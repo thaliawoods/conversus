@@ -85,6 +85,23 @@ function Chat({ token, onTokenExpired }: ChatProps) {
       return;
     }
     const debate: Channel = await response.json();
+    await fetch("http://localhost:4000/channel/message?namespace=conversus", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        content: subject,
+        channel: debate.id,
+        metadata: {
+          origin: selectedMessages.map((message) => ({
+            user: message.user,
+            content: message.content,
+          })),
+        },
+      }),
+    });
     navigate(`/debate/${debate.id}`);
   }
   function handleToggleSelecting() {

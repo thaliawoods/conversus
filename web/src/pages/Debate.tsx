@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router";
-import type { Channel } from "../components/Navbar";
+import Navbar, { type Channel } from "../components/Navbar";
 
 type DebateProps = { token: string };
 
 function Debate({ token }: DebateProps) {
   const { channelId } = useParams();
   const [channels, setChannels] = useState<Channel[]>([]);
+  const [origin, setOrigin] = useState<{ user: string; content: string }[]>([]);
+  const [content, setContent] = useState("");
+  const [replies, setReplies] = useState<{ user: string; content: string }[]>([]);
   const debate = channels.find((channel) => channel.id === Number(channelId));
 
   useEffect(() => {
@@ -22,9 +25,72 @@ function Debate({ token }: DebateProps) {
     loadChannels();
   }, [token]);
 
+  useEffect(() => {
+    async function loadMessages() {
+      const response = await fetch(
+        `http://localhost:4000/channel/message?channel=${channelId}&namespace=conversus`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!response.ok) return;
+      const data = await response.json();
+      setOrigin(data?.at(-1)?.metadata?.conversus?.origin ?? []);
+      setReplies((data ?? []).toReversed().slice(1));
+    }
+
+    loadMessages();
+    const intervalId = setInterval(loadMessages, 2000);
+    return () => clearInterval(intervalId);
+  }, [token, channelId]);
+
+  async function handleSendMessage(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!content.trim()) return;
+
+    const response = await fetch(
+      "http://localhost:4000/channel/message?namespace=conversus",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          content,
+          channel: Number(channelId),
+          metadata: {},
+        }),
+      },
+    );
+    if (!response.ok) {
+      console.log("message refusé", response.status);
+      return;
+    }
+    setContent("");
+  }
+
   return (
     <main className="chat debate">
+      <Navbar channels={channels} />
       <h2 className="channel-title">{debate?.name.replace(/#\d+$/, "")}</h2>
+      <ul className="messages">
+        {[...origin, ...replies].map((message, index) => (
+          <li className="message" key={index}>
+            <span className="avatar">{message.user[0]}</span>
+            <div className="message-body">
+              <strong>{message.user}</strong>
+              <p>{message.content}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+      <form className="message-form" onSubmit={handleSendMessage}>
+        <input
+          value={content}
+          onChange={(event) => setContent(event.target.value)}
+          placeholder="Écris ton message..."
+        />
+        <button type="submit">Envoyer</button>
+      </form>
     </main>
   );
 }
