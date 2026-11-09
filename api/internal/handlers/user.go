@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"time"
+
+	"chat-gobelin-api/internal"
 	"chat-gobelin-api/internal/users"
 	"chat-gobelin-api/internal/channels"
-	"time"
 
 	"github.com/dgrijalva/jwt-go"
 	"golang.org/x/crypto/bcrypt"
@@ -31,10 +33,21 @@ type loginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
+type userCreationRequest struct {
+	Username string           `json:"username" binding:"required"`
+	Password string           `json:"password" binding:"required"`
+	Metadata *json.RawMessage `json:"metadata"`
+}
+
+type userEditionRequest struct {
+	Metadata json.RawMessage `json:"metadata" binding:"required"`
+}
+
 type UserPresentation struct {
-	Username string `json:"username"`
+	Username string             `json:"username"`
 	Channels []channels.Channel `json:"channels"`
-	ID       int64  `json:"id"`
+	ID       int64              `json:"id"`
+	Metadata *json.RawMessage   `json:"metadata"`
 }
 
 var JWTKey = []byte("this_is_the_goblin_key_something_impossible_to_deviner")
@@ -118,6 +131,27 @@ func (h userHandler) Me(writer http.ResponseWriter, request *http.Request) {
 		ID: user.ID,
 		Channels: channels,
 	}
+	log.Printf("test: %v %s", user, internal.GetNamespace(ctx))
+	if user.Metadata != nil {
+		meta := user.Metadata
+		namespace := internal.GetNamespace(ctx)
+		if namespace != "" {
+			meta = make(map[string]json.RawMessage)
+			if namespaced, ok := user.Metadata[namespace]; ok {
+				meta[namespace] = namespaced
+			}
+		}
+		rawMeta, err := json.Marshal(meta)
+		if err != nil {
+			log.Printf("Error namespacing metadatas: %s", err.Error())
+			writer.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		jsonMeta := json.RawMessage(rawMeta)
+		presentation.Metadata = &jsonMeta
+	}
+
+
 	result, err := json.Marshal(presentation)
 	if err != nil {
 		log.Printf("Error marshaling value: %s", err.Error())
@@ -132,7 +166,7 @@ func (h userHandler) Create(writer http.ResponseWriter, request *http.Request) {
 	ctx := request.Context()
 	decoder := json.NewDecoder(request.Body)
 
-	var req loginRequest
+	var req userCreationRequest
 	err := decoder.Decode(&req)
 
 	if err != nil {
@@ -149,7 +183,26 @@ func (h userHandler) Create(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	user, err := h.userRepo.Create(ctx, req.Username, hash)
+	meta := json.RawMessage([]byte("{}"))
+	if req.Metadata != nil {
+		meta = *req.Metadata
+		namespace := internal.GetNamespace(ctx)
+		if namespace == "" {
+			log.Printf("Metadatas given without namespace")
+			writer.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		namespacedMeta := make(map[string]json.RawMessage)
+		namespacedMeta[namespace] = *req.Metadata
+		meta, err = json.Marshal(namespacedMeta)
+		if err != nil {
+			log.Printf("Error namespacing metadatas: %s", err.Error())
+			writer.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	}
+
+	user, err := h.userRepo.Create(ctx, req.Username, meta, hash)
 	if err != nil {
 		log.Printf("Error creating user: %s", err.Error())
 		writer.WriteHeader(http.StatusInternalServerError)
@@ -159,6 +212,60 @@ func (h userHandler) Create(writer http.ResponseWriter, request *http.Request) {
 	err = h.channelRepo.AddUserToChannel(ctx, h.general, *user)
 	if err != nil {
 		log.Printf("Error adding user to general channel: %s", err.Error())
+		writer.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	result, err := json.Marshal(user)
+	if err != nil {
+		log.Printf("Error marshaling value: %s", err.Error())
+		writer.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	writer.WriteHeader(http.StatusOK)
+	writer.Write(result)
+}
+
+func (h userHandler) Edit(writer http.ResponseWriter, request *http.Request) {
+	ctx := request.Context()
+
+	namespace := internal.GetNamespace(ctx)
+	if namespace == "" {
+		log.Printf("Metadatas given without namespace")
+		writer.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	decoder := json.NewDecoder(request.Body)
+	var req userEditionRequest
+	err := decoder.Decode(&req)
+	if err != nil {
+		log.Printf("Error decoding request: %s", err)
+		writer.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	userRaw := ctx.Value("user")
+	user := userRaw.(*users.User)
+	if user == nil {
+		log.Printf("No user found")
+		writer.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	oldMeta := user.Metadata
+	oldMeta[namespace] = req.Metadata
+	meta, err := json.Marshal(oldMeta)
+	if err != nil {
+		log.Printf("Error namespacing metadatas: %s", err.Error())
+		writer.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	user, err = h.userRepo.EditMetadata(ctx, *user, meta)
+	if err != nil {
+		log.Printf("Error creating user: %s", err.Error())
 		writer.WriteHeader(http.StatusInternalServerError)
 		return
 	}

@@ -1,0 +1,19 @@
+Goal of the request
+===================
+
+Since users are on a planet, have a field to store data about that planet in the user
+
+Technical proposition
+=====================
+
+Add a "metadata" field to users for us to store what we want in json format.
+
+Approximate frequency of use
+============================
+
+Once per user login, so very low
+
+Potential problem / side effect of note
+=======================================
+
+Potential collision with other chat applicaiton metadata
