@@ -1,0 +1,48 @@
+@font-face {
+  font-family: "Frames";
+  src: url("/fonts/frames.ttf");
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: "Frames";
+  src: url("/fonts/frames-bold.ttf");
+  font-weight: 700;
+}
+
+@font-face {
+  font-family: "PoppinsTN";
+  src: url("/fonts/poppins-tn.ttf");
+}
+
+:root {
+  --ardoise: #4e5675;
+  --lavande: #aab1d6;
+  --lavande-cl: #d8dbf3;
+  --encre: #353b58;
+  --blanc: #fff;
+  --degrade: linear-gradient(118deg, #454d6d 0%, #626a8f 46%, #9aa2c8 100%);
+  --violine: linear-gradient(120deg, #8b5fd6, #b06ae0);
+  --titre: "Frames", sans-serif;
+  --ui: "PoppinsTN", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--ui);
+  color: var(--encre);
+}
+
+h1 {
+  margin: 0;
+  font-family: var(--titre);
+}
+
+input,
+button {
+  font: inherit;
+}
