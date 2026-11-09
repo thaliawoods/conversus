@@ -9,8 +9,8 @@ function App() {
   const [token, setToken] = useState(localStorage.getItem("token") ?? "");
   const [channels, setChannels] = useState<Channel[]>([]);
   const [channelId, setChannelId] = useState<number | null>(null);
-    const [messages, setMessages] = useState<Message[]>([]);
-    const [content, setContent] = useState("");
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [content, setContent] = useState("");
   useEffect(() => {
     if (!token) return;
 
@@ -40,10 +40,12 @@ function App() {
         return;
       }
       const data: Message[] | null = await response.json();
-      setMessages((data ?? []).toReversed());    }
+      setMessages((data ?? []).toReversed());
+    }
 
     loadMessages();
-  }, [token, channelId]);
+    const intervalId = setInterval(loadMessages, 2000);
+    return () => clearInterval(intervalId);  }, [token, channelId]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -64,18 +66,21 @@ function App() {
     setToken(newToken);
   }
 
-    async function handleSendMessage(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSendMessage(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (channelId === null) return;
 
-    const response = await fetch("http://localhost:4000/channel/message?namespace=conversus", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+    const response = await fetch(
+      "http://localhost:4000/channel/message?namespace=conversus",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ content, channel: channelId, metadata: {} }),
       },
-      body: JSON.stringify({ content, channel: channelId, metadata: {} }),
-    });
+    );
 
     if (!response.ok) {
       console.log("message refusé", response.status);
@@ -88,7 +93,6 @@ function App() {
   }
 
   return (
-    
     <main>
       <h1>ConVersus</h1>
       <form onSubmit={handleSubmit}>
@@ -114,15 +118,18 @@ function App() {
           </li>
         ))}
       </ul>
-            <ul>
+      <ul>
         {messages.map((message) => (
           <li key={message.id}>
             {message.user} : {message.content}
           </li>
         ))}
       </ul>
-            <form onSubmit={handleSendMessage}>
-        <input value={content} onChange={(event) => setContent(event.target.value)} />
+      <form onSubmit={handleSendMessage}>
+        <input
+          value={content}
+          onChange={(event) => setContent(event.target.value)}
+        />
         <button type="submit">send</button>
       </form>
     </main>
