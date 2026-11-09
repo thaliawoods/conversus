@@ -12,7 +12,12 @@ function Chat({ token, onTokenExpired }: ChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [content, setContent] = useState("");
   const messagesRef = useRef<HTMLUListElement>(null);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [isSelecting, setIsSelecting] = useState(false);
   const lastMessageId = messages.at(-1)?.id;
+  const currentChannel = channels.find(
+    (channel) => channel.id === Number(channelId),
+  );
   useEffect(() => {
     async function loadProfile() {
       const response = await fetch("http://localhost:4000/me", {
@@ -54,6 +59,17 @@ function Chat({ token, onTokenExpired }: ChatProps) {
     if (!messagesRef.current) return;
     messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
   }, [lastMessageId]);
+  function handleToggleSelecting() {
+    setIsSelecting(!isSelecting);
+    setSelectedIds([]);
+  }
+  function handleToggleMessage(messageId: number) {
+    if (selectedIds.includes(messageId)) {
+      setSelectedIds(selectedIds.filter((id) => id !== messageId));
+      return;
+    }
+    setSelectedIds([...selectedIds, messageId]);
+  }
   async function handleSendMessage(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!channelId) return;
@@ -88,9 +104,22 @@ function Chat({ token, onTokenExpired }: ChatProps) {
   return (
     <main className="chat">
       <Navbar channels={channels} />
+      <div className="chat-actions">
+        <h2 className="channel-title">{currentChannel?.name}</h2>
+        <button type="button" onClick={handleToggleSelecting}>
+          {isSelecting ? "Annuler" : "Lancer un ConVersus"}
+        </button>
+      </div>
       <ul className="messages" ref={messagesRef}>
         {messages.map((message) => (
           <li className="message" key={message.id}>
+            {isSelecting && (
+              <input
+                type="checkbox"
+                checked={selectedIds.includes(message.id)}
+                onChange={() => handleToggleMessage(message.id)}
+              />
+            )}
             <span className="avatar">{message.user[0]}</span>
             <div className="message-body">
               <strong>{message.user}</strong>
@@ -99,6 +128,17 @@ function Chat({ token, onTokenExpired }: ChatProps) {
           </li>
         ))}
       </ul>
+      {isSelecting && (
+        <div className="selection-bar">
+          <span>
+            {selectedIds.length}{" "}
+            {selectedIds.length > 1 ? "messages ciblés" : "message ciblé"}
+          </span>
+          <button type="button" disabled={selectedIds.length === 0}>
+            Lancer le ConVersus
+          </button>
+        </div>
+      )}
       <form className="message-form" onSubmit={handleSendMessage}>
         <input
           value={content}
