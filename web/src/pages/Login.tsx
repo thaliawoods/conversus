@@ -27,19 +27,19 @@ function Login({ onLogin }: LoginProps) {
 
   return (
     <main>
-        <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit}>
         <input
           value={username}
           onChange={(event) => setUsername(event.target.value)}
-          placeholder="username"
+          placeholder="Nom d'utilisateur"
         />
         <input
           type="password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
-          placeholder="password"
-        />
-        <button type="submit">login</button>
+          placeholder="Mot de passe"
+                  />
+        <button type="submit">Se connecter</button>
       </form>
     </main>
   );
