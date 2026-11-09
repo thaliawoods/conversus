@@ -1,17 +1,32 @@
 curl -w "code:%{http_code}" -XPOST 0.0.0.0:4000/user -d '{"username":"isabelle","password":"reisen"}'
-curl -w "code:%{http_code}" -XPOST 0.0.0.0:4000/user -d '{"username":"sanae","password":"sanae"}'
+curl -w "code:%{http_code}" -XPOST 0.0.0.0:4000/user -H 'Namespace: space' -d '{"username":"sanae","password":"sanae", "metadata": [1,2,3,4,8,16,32]}'
 
-curl -XGET 0.0.0.0:4000/channel/message?channel=1 -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImlzYWJlbGxlIiwiaWQiOjEsImV4cCI6MTc5Mzg2NDMyNX0.LPZ8d0GPf_PqpAQ0urcJAs6M0dE7QsdVrbOBcAiEAtA'
-curl -XGET 0.0.0.0:4000/channel/message?channel=4 -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImlzYWJlbGxlIiwiaWQiOjEsImV4cCI6MTc5Mzg2NDMyNX0.LPZ8d0GPf_PqpAQ0urcJAs6M0dE7QsdVrbOBcAiEAtA'
+curl -XGET 0.0.0.0:4000/channel/message?channel=1 -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImlzYWJlbGxlIiwiaWQiOjQsImV4cCI6MTc5NDQxMTA0MH0.jFobv5pN04zIpzsYPkGT_GuJ5lepPdvxtZSek9u4dzw'
+curl -XGET 0.0.0.0:4000/channel/message?channel=4 -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImlzYWJlbGxlIiwiaWQiOjQsImV4cCI6MTc5NDQxMTA0MH0.jFobv5pN04zIpzsYPkGT_GuJ5lepPdvxtZSek9u4dzw'
 curl -XGET 0.0.0.0:4000/channel/message?channel=5 -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImlzYWJlbGxlIiwiaWQiOjEsImV4cCI6MTc5Mzg2NDMyNX0.LPZ8d0GPf_PqpAQ0urcJAs6M0dE7QsdVrbOBcAiEAtA'
 
-curl -XGET 0.0.0.0:4000/channel/me -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImlzYWJlbGxlIiwiaWQiOjEsImV4cCI6MTc5Mzg2NDMyNX0.LPZ8d0GPf_PqpAQ0urcJAs6M0dE7QsdVrbOBcAiEAtA'
+curl -w "code:%{http_code}" -XGET 0.0.0.0:4000/me -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImlzYWJlbGxlIiwiaWQiOjQsImV4cCI6MTc5NDQxMTA0MH0.jFobv5pN04zIpzsYPkGT_GuJ5lepPdvxtZSek9u4dzw'
+
+curl -w "code:%{http_code}" -XGET 0.0.0.0:4000/me -H 'Namespace: space' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InNhbmFlIiwiaWQiOjUsImV4cCI6MTc5NDQxMTgyMX0.6kvqO-IkEHgrxEVzl1gOVjflyDTaUFA8kHx1RTT6ml8' -d '{"metadata": [5,6]}'
+
+curl -w "code:%{http_code}" -XPOST 0.0.0.0:4000/user/edit -H 'Namespace: space' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InNhbmFlIiwiaWQiOjUsImV4cCI6MTc5NDQxMTgyMX0.6kvqO-IkEHgrxEVzl1gOVjflyDTaUFA8kHx1RTT6ml8'  -d '{"metadata": [5,6]}'
 
 curl -XPOST 0.0.0.0:4000/channel -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImlzYWJlbGxlIiwiaWQiOjEsImV4cCI6MTc5Mzg2NDMyNX0.LPZ8d0GPf_PqpAQ0urcJAs6M0dE7QsdVrbOBcAiEAtA' -d '{"name":"goblin-tests"}'
 
-curl -XPOST 0.0.0.0:4000/channel/message -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImlzYWJlbGxlIiwiaWQiOjEsImV4cCI6MTc5Mzg2NDMyNX0.LPZ8d0GPf_PqpAQ0urcJAs6M0dE7QsdVrbOBcAiEAtA' -d '{"content":"this is some kind of content", "channel":4}'
-curl -XPOST 0.0.0.0:4000/channel/message -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImlzYWJlbGxlIiwiaWQiOjEsImV4cCI6MTc5Mzg2NDMyNX0.LPZ8d0GPf_PqpAQ0urcJAs6M0dE7QsdVrbOBcAiEAtA' -d '{"content":"you are very right !", "channel":4}'
+curl -XPOST 0.0.0.0:4000/channel -H 'Namespace: space' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImlzYWJlbGxlIiwiaWQiOjQsImV4cCI6MTc5NDQxMTA0MH0.jFobv5pN04zIpzsYPkGT_GuJ5lepPdvxtZSek9u4dzw' -d '{"name":"meta-tests", "metadata":[2,3,5,7,11]}'
+
+curl -XPOST 0.0.0.0:4000/channel/message?namespace=space -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImlzYWJlbGxlIiwiaWQiOjQsImV4cCI6MTc5NDQxMTA0MH0.jFobv5pN04zIpzsYPkGT_GuJ5lepPdvxtZSek9u4dzw' -d '{"content":"this is some kind of other content", "metadata": [5,6],"channel":2, "anonymous": true}'
+
+
+curl -XPOST 0.0.0.0:4000/channel/message?namespace=space -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImlzYWJlbGxlIiwiaWQiOjQsImV4cCI6MTc5NDQxMTA0MH0.jFobv5pN04zIpzsYPkGT_GuJ5lepPdvxtZSek9u4dzw' -d '{"content":"this is some kind of rare content", "metadata": [5,6],"channel":2, "anonymous": true, "posted_at":"2026-11-09T06:42:59.331319Z"}'
+
+
+curl -XPOST 0.0.0.0:4000/channel/message -H 'Namespace: space' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImlzYWJlbGxlIiwiaWQiOjQsImV4cCI6MTc5NDQxMTA0MH0.jFobv5pN04zIpzsYPkGT_GuJ5lepPdvxtZSek9u4dzw' -d '{"content":"you here ?", "id": 456}'
 
 curl -XPOST 0.0.0.0:4000/channel/enter -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImlzYWJlbGxlIiwiaWQiOjEsImV4cCI6MTc5Mzg2NDMyNX0.LPZ8d0GPf_PqpAQ0urcJAs6M0dE7QsdVrbOBcAiEAtA' -d '{"channel":"general"}'
 
 psql -p 6432 -h 0.0.0.0  --username=postgres --dbname=chat-goblin-db -W
+
+
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImlzYWJlbGxlIiwiaWQiOjQsImV4cCI6MTc5NDQxMTA0MH0.jFobv5pN04zIpzsYPkGT_GuJ5lepPdvxtZSek9u4dzw
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InNhbmFlIiwiaWQiOjUsImV4cCI6MTc5NDQxMTgyMX0.6kvqO-IkEHgrxEVzl1gOVjflyDTaUFA8kHx1RTT6ml8

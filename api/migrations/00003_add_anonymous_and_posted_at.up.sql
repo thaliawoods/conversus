@@ -1,0 +1,5 @@
+ALTER TABLE messages
+    ADD anonymous boolean NOT NULL DEFAULT FALSE;
+
+ALTER TABLE messages
+    ADD posted_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW();

@@ -1,0 +1,19 @@
+But de la demande & contexte
+============================
+
+Dans notre application de chat, les utilisateurs sont sur une planéte, donc nous avons besoin de stocker des coordonnées, des informations sur la planéte, etcd
+
+Proposition technique
+=====================
+
+Ajouter un champ "metadata" dans l'objet user
+
+Utilisation approximative
+==========================
+
+Une fois au login
+
+Probléme potentiels et/ou effets secondaires
+============================================
+
+Collision avec d'autres clients

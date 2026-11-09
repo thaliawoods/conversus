@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 
@@ -12,6 +13,10 @@ import (
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
+
+type HaveNamespace struct{
+	NameSpace string
+}
 
 func GetDevDB() (*sqlx.DB, error) {
 	db, err := GetDB("postgres://postgres:postgres@db:5432/chat-goblin-db?sslmode=disable")
@@ -73,4 +78,13 @@ func MigrateDB(db *sqlx.DB, migration string) error {
 		return fmt.Errorf("Error changing DB version", err)
 	}
 	return nil
+}
+
+func GetNamespace(ctx context.Context) string {
+	namespace :=  ctx.Value("namespace")
+	if namespace == nil {
+		return ""
+	}
+	ns := namespace.(*HaveNamespace)
+	return ns.NameSpace
 }

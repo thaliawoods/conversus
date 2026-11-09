@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"chat-gobelin-api/internal"
 	"chat-gobelin-api/internal/users"
 	"chat-gobelin-api/internal/channels"
 )
@@ -23,6 +24,13 @@ func NewChannelHandler(s channels.Repo, u users.Repo) (*channelHandler, error) {
 
 type createChannelRequest struct {
 	Name string `json:"name" binding:"required"`
+	Metadata *json.RawMessage `json:"metadata"`
+}
+
+type editChannelRequest struct {
+	ID int64 `json:"id" binding:"required"`
+	Name string `json:"name" binding:"required"`
+	Metadata *json.RawMessage `json:"metadata"`
 }
 
 type EnterChannelRequest struct {
@@ -51,12 +59,31 @@ func (h channelHandler) Create(writer http.ResponseWriter, request *http.Request
 		return
 	}
 
-	channel, err := h.channelRepo.Create(ctx, req.Name)
+	var meta json.RawMessage
+	namespacedMeta := make(map[string]json.RawMessage)
+	if req.Metadata != nil {
+		namespace := internal.GetNamespace(ctx)
+		if namespace == "" {
+			log.Printf("Metadatas given without namespace")
+			writer.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		namespacedMeta[namespace] = *req.Metadata
+		meta, err = json.Marshal(namespacedMeta)
+		if err != nil {
+			log.Printf("Error namespacing metadatas: %s", err.Error())
+			writer.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	}
+
+	channel, err := h.channelRepo.Create(ctx, req.Name, meta)
 	if err != nil {
 		log.Printf("Error creating channel: %s", err.Error())
 		writer.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	channel.Metadata = namespacedMeta
 
 	err = h.channelRepo.AddUserToChannel(ctx, *channel, *user)
 	if err != nil {
@@ -110,6 +137,70 @@ func (h channelHandler) EnterChannel(writer http.ResponseWriter, request *http.R
 		writer.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+
+	result, err := json.Marshal(channel)
+	if err != nil {
+		log.Printf("Error marshaling value: %s", err.Error())
+		writer.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	writer.WriteHeader(http.StatusOK)
+	writer.Write(result)
+}
+
+func (h channelHandler) EditChannel(writer http.ResponseWriter, request *http.Request) {
+	ctx := request.Context()
+
+	userRaw := ctx.Value("user")
+	user := userRaw.(*users.User)
+	if user == nil {
+		log.Printf("No user found")
+		writer.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	decoder := json.NewDecoder(request.Body)
+
+	var req editChannelRequest
+	err := decoder.Decode(&req)
+	if err != nil {
+		log.Printf("Error decoding request: %s", err)
+		writer.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	channel, err := h.channelRepo.GetByID(ctx, req.ID)
+	if err != nil {
+		log.Printf("Error retrieving channel: %s", err)
+		writer.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	var meta json.RawMessage
+	namespacedMeta := channel.Metadata
+	if req.Metadata != nil {
+		namespace := internal.GetNamespace(ctx)
+		if namespace == "" {
+			log.Printf("Metadatas given without namespace")
+			writer.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		namespacedMeta[namespace] = *req.Metadata
+		meta, err = json.Marshal(namespacedMeta)
+		if err != nil {
+			log.Printf("Error namespacing metadatas: %s", err.Error())
+			writer.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	}
+
+	channel, err = h.channelRepo.Edit(ctx, *channel, req.Name, meta)
+	if err != nil {
+		log.Printf("Error editing message: %s", err.Error())
+		writer.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	channel.Metadata = namespacedMeta
 
 	result, err := json.Marshal(channel)
 	if err != nil {
