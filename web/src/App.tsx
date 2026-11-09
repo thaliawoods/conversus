@@ -18,6 +18,11 @@ function App() {
       const response = await fetch("http://localhost:4000/me", {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (response.status === 401) {
+  localStorage.removeItem("token");
+  setToken("");
+  return;
+}
       const profile = await response.json();
       setChannels(profile.channels);
     }
@@ -45,7 +50,8 @@ function App() {
 
     loadMessages();
     const intervalId = setInterval(loadMessages, 2000);
-    return () => clearInterval(intervalId);  }, [token, channelId]);
+    return () => clearInterval(intervalId);
+  }, [token, channelId]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
