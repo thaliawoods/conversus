@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router";
 import Chat from "./pages/Chat";
 import Login from "./pages/Login";
 import Debate from "./pages/Debate";
+import AccountMenu from "./components/AccountMenu";
 import "./App.css";
 
 function App() {
@@ -18,6 +19,7 @@ function App() {
   );
 
   return (
+    <>
     <Routes>
       <Route
         path="/login"
@@ -30,6 +32,8 @@ function App() {
         element={token ? <Debate token={token} /> : <Navigate to="/login" replace />}
       />
     </Routes>
+    {token && <AccountMenu onSwitch={setToken} onLogout={handleTokenExpired} />}
+    </>
   );}
 
 export default App;
