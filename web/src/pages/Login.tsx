@@ -27,7 +27,7 @@ function Login({ onLogin }: LoginProps) {
 
   return (
     <main className="login">
-      <form className="carte-login" onSubmit={handleSubmit}>
+      <form className="login-card" onSubmit={handleSubmit}>
         <h2>Ici exprime toi librement avec tes messages qui changent de forme</h2>
         <input
           value={username}
@@ -40,7 +40,7 @@ function Login({ onLogin }: LoginProps) {
           onChange={(event) => setPassword(event.target.value)}
           placeholder="Mot de passe"
                   />
-        <button className="go" type="submit">Se connecter</button>
+        <button className="login-button" type="submit">Se connecter</button>
               </form>
     </main>
   );

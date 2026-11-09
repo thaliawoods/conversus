@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { NavLink, useParams } from "react-router";
+import { useParams } from "react-router";
+import Navbar, { type Channel } from "../components/Navbar";
 
-type Channel = { id: number; name: string };
 type Message = { id: number; content: string; user: string };
 
 type ChatProps = { token: string; onTokenExpired: () => void };
@@ -79,23 +79,20 @@ function Chat({ token, onTokenExpired }: ChatProps) {
   }
 
   return (
-    <main>
-      <h1>ConVersus</h1>
-      <nav>
-        {channels.map((channel) => (
-          <NavLink key={channel.id} to={`/channel/${channel.id}`}>
-            {channel.name}
-          </NavLink>
-        ))}
-      </nav>
-      <ul>
+    <main className="chat">
+      <Navbar channels={channels} />
+      <ul className="messages">
         {messages.map((message) => (
-          <li key={message.id}>
-            {message.user} : {message.content}
+          <li className="message" key={message.id}>
+            <span className="avatar">{message.user[0]}</span>
+            <div className="message-body">
+              <strong>{message.user}</strong>
+              <p>{message.content}</p>
+            </div>
           </li>
         ))}
       </ul>
-      <form onSubmit={handleSendMessage}>
+      <form className="message-form" onSubmit={handleSendMessage}>
         <input
           value={content}
           onChange={(event) => setContent(event.target.value)}

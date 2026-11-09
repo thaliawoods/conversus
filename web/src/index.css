@@ -16,15 +16,16 @@
 }
 
 :root {
-  --ardoise: #4e5675;
-  --lavande: #aab1d6;
-  --lavande-cl: #d8dbf3;
-  --encre: #353b58;
-  --blanc: #fff;
-  --degrade: linear-gradient(118deg, #454d6d 0%, #626a8f 46%, #9aa2c8 100%);
-  --violine: linear-gradient(120deg, #8b5fd6, #b06ae0);
-  --titre: "Frames", sans-serif;
-  --ui: "PoppinsTN", system-ui, sans-serif;
+  --slate: #4e5675;
+  --lavender: #aab1d6;
+  --lavender-light: #d8dbf3;
+  --ink: #353b58;
+  --white: #fff;
+  --surface: #f4f4fb;
+  --gradient: linear-gradient(118deg, #454d6d 0%, #626a8f 46%, #9aa2c8 100%);
+  --accent: linear-gradient(120deg, #4e5675, #6b7395);
+  --font-title: "Frames", sans-serif;
+  --font-text: "PoppinsTN", system-ui, sans-serif;
 }
 
 * {
@@ -33,13 +34,13 @@
 
 body {
   margin: 0;
-  font-family: var(--ui);
-  color: var(--encre);
+  font-family: var(--font-text);
+  color: var(--ink);
 }
 
 h1 {
   margin: 0;
-  font-family: var(--titre);
+  font-family: var(--font-title);
 }
 
 input,
