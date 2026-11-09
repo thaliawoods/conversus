@@ -10,6 +10,7 @@ function App() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [channelId, setChannelId] = useState<number | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
+    const [content, setContent] = useState("");
   useEffect(() => {
     if (!token) return;
 
@@ -63,7 +64,31 @@ function App() {
     setToken(newToken);
   }
 
+    async function handleSendMessage(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (channelId === null) return;
+
+    const response = await fetch("http://localhost:4000/channel/message?namespace=conversus", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ content, channel: channelId, metadata: {} }),
+    });
+
+    if (!response.ok) {
+      console.log("message refusé", response.status);
+      return;
+    }
+
+    const message: Message = await response.json();
+    setMessages([...messages, message]);
+    setContent("");
+  }
+
   return (
+    
     <main>
       <h1>ConVersus</h1>
       <form onSubmit={handleSubmit}>
@@ -96,6 +121,10 @@ function App() {
           </li>
         ))}
       </ul>
+            <form onSubmit={handleSendMessage}>
+        <input value={content} onChange={(event) => setContent(event.target.value)} />
+        <button type="submit">send</button>
+      </form>
     </main>
   );
 }
