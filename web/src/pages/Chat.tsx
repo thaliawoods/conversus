@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
 import Navbar, { type Channel } from "../components/Navbar";
 
@@ -11,6 +11,8 @@ function Chat({ token, onTokenExpired }: ChatProps) {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [content, setContent] = useState("");
+  const messagesRef = useRef<HTMLUListElement>(null);
+  const lastMessageId = messages.at(-1)?.id;
   useEffect(() => {
     async function loadProfile() {
       const response = await fetch("http://localhost:4000/me", {
@@ -48,9 +50,14 @@ function Chat({ token, onTokenExpired }: ChatProps) {
     const intervalId = setInterval(loadMessages, 2000);
     return () => clearInterval(intervalId);
   }, [token, channelId]);
+  useEffect(() => {
+    if (!messagesRef.current) return;
+    messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
+  }, [lastMessageId]);
   async function handleSendMessage(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!channelId) return;
+    if (!content.trim()) return;
 
     const response = await fetch(
       "http://localhost:4000/channel/message?namespace=conversus",
@@ -81,7 +88,7 @@ function Chat({ token, onTokenExpired }: ChatProps) {
   return (
     <main className="chat">
       <Navbar channels={channels} />
-      <ul className="messages">
+      <ul className="messages" ref={messagesRef}>
         {messages.map((message) => (
           <li className="message" key={message.id}>
             <span className="avatar">{message.user[0]}</span>
