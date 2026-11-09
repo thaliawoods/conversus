@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
 import Navbar, { type Channel } from "../components/Navbar";
+import LaunchModal from "../components/LaunchModal";
 
-type Message = { id: number; content: string; user: string };
+export type Message = { id: number; content: string; user: string };
 
 type ChatProps = { token: string; onTokenExpired: () => void };
 
@@ -14,6 +15,10 @@ function Chat({ token, onTokenExpired }: ChatProps) {
   const messagesRef = useRef<HTMLUListElement>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isSelecting, setIsSelecting] = useState(false);
+  const [isLaunching, setIsLaunching] = useState(false);
+  const selectedMessages = messages.filter((message) =>
+    selectedIds.includes(message.id),
+  );
   const lastMessageId = messages.at(-1)?.id;
   const currentChannel = channels.find(
     (channel) => channel.id === Number(channelId),
@@ -59,6 +64,10 @@ function Chat({ token, onTokenExpired }: ChatProps) {
     if (!messagesRef.current) return;
     messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
   }, [lastMessageId]);
+  function handleLaunch(subject: string) {
+    console.log("lancement", subject, selectedMessages);
+    setIsLaunching(false);
+  }
   function handleToggleSelecting() {
     setIsSelecting(!isSelecting);
     setSelectedIds([]);
@@ -134,7 +143,11 @@ function Chat({ token, onTokenExpired }: ChatProps) {
             {selectedIds.length}{" "}
             {selectedIds.length > 1 ? "messages ciblés" : "message ciblé"}
           </span>
-          <button type="button" disabled={selectedIds.length === 0}>
+          <button
+            type="button"
+            disabled={selectedIds.length === 0}
+            onClick={() => setIsLaunching(true)}
+          >
             Lancer le ConVersus
           </button>
         </div>
@@ -147,6 +160,13 @@ function Chat({ token, onTokenExpired }: ChatProps) {
         />
         <button type="submit">Envoyer</button>
       </form>
+      {isLaunching && (
+        <LaunchModal
+          messages={selectedMessages}
+          onCancel={() => setIsLaunching(false)}
+          onLaunch={handleLaunch}
+        />
+      )}
     </main>
   );
 }
