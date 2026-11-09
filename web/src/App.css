@@ -313,3 +313,14 @@
 .debate-tab {
   box-shadow: inset 0 0 0 1px var(--slate);
 }
+
+.join-button {
+  margin-top: 0.3rem;
+  padding: 0.35rem 0.9rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--white);
+  font-size: 0.76rem;
+  cursor: pointer;
+}

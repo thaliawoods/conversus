@@ -3,7 +3,12 @@ import { useNavigate, useParams } from "react-router";
 import Navbar, { type Channel } from "../components/Navbar";
 import LaunchModal from "../components/LaunchModal";
 
-export type Message = { id: number; content: string; user: string };
+export type Message = {
+  id: number;
+  content: string;
+  user: string;
+  metadata?: { conversus?: { channelName?: string } };
+};
 
 type ChatProps = { token: string; onTokenExpired: () => void };
 
@@ -44,7 +49,7 @@ function Chat({ token, onTokenExpired }: ChatProps) {
 
     async function loadMessages() {
       const response = await fetch(
-        `http://localhost:4000/channel/message?channel=${channelId}`,
+        `http://localhost:4000/channel/message?channel=${channelId}&namespace=conversus`,
         {
           headers: { Authorization: `Bearer ${token}` },
         },
@@ -102,6 +107,43 @@ function Chat({ token, onTokenExpired }: ChatProps) {
         },
       }),
     });
+    await fetch("http://localhost:4000/channel/message?namespace=conversus", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        content: `a ouvert un ConVersus : ${subject}`,
+        channel: Number(channelId),
+        metadata: { channelName: debate.name },
+      }),
+    });
+    navigate(`/debate/${debate.id}`);
+  }
+  async function handleJoin(message: Message) {
+    const channelName = message.metadata?.conversus?.channelName;
+    if (!channelName) return;
+
+    const joined = channels.find((channel) => channel.name === channelName);
+    if (joined) {
+      navigate(`/debate/${joined.id}`);
+      return;
+    }
+
+    const response = await fetch("http://localhost:4000/channel/enter", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ channel: channelName }),
+    });
+    if (!response.ok) {
+      console.log("entrée refusée", response.status);
+      return;
+    }
+    const debate: Channel = await response.json();
     navigate(`/debate/${debate.id}`);
   }
   function handleToggleSelecting() {
@@ -169,6 +211,15 @@ function Chat({ token, onTokenExpired }: ChatProps) {
             <div className="message-body">
               <strong>{message.user}</strong>
               <p>{message.content}</p>
+              {message.metadata?.conversus?.channelName && (
+                <button
+                  className="join-button"
+                  type="button"
+                  onClick={() => handleJoin(message)}
+                >
+                  Rejoindre
+                </button>
+              )}
             </div>
           </li>
         ))}
