@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router";
+import { useNavigate, useParams } from "react-router";
 import Navbar, { type Channel } from "../components/Navbar";
 import LaunchModal from "../components/LaunchModal";
 
@@ -9,6 +9,7 @@ type ChatProps = { token: string; onTokenExpired: () => void };
 
 function Chat({ token, onTokenExpired }: ChatProps) {
   const { channelId } = useParams();
+  const navigate = useNavigate();
   const [channels, setChannels] = useState<Channel[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [content, setContent] = useState("");
@@ -64,9 +65,27 @@ function Chat({ token, onTokenExpired }: ChatProps) {
     if (!messagesRef.current) return;
     messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
   }, [lastMessageId]);
-  function handleLaunch(subject: string) {
-    console.log("lancement", subject, selectedMessages);
-    setIsLaunching(false);
+  async function handleLaunch(subject: string) {
+    const response = await fetch(
+      "http://localhost:4000/channel?namespace=conversus",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: `${subject}#${Date.now()}`,
+          metadata: {},
+        }),
+      },
+    );
+    if (!response.ok) {
+      console.log("débat refusé", response.status);
+      return;
+    }
+    const debate: Channel = await response.json();
+    navigate(`/debate/${debate.id}`);
   }
   function handleToggleSelecting() {
     setIsSelecting(!isSelecting);
