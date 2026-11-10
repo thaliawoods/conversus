@@ -412,6 +412,22 @@
   top: 50%;
 }
 
+.stems {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  overflow: visible;
+}
+
+.stem {
+  fill: none;
+  stroke: var(--slate);
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+
 .flower {
   position: absolute;
   left: -3rem;

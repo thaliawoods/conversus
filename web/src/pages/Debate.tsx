@@ -3,7 +3,7 @@ import { useParams } from "react-router";
 import Navbar, { type Channel } from "../components/Navbar";
 import Flower from "../components/Flower";
 import type { Message } from "./Chat";
-import { placeMessages } from "../layout";
+import { placeMessages, stemPath, type Placement } from "../layout";
 
 type DebateProps = { token: string };
 
@@ -12,7 +12,7 @@ function Debate({ token }: DebateProps) {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [content, setContent] = useState("");
   const [replies, setReplies] = useState<Message[]>([]);
-  const [positions, setPositions] = useState<{ x: number; y: number }[]>([]);
+  const [positions, setPositions] = useState<Placement[]>([]);
   const messageRefs = useRef<HTMLDivElement[]>([]);
   const debate = channels.find((channel) => channel.id === Number(channelId));
 
@@ -85,6 +85,18 @@ function Debate({ token }: DebateProps) {
       <h2 className="channel-title">{debate?.name.replace(/#\d+$/, "")}</h2>
       <div className="viewport">
         <div className="board">
+          <svg className="stems">
+            {replies.map(
+              (message, index) =>
+                positions[index] && (
+                  <path
+                    className="stem"
+                    key={message.id}
+                    d={stemPath({ x: 0, y: 0 }, positions[index])}
+                  />
+                ),
+            )}
+          </svg>
           <Flower />
           {replies.map((message, index) => (
             <div
