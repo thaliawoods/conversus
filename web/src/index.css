@@ -15,6 +15,26 @@
   src: url("/fonts/poppins-tn.ttf");
 }
 
+@font-face {
+  font-family: "Tremplin";
+  src: url("/fonts/tremplin.otf");
+}
+
+@font-face {
+  font-family: "OpenSans";
+  src: url("/fonts/open-sans.otf");
+}
+
+@font-face {
+  font-family: "LigaSans";
+  src: url("/fonts/liga-sans.otf");
+}
+
+@font-face {
+  font-family: "Coxinelle";
+  src: url("/fonts/coxinelle.otf");
+}
+
 :root {
   --slate: #4e5675;
   --lavender: #aab1d6;

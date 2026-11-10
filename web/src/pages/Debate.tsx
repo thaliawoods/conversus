@@ -6,6 +6,8 @@ import ReactionIcon, { ReactionShape } from "../components/ReactionIcon";
 import type { Message, ReactionValue } from "./Chat";
 import { placeMessages, pointOnStem, stemPath, wiltSag, type Placement } from "../layout";
 import { useCamera } from "../hooks/useCamera";
+import MessageForm from "../components/MessageForm";
+import { fontFamily } from "../fonts";
 
 type DebateProps = { token: string };
 
@@ -30,10 +32,14 @@ function countWilts(reactions: Message[], messageId: number) {
   ).length;
 }
 
+function displayName(message: Message) {
+  const name = message.metadata?.conversus?.author ?? message.user;
+  return message.anonymous || name === "anonymous" ? "Anonyme" : name;
+}
+
 function Debate({ token }: DebateProps) {
   const { channelId } = useParams();
   const [channels, setChannels] = useState<Channel[]>([]);
-  const [content, setContent] = useState("");
   const [replies, setReplies] = useState<Message[]>([]);
   const [reactions, setReactions] = useState<Message[]>([]);
   const [positions, setPositions] = useState<Placement[]>([]);
@@ -94,9 +100,10 @@ function Debate({ token }: DebateProps) {
     setPositions(placeMessages(sizes, parents, ids, sags));
   }, [replies, reactions]);
 
-  async function handleSendMessage(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!content.trim()) return;
+  async function handleSendMessage(content: string, font: string | undefined, anonymous: boolean) {
+    const metadata: { replyTo?: number; font?: string } = {};
+    if (replyingTo) metadata.replyTo = replyingTo.id;
+    if (font) metadata.font = font;
 
     const response = await fetch(
       "http://localhost:4000/channel/message?namespace=conversus",
@@ -109,16 +116,17 @@ function Debate({ token }: DebateProps) {
         body: JSON.stringify({
           content,
           channel: Number(channelId),
-          metadata: replyingTo ? { replyTo: replyingTo.id } : {},
+          metadata,
+          anonymous,
         }),
       },
     );
     if (!response.ok) {
       console.log("message refusé", response.status);
-      return;
+      return false;
     }
-    setContent("");
     setReplyingTo(null);
+    return true;
   }
 
   async function handleReact(message: Message, value: ReactionValue) {
@@ -202,8 +210,8 @@ function Debate({ token }: DebateProps) {
                 setOpenId(openId === message.id ? null : message.id);
               }}
             >
-              <strong>{message.metadata?.conversus?.author ?? message.user}</strong>
-              <p>{message.content}</p>
+              <strong>{displayName(message)}</strong>
+              <p style={{ fontFamily: fontFamily(message.metadata?.conversus?.font) }}>{message.content}</p>
               {openId === message.id && (
                 <div className="message-actions">
                   {REACTIONS.map((reaction) => (
@@ -235,19 +243,12 @@ function Debate({ token }: DebateProps) {
       {replyingTo && (
         <div className="reply-banner">
           <p>
-            Réponse à {replyingTo.metadata?.conversus?.author ?? replyingTo.user} : « {replyingTo.content} »
+            Réponse à {displayName(replyingTo)} : « {replyingTo.content} »
           </p>
           <button type="button" onClick={() => setReplyingTo(null)}>Annuler</button>
         </div>
       )}
-      <form className="message-form" onSubmit={handleSendMessage}>
-        <input
-          value={content}
-          onChange={(event) => setContent(event.target.value)}
-          placeholder="Écris ton message..."
-        />
-        <button type="submit">Envoyer</button>
-      </form>
+      <MessageForm onSend={handleSendMessage} />
     </main>
   );
 }

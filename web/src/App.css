@@ -552,3 +552,63 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.composer {
+  position: relative;
+}
+
+.composer-above {
+  position: absolute;
+  bottom: 100%;
+  left: 1rem;
+  margin-bottom: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  z-index: 2;
+}
+
+.composer-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.5rem;
+  border-radius: 1rem;
+  background: var(--white);
+}
+
+.composer-panel .active {
+  outline: 2px solid var(--slate);
+}
+
+.composer-preview {
+  max-width: 26rem;
+  margin: 0;
+  padding: 0.5rem 1rem;
+  border-radius: 1rem;
+  background: var(--white);
+  font-size: 1.1rem;
+  overflow-wrap: anywhere;
+}
+
+.message-form .composer-tool {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  padding: 0;
+  background: var(--white);
+  color: var(--slate);
+  font-weight: 600;
+}
+
+.message-form .composer-tool.on {
+  background: var(--lavender-light);
+}
+
+.composer-tool img {
+  width: 1.4rem;
+  height: 1.4rem;
+}

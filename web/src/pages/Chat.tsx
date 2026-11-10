@@ -9,11 +9,13 @@ export type Message = {
   id: number;
   content: string;
   user: string;
+  anonymous?: boolean;
   metadata?: {
     conversus?: {
       channelName?: string;
       author?: string;
       replyTo?: number;
+      font?: string;
       reactTo?: number;
       value?: ReactionValue;
     };
