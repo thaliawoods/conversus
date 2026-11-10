@@ -1,4 +1,4 @@
-// L'espace 3D d'un ConVersus : la fleur au centre (Fleur.tsx, posée en HTML), les racines de lumière, la poussière, et la caméra
+// L'espace 3D d'un ConVersus : le pétunia en grains au centre, les racines de lumière, la poussière, et la caméra
 // qui tourne toujours autour de la fleur (glisser pour tourner, molette ou pincement pour zoomer).
 // Les messages restent du HTML (polices, effets, clics) : à chaque image, la scène projette leur position 3D
 // sur l'écran et place chaque élément enregistré (étiquette) au bon endroit, à la bonne taille,
@@ -7,6 +7,7 @@ import * as THREE from 'three'
 import { creerRendu, mouvementReduit, type Rendu } from './rendu'
 import { Faisceaux, type Def } from './faisceaux'
 import { creerPoussiere } from './poussiere'
+import { creerPetunia } from './grainsFleur'
 import { courbe3, departFleur, derive, plus, unitaire, type Noeud, type V3 } from './espace'
 import { BRIN, FLEUR_TAILLE, melange, type Place } from '../plan'
 import type { Mode } from '../Carte'
@@ -38,7 +39,7 @@ const TOUR_LENT = .022                 // rad/s : la scène tourne doucement qua
 const REPOS = 9000                     // ms sans interaction avant que la scène se remette à tourner
 
 // Les couleurs des racines : lavande pour les idées qui partent de la fleur, bleu ciel pour les réponses ;
-// un message rejeté tire vers le rouge, un message très aimé devient doré.
+// un message rejeté devient rouge et sa racine zigzague en pics ; un message très aimé devient doré.
 const RACINE_IDEE = '#dbd7f5'
 const RACINE_REPONSE = '#A9D4FF'
 const ROUGE = '#FF4A4A'
@@ -56,6 +57,27 @@ const courbe = (a: V3, vers: V3, b: V3, n = 10): V3[] => Array.from({ length: n 
   return [0, 1, 2].map(k => s * s * a[k] + 2 * s * t * vers[k] + t * t * b[k]) as V3
 })
 
+// Le zigzag d'une racine rejetée : des pics de part et d'autre de la racine (telle qu'on la voit), sur sa partie
+// centrale ; il s'efface avant les terminaisons, qui restent accrochées. `force` : 0 → 1.
+const PIC = 20                          // hauteur d'un pic à pleine force (unités de la scène)
+function zigzag(pts: V3[], cote: V3, force: number): V3[] {
+  const n = pts.length - 1
+  let L = 0
+  for (let i = 1; i <= n; i++) L += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1], pts[i][2] - pts[i - 1][2])
+  const pics = Math.max(6, Math.min(18, Math.round(L / 34))) * 2
+  const sur = (t: number): V3 => {
+    const f = t * n, i = Math.min(n - 1, Math.floor(f)), k = f - i
+    return [0, 1, 2].map(c => pts[i][c] + (pts[i + 1][c] - pts[i][c]) * k) as V3
+  }
+  // les sommets des pics, plus de quoi garder la courbe ailleurs ; entre deux pics, le trait est droit
+  const ts = [...new Set([...Array.from({ length: 33 }, (_, i) => i / 32), ...Array.from({ length: pics + 1 }, (_, j) => j / pics)])].sort((a, b) => a - b)
+  return ts.map(t => {
+    const x = t * pics, dent = 1 - 2 * Math.abs((x % 2) - 1)
+    const env = Math.min(1, t / .1) * Math.max(0, Math.min(1, (.72 - t) / .14))
+    return plus(sur(t), cote, dent * env * PIC * force)
+  })
+}
+
 type Cam = { theta: number; phi: number; dist: number; cible: THREE.Vector3 }
 
 export class Espace {
@@ -63,6 +85,8 @@ export class Espace {
   private camera = new THREE.PerspectiveCamera(CHAMP, 1, 5, 12000)
   private faisceaux: Faisceaux
   private poussiere: ReturnType<typeof creerPoussiere>
+  private fleur: ReturnType<typeof creerPetunia>
+  private pics = new Map<number, { actuel: number; cible: number }>()   // le zigzag de chaque racine rejetée
   private horloge = new THREE.Timer()
   private mouvement = mouvementReduit() ? .25 : 1
   private taille = { l: 1, h: 1 }
@@ -104,7 +128,12 @@ export class Espace {
       nombre: 1600, etendue: { x: 2600, y: 2600, z: 2600 }, taille: 2.6 * rendu.ratio, mouvement: this.mouvement,
       couleurs: ['#7CFFB2', '#AEB3FF', '#FF9AA8', '#FFE27A', '#6FE3D2', '#c4e6ff'],
     })
-    rendu.scene.add(this.poussiere.objet, this.faisceaux.groupe)
+    // Le pétunia du centre, en grains comme le glaïeul de la connexion : il baigne dans le bloom.
+    // Les racines, elles, sont dessinées après le bloom (scène nette) : un trait net, sans lueur derrière.
+    this.fleur = creerPetunia({ hauteur: 410, grainsLargeur: 200, mouvement: this.mouvement })
+    this.fleur.uniforms.uTailleMin.value = 1.1 * rendu.ratio
+    rendu.scene.add(this.poussiere.objet, this.fleur.groupe)
+    rendu.nette.add(this.faisceaux.groupe)
 
     this.obs = new ResizeObserver(() => {
       this.taille = { l: Math.max(1, conteneur.clientWidth), h: Math.max(1, conteneur.clientHeight) }
@@ -251,9 +280,15 @@ export class Espace {
       if (vise(d.survol) || vise(regarde)) eclat *= 1.6
       else if (regarde !== null && d.mode === 'normal') eclat *= .45
       const solde = p.m.pour - p.m.contre
-      const rejet = Math.min(1, Math.max(0, -solde / AVIS_PLEIN)), adhesion = Math.min(1, Math.max(0, solde / AVIS_PLEIN))
+      // Dès qu'un message a plus de dislikes que de likes, sa racine est rouge et zigzague ; plus il est rejeté,
+      // plus les pics sont hauts.
+      const rejet = solde < 0 ? .55 + .45 * Math.min(1, (-solde - 1) / (AVIS_PLEIN - 1)) : 0
+      const adhesion = Math.min(1, Math.max(0, solde / AVIS_PLEIN))
+      const pic = this.pics.get(p.m.id)
+      if (pic) pic.cible = rejet
+      else this.pics.set(p.m.id, { actuel: rejet, cible: rejet })
       const base = n.parent === null ? RACINE_IDEE : RACINE_REPONSE
-      const teinte = adhesion > 0 ? melange(base, OR, adhesion) : melange(base, ROUGE, rejet * .85)
+      const teinte = adhesion > 0 ? melange(base, OR, adhesion) : rejet > 0 ? melange(base, ROUGE, .7 + .3 * rejet) : base
       // Un trait fin qui ondule à peine, comme une fibre nerveuse ; ses terminaisons, plus fines et plus pâles.
       f.regler('m' + p.m.id, {
         couleurA: teinte, couleurB: melange(teinte, '#ffffff', .25), eclat, rayon: .9, energie: .25,
@@ -320,11 +355,15 @@ export class Espace {
       const S = P && aP ? plus(aP, P.dir, P.libre ? AU_DELA_IDEE : AU_DELA_REPONSE) : departFleur(n)
       const pts = courbe3(S, this.ancres.get(n.id)!, n.id)
       this.traces.set(n.id, pts)
-      this.faisceaux.tracer('m' + n.id, pts)
-      // Les terminaisons : elles quittent la racine peu avant le message et s'ouvrent en éventail, de part et
-      // d'autre de la racine telle qu'on la voit (perpendiculairement à la caméra).
+      // « de côté » : perpendiculaire à la racine telle qu'on la voit (et à la caméra)
       const fin = pts[pts.length - 1], u = unitaire([fin[0] - pts[28][0], fin[1] - pts[28][1], fin[2] - pts[28][2]])
       const cote = unitaire([u[1] * avant.z - u[2] * avant.y, u[2] * avant.x - u[0] * avant.z, u[0] * avant.y - u[1] * avant.x])
+      // Le zigzag d'un message rejeté pousse (ou se résorbe) en douceur.
+      const pic = this.pics.get(n.id)
+      if (pic) pic.actuel += (pic.cible - pic.actuel) * (1 - Math.exp(-dt * 2.5))
+      this.faisceaux.tracer('m' + n.id, pic && pic.actuel > .01 ? zigzag(pts, cote, pic.actuel) : pts)
+      // Les terminaisons : elles quittent la racine peu avant le message et s'ouvrent en éventail, de part et
+      // d'autre de la racine.
       TERMINAISONS.forEach(([i, ecart, avance], k) => {
         const depart = pts[i]
         const bout = plus(plus(fin, cote, ecart), u, avance)
@@ -339,14 +378,23 @@ export class Espace {
       this.faisceaux.tracer(br.cle, [debut, pied, tete])
     }
 
+    // Le pétunia fait toujours face à la caméra. Il brille d'autant plus que le débat vit ;
+    // quand tout le débat est pris pour une synthèse, il s'illumine.
+    const fl = this.fleur
+    fl.groupe.quaternion.copy(cam.quaternion)
+    fl.groupe.updateMatrixWorld()
+    fl.uniforms.uTaille.value = 1.15 * fl.ecart * h / (2 * Math.tan(THREE.MathUtils.degToRad(CHAMP / 2))) * this.rendu.ratio
+    fl.uniforms.uEclat.value = (.55 + .45 * d.vie) * (d.fleurPrise ? 1.35 : 1)
+    fl.uniforms.uTemps.value = temps
+
     // Le pointeur dans l'espace : là où la souris vise, à la profondeur de ce qu'on regarde.
     if (this.pointeurEcran) {
       const ray = new THREE.Raycaster()
       ray.setFromCamera(new THREE.Vector2(this.pointeurEcran.x / l * 2 - 1, -(this.pointeurEcran.y / h) * 2 + 1), cam)
       const plan = new THREE.Plane().setFromNormalAndCoplanarPoint(avant, c.cible)
       const p = new THREE.Vector3()
-      if (ray.ray.intersectPlane(plan, p)) this.faisceaux.pointeur(p.x, p.y, p.z)
-    } else this.faisceaux.sansPointeur()
+      if (ray.ray.intersectPlane(plan, p)) { this.faisceaux.pointeur(p.x, p.y, p.z); fl.pointeur(p) }
+    } else { this.faisceaux.sansPointeur(); fl.pointeur(null) }
 
     // Le HTML suit : chaque étiquette est posée sur la projection de son point 3D.
     const focale = h / (2 * Math.tan(THREE.MathUtils.degToRad(CHAMP / 2)))
@@ -446,6 +494,7 @@ export class Espace {
     c.removeEventListener('wheel', this.roule)
     this.faisceaux.liberer()
     this.poussiere.liberer()
+    this.fleur.liberer()
     this.horloge.dispose()
     this.rendu.liberer()
   }

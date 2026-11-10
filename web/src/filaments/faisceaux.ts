@@ -13,8 +13,8 @@
 import * as THREE from 'three'
 import { BRUIT, POINT_DOUX } from './bruit'
 
-export const ECH = 64           // points de la ligne centrale
-const SEGMENTS = 72             // segments par brin
+export const ECH = 128          // points de la ligne centrale (assez pour garder les pics d'un zigzag)
+const SEGMENTS = 128            // segments par brin
 const PARAMS = 5                // texels de réglages par faisceau
 
 export type Pt3 = [number, number, number]

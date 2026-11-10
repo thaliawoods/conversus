@@ -86,7 +86,8 @@ void main() {
 // Lit l'image et garde un grain par pixel de la fleur (pixel opaque, et pas blanc quand l'image a un fond blanc).
 // La couleur d'origine est remplacée par des bleus, en gardant la lumière de chaque pixel : le modelé des pétales
 // reste intact. Les pétales (roses, violets) prennent les bleus des pétales ; tige, feuilles et cœur, les bleus sombres.
-function grains(img: HTMLImageElement, largeurGrains: number, H: number, rapport: number, fondBlanc: boolean) {
+// `gain` : éclaircit l'image avant de choisir les bleus (le violet du pétunia, plus sombre que le rose du glaïeul).
+function grains(img: HTMLImageElement, largeurGrains: number, H: number, rapport: number, fondBlanc: boolean, gain: number) {
   const W = H * rapport
   const l = largeurGrains, h = Math.round(l / rapport)
   const cv = document.createElement('canvas')
@@ -104,7 +105,7 @@ function grains(img: HTMLImageElement, largeurGrains: number, H: number, rapport
       const [r, g, b] = [data[i] / 255, data[i + 1] / 255, data[i + 2] / 255]
       if (fondBlanc && Math.min(r, g, b) > .9 && Math.max(r, g, b) - Math.min(r, g, b) < .08) continue
       const rose = Math.max(0, Math.min(1, (Math.max(r, b) - g) * 2.2))
-      const lumiere = Math.min(1, .3 * r + .59 * g + .11 * b)
+      const lumiere = Math.min(1, (.3 * r + .59 * g + .11 * b) * gain)
       degrade(petale, PETALE, contraste(lumiere))
       degrade(tige, TIGE, contraste(lumiere))
       const c = tige.lerp(petale, rose)
@@ -122,14 +123,15 @@ function grains(img: HTMLImageElement, largeurGrains: number, H: number, rapport
 
 type Options = { hauteur: number; grainsLargeur: number; mouvement: number; centre?: number }
 
-export const creerGlaieul = (o: Options) => creerFleurEnGrains({ ...o, image: imageGlaieul, rapport: RAPPORT, fondBlanc: false })
+export const creerGlaieul = (o: Options) =>
+  creerFleurEnGrains({ ...o, image: imageGlaieul, rapport: RAPPORT, fondBlanc: false, gain: 1 })
 export const creerPetunia = (o: Options) =>
-  creerFleurEnGrains({ centre: COEUR_PETUNIA, ...o, image: imagePetunia, rapport: RAPPORT_PETUNIA, fondBlanc: true })
+  creerFleurEnGrains({ centre: COEUR_PETUNIA, ...o, image: imagePetunia, rapport: RAPPORT_PETUNIA, fondBlanc: true, gain: 1.5 })
 
 // hauteur : hauteur de l'image dans la scène · grainsLargeur : nombre de grains sur la largeur de l'image
 // centre : le point de l'image (fraction de la hauteur, depuis le haut) placé à l'origine du groupe.
 // `groupe` se place et s'oriente dans la scène ; `interieur` sert à ramener le pointeur dans le repère des grains.
-function creerFleurEnGrains(o: Options & { image: string; rapport: number; fondBlanc: boolean }) {
+function creerFleurEnGrains(o: Options & { image: string; rapport: number; fondBlanc: boolean; gain: number }) {
   const H = o.hauteur, W = H * o.rapport
   const uniforms = {
     uTemps: { value: 0 }, uMouvement: { value: o.mouvement },
@@ -150,7 +152,7 @@ function creerFleurEnGrains(o: Options & { image: string; rapport: number; fondB
   const img = new Image()
   img.onload = () => {
     if (libere) return
-    nuage = new THREE.Points(grains(img, o.grainsLargeur, H, o.rapport, o.fondBlanc), mat)
+    nuage = new THREE.Points(grains(img, o.grainsLargeur, H, o.rapport, o.fondBlanc, o.gain), mat)
     nuage.frustumCulled = false
     interieur.add(nuage)
   }

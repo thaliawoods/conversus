@@ -7,7 +7,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Espace, type Brin, type Regard } from './filaments/Toile'
 import { spatialiser } from './filaments/espace'
-import Fleur from './Fleur'
 import type { Debat, MsgConv } from './conversus'
 import {
   BULLE_L, FLEUR_TAILLE, FLEURS,
@@ -193,12 +192,13 @@ export default function Carte({
       )}
 
       <div className="bd-espace">
-        {/* La fleur orange du cœur du débat (Fleur.tsx) : elle suit le centre de la scène et fait toujours face à la
-            caméra ; elle vit et fane avec le débat. Le clic ne doit pas remonter jusqu'au board (il quitterait le focus). */}
+        {/* La fleur (le pétunia en grains) est dessinée par la scène ; ici, sa zone cliquable.
+            Le clic ne doit pas remonter jusqu'au board, qui quitterait aussitôt le focus. */}
         <div className="bd-ancre" ref={accrocher('fleur')}>
           <div className={'bd-coeur' + (choix ? ' prenable' : '') + (toutPris ? ' choisie' : '')} onClick={e => e.stopPropagation()}>
-            <Fleur vie={vie} taille={FLEUR_TAILLE} className="bd-fleur" onClick={clicFleur}
-                   titre={!choix ? 'Proposer une nouvelle idée' : toutPris ? 'Tout désélectionner' : 'Synthèse de tout le débat'} />
+            <button className="bd-fleur" style={{ width: FLEUR_TAILLE * 1.1, height: FLEUR_TAILLE * 1.1 }} onClick={clicFleur}
+                    title={!choix ? 'Proposer une nouvelle idée' : toutPris ? 'Tout désélectionner' : 'Synthèse de tout le débat'}
+                    aria-label={!choix ? 'Proposer une nouvelle idée' : toutPris ? 'Tout désélectionner' : 'Synthèse de tout le débat'} />
           </div>
         </div>
 
