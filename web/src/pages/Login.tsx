@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from "react";
+import Logo from "../components/Logo";
 
 const Gladiolus = lazy(() => import("../login-flower/Gladiolus"));
 
@@ -68,7 +69,7 @@ function Login({ onLogin }: LoginProps) {
       </Suspense>
 
       <form className="login-card" onSubmit={handleSubmit}>
-        <p className="login-brand">ConVersus</p>
+        <Logo />
         <h2>
           Ici exprime toi librement avec tes messages qui{" "}
           <span className="shape-word" style={{ fontFamily: SHAPE_FONTS[fontIndex] }}>
@@ -97,6 +98,13 @@ function Login({ onLogin }: LoginProps) {
         {error && <p className="login-error">{error}</p>}
         <button className="login-button" type="submit" disabled={loading}>
           {loading ? "…" : signingUp ? "Créer mon compte" : "Se connecter"}
+          {/* Variante à montrer à la créa : pictogramme à la place de « Se connecter »
+              (ajouter aria-label="Se connecter" et title="Se connecter" sur le bouton)
+          <svg viewBox="0 0 24 24" aria-hidden>
+            <path d="M14 4h6v16h-6" />
+            <path d="M3 12h12M11 8l4 4-4 4" />
+          </svg>
+          */}
         </button>
         <button
           type="button"
@@ -106,7 +114,7 @@ function Login({ onLogin }: LoginProps) {
             setError("");
           }}
         >
-          {signingUp ? "J’ai déjà un compte" : "Pas encore de compte ? En créer un"}
+          {signingUp ? "J’ai déjà un compte" : "Pas encore de compte ? Inscris toi"}
         </button>
       </form>
     </main>

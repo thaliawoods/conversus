@@ -2,7 +2,8 @@
 .login {
   min-height: 100vh;
   display: grid;
-  place-items: center;
+  place-items: center start;
+  padding-left: 8vw;
   position: relative;
   overflow: hidden;
   background: radial-gradient(ellipse at 70% 40%, #141832 0%, #090b17 70%);
@@ -20,51 +21,54 @@
 .login-card {
   --ice: #c4e6ff;
   --bright-blue: #2f62ff;
-  --border-line: rgba(196, 230, 255, 0.16);
   position: relative;
   z-index: 2;
-  width: min(26rem, 88vw);
-  padding: 2.2rem 2.3rem 1.9rem;
+  width: min(30rem, 84vw);
   display: flex;
   flex-direction: column;
   gap: 1.05rem;
-  background: linear-gradient(160deg, rgba(18, 24, 58, 0.5), rgba(7, 9, 22, 0.66));
-  backdrop-filter: blur(18px) saturate(1.3);
-  -webkit-backdrop-filter: blur(18px) saturate(1.3);
-  border: 1px solid var(--border-line);
-  border-radius: 1.6rem;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(196, 230, 255, 0.12),
-    0 0 60px rgba(47, 98, 255, 0.12);
   color: var(--white);
-}
-
-.login-card::before {
-  content: "";
-  position: absolute;
-  top: -1px;
-  left: 12%;
-  right: 12%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--ice), transparent);
-  opacity: 0.75;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.8);
 }
 
 .login-brand {
-  margin: 0;
-  font-family: var(--font-title);
-  font-size: 0.72rem;
-  letter-spacing: 0.32em;
+  margin: 0 0 0.6rem;
+  display: flex;
+  align-items: center;
+  font-family: var(--font-text);
+  font-weight: 600;
+  font-style: italic;
+  font-size: 2.6rem;
+  line-height: 1;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
-  color: var(--ice);
+  color: var(--white);
+}
+
+.logo-flower {
+  position: relative;
+  width: 1.35em;
+  height: 1.35em;
+  margin: 0 -0.14em 0 -0.1em;
+}
+
+.logo-flower canvas {
+  position: absolute;
+  left: -75%;
+  top: -75%;
+  width: 250%;
+  height: 250%;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .login-card h2 {
   margin: 0 0 0.5rem;
   min-height: 3.9em;
-  font-family: var(--font-text);
+  font-family: "OpenSans", var(--font-text);
   font-weight: 400;
-  font-size: 1.55rem;
-  line-height: 1.28;
+  font-size: 2.3rem;
+  line-height: 1.1;
   letter-spacing: -0.01em;
   color: var(--white);
 }
@@ -72,7 +76,6 @@
 .shape-word {
   display: inline;
   color: var(--ice);
-  text-shadow: 0 0 18px rgba(47, 98, 255, 0.75);
 }
 
 .login-field {
@@ -112,26 +115,38 @@
 }
 
 .login-button {
-  width: 100%;
-  margin-top: 0.6rem;
-  padding: 0.85rem;
-  border: 1px solid rgba(196, 230, 255, 0.55);
-  border-radius: 999px;
-  background: linear-gradient(120deg, rgba(47, 98, 255, 0.85), rgba(120, 180, 255, 0.75));
-  color: var(--white);
-  font-size: 0.8rem;
+  align-self: flex-start;
+  min-width: 2.8rem;
+  height: 2.8rem;
+  margin-top: 0.4rem;
+  padding: 0 1.1rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(196, 230, 255, 0.28);
+  background: transparent;
+  color: rgba(196, 230, 255, 0.85);
+  font-size: 0.66rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  text-shadow: 0 1px 8px rgba(5, 10, 40, 0.45);
-  box-shadow: 0 8px 26px rgba(47, 98, 255, 0.35);
   cursor: pointer;
-  transition: transform 0.2s cubic-bezier(0.3, 0.7, 0.3, 1), box-shadow 0.3s, background 0.3s;
+  transition: border-color 0.25s, color 0.25s;
+}
+
+.login-button:has(svg) {
+  padding: 0;
+}
+
+.login-button svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
 }
 
 .login-button:hover {
-  transform: translateY(-1px);
-  background: linear-gradient(120deg, rgba(70, 120, 255, 0.95), rgba(160, 205, 255, 0.9));
-  box-shadow: 0 0 0 4px rgba(47, 98, 255, 0.18), 0 10px 34px rgba(47, 98, 255, 0.55);
+  border-color: var(--ice);
+  color: var(--white);
 }
 
 .login-button:disabled {
@@ -146,7 +161,7 @@
 }
 
 .login-switch {
-  align-self: center;
+  align-self: flex-start;
   padding: 0 0 0.1rem;
   border: none;
   border-bottom: 1px solid transparent;
@@ -160,6 +175,13 @@
 .login-switch:hover {
   color: var(--ice);
   border-bottom-color: var(--ice);
+}
+
+@media (max-width: 700px) {
+  .login {
+    place-items: center;
+    padding-left: 0;
+  }
 }
 
 .nav {

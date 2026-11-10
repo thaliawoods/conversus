@@ -16,6 +16,13 @@
 }
 
 @font-face {
+  font-family: "PoppinsTN";
+  src: url("/fonts/poppins-tn-display-semibold-italic.ttf");
+  font-weight: 600;
+  font-style: italic;
+}
+
+@font-face {
   font-family: "Tremplin";
   src: url("/fonts/tremplin.otf");
 }
