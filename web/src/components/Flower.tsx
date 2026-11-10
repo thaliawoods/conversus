@@ -1,8 +1,8 @@
 const petals = [0, 1, 2, 3, 4];
 
-function Flower() {
+function Flower({ className = "flower" }: { className?: string }) {
   return (
-    <svg className="flower" viewBox="-50 -50 100 100">
+    <svg className={className} viewBox="-50 -50 100 100">
       {petals.map((petal) => {
         const angle = (petal * 2 * Math.PI) / petals.length;
         return (

@@ -4,14 +4,9 @@ import Navbar, { type Channel } from "../components/Navbar";
 import Flower from "../components/Flower";
 import type { Message } from "./Chat";
 import { placeMessages, stemPath, type Placement } from "../layout";
+import { useCamera } from "../hooks/useCamera";
 
 type DebateProps = { token: string };
-
-const DRAG_THRESHOLD = 5;
-const ZOOM_MIN = 0.2;
-const ZOOM_MAX = 2.5;
-const ZOOM_SPEED = 0.01;
-const WHEEL_MAX = 50;
 
 function findParents(replies: Message[]) {
   return replies.map((message) => {
@@ -29,10 +24,15 @@ function Debate({ token }: DebateProps) {
   const messageRefs = useRef<HTMLDivElement[]>([]);
   const [openId, setOpenId] = useState<number | null>(null);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
-  const [camera, setCamera] = useState({ x: 0, y: 0, zoom: 1 });
-  const drag = useRef<{ x: number; y: number; cameraX: number; cameraY: number } | null>(null);
-  const dragged = useRef(false);
-  const viewportRef = useRef<HTMLDivElement>(null);
+  const {
+    camera,
+    viewportRef,
+    handlePointerDown,
+    handlePointerMove,
+    handlePointerUp,
+    handleClickCapture,
+    recenter,
+  } = useCamera();
   const debate = channels.find((channel) => channel.id === Number(channelId));
   const parents = findParents(replies);
 
@@ -75,35 +75,6 @@ function Debate({ token }: DebateProps) {
     setPositions(placeMessages(sizes, parents, ids));
   }, [replies]);
 
-  useEffect(() => {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-
-    const handleWheel = (event: WheelEvent) => {
-      event.preventDefault();
-      if (event.ctrlKey || event.metaKey) {
-        const rect = viewport.getBoundingClientRect();
-        const pointerX = event.clientX - rect.left - rect.width / 2;
-        const pointerY = event.clientY - rect.top - rect.height / 2;
-        const delta = Math.max(-WHEEL_MAX, Math.min(WHEEL_MAX, event.deltaY));
-        setCamera((current) => {
-          const zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, current.zoom * Math.exp(-delta * ZOOM_SPEED)));
-          const ratio = zoom / current.zoom;
-          return {
-            x: pointerX - (pointerX - current.x) * ratio,
-            y: pointerY - (pointerY - current.y) * ratio,
-            zoom,
-          };
-        });
-      } else {
-        setCamera((current) => ({ ...current, x: current.x - event.deltaX, y: current.y - event.deltaY }));
-      }
-    };
-
-    viewport.addEventListener("wheel", handleWheel, { passive: false });
-    return () => viewport.removeEventListener("wheel", handleWheel);
-  }, []);
-
   async function handleSendMessage(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!content.trim()) return;
@@ -131,29 +102,6 @@ function Debate({ token }: DebateProps) {
     setReplyingTo(null);
   }
 
-  function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
-    if (event.button !== 0) return;
-    drag.current = { x: event.clientX, y: event.clientY, cameraX: camera.x, cameraY: camera.y };
-    dragged.current = false;
-  }
-
-  function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
-    const start = drag.current;
-    if (!start) return;
-    const dx = event.clientX - start.x;
-    const dy = event.clientY - start.y;
-    if (!dragged.current && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
-    if (!dragged.current) {
-      dragged.current = true;
-      event.currentTarget.setPointerCapture(event.pointerId);
-    }
-    setCamera((current) => ({ ...current, x: start.cameraX + dx, y: start.cameraY + dy }));
-  }
-
-  function handlePointerUp() {
-    drag.current = null;
-  }
-
   return (
     <main className="chat debate">
       <Navbar channels={channels} />
@@ -165,9 +113,7 @@ function Debate({ token }: DebateProps) {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
-        onClickCapture={(event) => {
-          if (dragged.current) event.stopPropagation();
-        }}
+        onClickCapture={handleClickCapture}
         onClick={() => setOpenId(null)}
       >
         <div className="board" style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})` }}>
@@ -207,6 +153,19 @@ function Debate({ token }: DebateProps) {
             </div>
           ))}
         </div>
+        <button
+          type="button"
+          className="recenter"
+          aria-label="Recentrer"
+          title="Recentrer"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            recenter();
+          }}
+        >
+          <Flower className="recenter-icon" />
+        </button>
       </div>
       {replyingTo && (
         <div className="reply-banner">

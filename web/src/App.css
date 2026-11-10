@@ -419,6 +419,19 @@
   top: 50%;
 }
 
+.recenter {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  cursor: pointer;
+}
+
+.recenter-icon {
+  display: block;
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
 .stems {
   position: absolute;
   left: 0;
