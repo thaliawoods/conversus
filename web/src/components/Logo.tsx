@@ -47,7 +47,9 @@ function createGrains(dot: number) {
   return grains;
 }
 
-function Logo() {
+type LogoProps = { still?: boolean; className?: string };
+
+function Logo({ still = false, className = "login-brand" }: LogoProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -57,9 +59,10 @@ function Logo() {
     const layerContext = layer.getContext("2d");
     if (!canvas || !context || !layerContext) return;
 
-    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
     const ratio = window.devicePixelRatio || 1;
     const size = Math.round(canvas.clientWidth * ratio);
+    if (size === 0) return;
     canvas.width = canvas.height = layer.width = layer.height = size;
     const center = size / 2;
     const radius = size * 0.185;
@@ -72,11 +75,11 @@ function Logo() {
       pointer.x = event.clientX;
       pointer.y = event.clientY;
     };
-    window.addEventListener("pointermove", handlePointerMove);
+    if (!still) window.addEventListener("pointermove", handlePointerMove);
 
     function draw(now: number) {
       if (!canvas || !context || !layerContext) return;
-      const time = still ? 0 : now;
+      const time = still || reduceMotion ? 0 : now;
       const rect = canvas.getBoundingClientRect();
       const px = (pointer.x - rect.left) * (size / rect.width);
       const py = (pointer.y - rect.top) * (size / rect.height);
@@ -112,7 +115,7 @@ function Logo() {
       context.globalAlpha = 0.25;
       context.filter = `blur(${size / 100}px)`;
       context.drawImage(layer, 0, 0);
-      frameId = requestAnimationFrame(draw);
+      if (!still) frameId = requestAnimationFrame(draw);
     }
     frameId = requestAnimationFrame(draw);
 
@@ -120,10 +123,10 @@ function Logo() {
       cancelAnimationFrame(frameId);
       window.removeEventListener("pointermove", handlePointerMove);
     };
-  }, []);
+  }, [still]);
 
   return (
-    <p className="login-brand" role="img" aria-label="ConVersus">
+    <p className={className} role="img" aria-label="ConVersus">
       C
       <span className="logo-flower">
         <canvas ref={canvasRef} />

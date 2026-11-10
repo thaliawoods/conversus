@@ -73,6 +73,13 @@
   --accent: linear-gradient(120deg, #4e5675, #6b7395);
   --font-title: "Frames", sans-serif;
   --font-text: "PoppinsTN", system-ui, sans-serif;
+  --night: #090b17;
+  --background: radial-gradient(ellipse at 70% 40%, #141832 0%, #090b17 70%);
+  --deep-blue: #0a1670;
+  --bright-blue: #2f62ff;
+  --ice: #c4e6ff;
+  --ice-soft: rgba(196, 230, 255, 0.72);
+  --line: rgba(196, 230, 255, 0.28);
 }
 
 * {
@@ -82,7 +89,7 @@
 body {
   margin: 0;
   font-family: var(--font-text);
-  color: var(--ink);
+  color: var(--white);
 }
 
 h1 {

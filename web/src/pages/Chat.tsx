@@ -23,9 +23,9 @@ export type Message = {
   };
 };
 
-type ChatProps = { token: string; onTokenExpired: () => void };
+type ChatProps = { token: string; onTokenExpired: () => void; onSwitch: (newToken: string) => void };
 
-function Chat({ token, onTokenExpired }: ChatProps) {
+function Chat({ token, onTokenExpired, onSwitch }: ChatProps) {
   const { channelId } = useParams();
   const navigate = useNavigate();
   const [channels, setChannels] = useState<Channel[]>([]);
@@ -212,7 +212,7 @@ function Chat({ token, onTokenExpired }: ChatProps) {
 
   return (
     <main className="chat">
-      <Navbar channels={channels} />
+      <Navbar channels={channels} onSwitch={onSwitch} onLogout={onTokenExpired} />
       <div className="chat-actions">
         <h2 className="channel-title">{currentChannel?.name}</h2>
         <button type="button" onClick={handleToggleSelecting}>

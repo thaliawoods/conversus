@@ -9,7 +9,7 @@ import { useCamera } from "../hooks/useCamera";
 import MessageForm from "../components/MessageForm";
 import { fontFamily } from "../fonts";
 
-type DebateProps = { token: string };
+type DebateProps = { token: string; onTokenExpired: () => void; onSwitch: (newToken: string) => void };
 
 function findParents(replies: Message[]) {
   return replies.map((message) => {
@@ -33,7 +33,7 @@ function displayName(message: Message) {
   return message.anonymous || name === "anonymous" ? "Anonyme" : name;
 }
 
-function Debate({ token }: DebateProps) {
+function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
   const { channelId } = useParams();
   const [channels, setChannels] = useState<Channel[]>([]);
   const [replies, setReplies] = useState<Message[]>([]);
@@ -154,7 +154,7 @@ function Debate({ token }: DebateProps) {
 
   return (
     <main className="chat debate">
-      <Navbar channels={channels} />
+      <Navbar channels={channels} onSwitch={onSwitch} onLogout={onTokenExpired} />
       <h2 className="channel-title">{debate?.name.replace(/#\d+$/, "")}</h2>
       <div
         className="viewport"

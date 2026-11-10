@@ -3,7 +3,6 @@ import { Navigate, Route, Routes } from "react-router";
 import Chat from "./pages/Chat";
 import Login from "./pages/Login";
 import Debate from "./pages/Debate";
-import AccountMenu from "./components/AccountMenu";
 import "./App.css";
 
 function App() {
@@ -13,7 +12,7 @@ function App() {
     setToken("");
   }
   const chatOrLogin = token ? (
-    <Chat token={token} onTokenExpired={handleTokenExpired} />
+    <Chat token={token} onTokenExpired={handleTokenExpired} onSwitch={setToken} />
   ) : (
     <Navigate to="/login" replace />
   );
@@ -29,10 +28,15 @@ function App() {
       <Route path="/channel/:channelId" element={chatOrLogin} />
       <Route
         path="/debate/:channelId"
-        element={token ? <Debate token={token} /> : <Navigate to="/login" replace />}
+        element={
+          token ? (
+            <Debate token={token} onTokenExpired={handleTokenExpired} onSwitch={setToken} />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
       />
     </Routes>
-    {token && <AccountMenu onSwitch={setToken} onLogout={handleTokenExpired} />}
     </>
   );}
 
