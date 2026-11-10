@@ -429,3 +429,24 @@
 .flower-heart {
   fill: var(--slate);
 }
+
+.board-message {
+  position: absolute;
+  width: max-content;
+  max-width: 26rem;
+  overflow-wrap: anywhere;
+  transform: translate(-50%, -50%);
+}
+
+.board-message strong {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--slate);
+}
+
+.board-message p {
+  margin: 0;
+  font-size: 1.1rem;
+  line-height: 1.4;
+}

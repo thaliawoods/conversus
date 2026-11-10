@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
 import Navbar, { type Channel } from "../components/Navbar";
 import Flower from "../components/Flower";
 import type { Message } from "./Chat";
+import { placeMessages } from "../layout";
 
 type DebateProps = { token: string };
 
@@ -11,6 +12,8 @@ function Debate({ token }: DebateProps) {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [content, setContent] = useState("");
   const [replies, setReplies] = useState<Message[]>([]);
+  const [positions, setPositions] = useState<{ x: number; y: number }[]>([]);
+  const messageRefs = useRef<HTMLDivElement[]>([]);
   const debate = channels.find((channel) => channel.id === Number(channelId));
 
   useEffect(() => {
@@ -41,6 +44,14 @@ function Debate({ token }: DebateProps) {
     const intervalId = setInterval(loadMessages, 2000);
     return () => clearInterval(intervalId);
   }, [token, channelId]);
+
+  useLayoutEffect(() => {
+    const sizes = messageRefs.current.slice(0, replies.length).map((element) => ({
+      width: element.offsetWidth,
+      height: element.offsetHeight,
+    }));
+    setPositions(placeMessages(sizes));
+  }, [replies]);
 
   async function handleSendMessage(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -75,6 +86,19 @@ function Debate({ token }: DebateProps) {
       <div className="viewport">
         <div className="board">
           <Flower />
+          {replies.map((message, index) => (
+            <div
+              className="board-message"
+              key={message.id}
+              style={{ left: positions[index]?.x, top: positions[index]?.y }}
+              ref={(element) => {
+                if (element) messageRefs.current[index] = element;
+              }}
+            >
+              <strong>{message.metadata?.conversus?.author ?? message.user}</strong>
+              <p>{message.content}</p>
+            </div>
+          ))}
         </div>
       </div>
       <ul className="messages">
