@@ -404,6 +404,13 @@
   margin: 0 1rem;
   border-radius: 1.4rem;
   background: var(--surface);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.viewport:active {
+  cursor: grabbing;
 }
 
 .board {
