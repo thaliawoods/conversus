@@ -1,5 +1,11 @@
 import type { ReactionValue } from "../pages/Chat";
 
+export const REACTIONS: { value: ReactionValue; label: string }[] = [
+  { value: "leaf", label: "Feuille" },
+  { value: "thorn", label: "Épine" },
+  { value: "wilt", label: "Faner" },
+];
+
 type ReactionShapeProps = { value: ReactionValue; onStem?: boolean };
 
 export function ReactionShape({ value, onStem = false }: ReactionShapeProps) {

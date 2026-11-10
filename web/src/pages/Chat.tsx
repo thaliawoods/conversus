@@ -16,6 +16,7 @@ export type Message = {
       author?: string;
       replyTo?: number;
       font?: string;
+      effect?: ReactionValue;
       reactTo?: number;
       value?: ReactionValue;
     };

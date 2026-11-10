@@ -508,6 +508,15 @@
   gap: 0.3rem;
 }
 
+.message-actions button.on {
+  background: var(--lavender-light);
+}
+
+.message-actions img {
+  width: 1.4rem;
+  height: 1.4rem;
+}
+
 .reaction-icon {
   display: block;
   width: 1.5rem;

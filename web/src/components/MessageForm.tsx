@@ -1,16 +1,24 @@
 import { useState } from "react";
 import EmojiPicker, { EmojiStyle } from "emoji-picker-react";
 import { FONTS, fontFamily } from "../fonts";
+import ReactionIcon, { REACTIONS } from "./ReactionIcon";
+import type { ReactionValue } from "../pages/Chat";
 
 type MessageFormProps = {
-  onSend: (content: string, font: string | undefined, anonymous: boolean) => Promise<boolean>;
+  onSend: (
+    content: string,
+    font: string | undefined,
+    effect: ReactionValue | undefined,
+    anonymous: boolean,
+  ) => Promise<boolean>;
 };
 
-type Panel = "emoji" | "font" | null;
+type Panel = "emoji" | "font" | "effect" | null;
 
 function MessageForm({ onSend }: MessageFormProps) {
   const [content, setContent] = useState("");
   const [font, setFont] = useState<string | undefined>(undefined);
+  const [effect, setEffect] = useState<ReactionValue | undefined>(undefined);
   const [anonymous, setAnonymous] = useState(false);
   const [panel, setPanel] = useState<Panel>(null);
 
@@ -21,9 +29,10 @@ function MessageForm({ onSend }: MessageFormProps) {
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!content.trim()) return;
-    const sent = await onSend(content, font, anonymous);
+    const sent = await onSend(content, font, effect, anonymous);
     if (!sent) return;
     setContent("");
+    setEffect(undefined);
     setPanel(null);
   }
 
@@ -60,6 +69,34 @@ function MessageForm({ onSend }: MessageFormProps) {
             ))}
           </div>
         )}
+        {panel === "effect" && (
+          <div className="composer-panel">
+            <button
+              type="button"
+              className={effect === undefined ? "active" : undefined}
+              onClick={() => {
+                setEffect(undefined);
+                setPanel(null);
+              }}
+            >
+              Aucun
+            </button>
+            {REACTIONS.map((option) => (
+              <button
+                type="button"
+                key={option.value}
+                className={effect === option.value ? "active" : undefined}
+                onClick={() => {
+                  setEffect(option.value);
+                  setPanel(null);
+                }}
+              >
+                <ReactionIcon value={option.value} />
+                {option.label}
+              </button>
+            ))}
+          </div>
+        )}
         {content && (
           <p className="composer-preview" style={{ fontFamily: fontFamily(font) }}>
             {content}
@@ -86,6 +123,16 @@ function MessageForm({ onSend }: MessageFormProps) {
           onClick={() => togglePanel("font")}
         >
           Aa
+        </button>
+        <button
+          type="button"
+          className={panel === "effect" ? "composer-tool on" : "composer-tool"}
+          title="Choisir l'effet"
+          aria-label="Choisir l'effet"
+          aria-expanded={panel === "effect"}
+          onClick={() => togglePanel("effect")}
+        >
+          ✦
         </button>
         <button
           type="button"

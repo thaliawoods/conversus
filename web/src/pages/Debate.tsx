@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
 import Navbar, { type Channel } from "../components/Navbar";
 import Flower from "../components/Flower";
-import ReactionIcon, { ReactionShape } from "../components/ReactionIcon";
+import ReactionIcon, { REACTIONS, ReactionShape } from "../components/ReactionIcon";
 import type { Message, ReactionValue } from "./Chat";
 import { placeMessages, pointOnStem, stemPath, wiltSag, type Placement } from "../layout";
 import { useCamera } from "../hooks/useCamera";
@@ -11,12 +11,6 @@ import { fontFamily } from "../fonts";
 
 type DebateProps = { token: string };
 
-const REACTIONS: { value: ReactionValue; label: string }[] = [
-  { value: "leaf", label: "Feuille" },
-  { value: "thorn", label: "Épine" },
-  { value: "wilt", label: "Faner" },
-];
-
 function findParents(replies: Message[]) {
   return replies.map((message) => {
     const index = replies.findIndex((other) => other.id === message.metadata?.conversus?.replyTo);
@@ -24,12 +18,14 @@ function findParents(replies: Message[]) {
   });
 }
 
-function countWilts(reactions: Message[], messageId: number) {
-  return reactions.filter(
+function countWilts(reactions: Message[], message: Message) {
+  const fromReactions = reactions.filter(
     (reaction) =>
-      reaction.metadata?.conversus?.reactTo === messageId &&
+      reaction.metadata?.conversus?.reactTo === message.id &&
       reaction.metadata?.conversus?.value === "wilt",
   ).length;
+  const fromEffect = message.metadata?.conversus?.effect === "wilt" ? 1 : 0;
+  return fromReactions + fromEffect;
 }
 
 function displayName(message: Message) {
@@ -46,6 +42,7 @@ function Debate({ token }: DebateProps) {
   const messageRefs = useRef<HTMLDivElement[]>([]);
   const [openId, setOpenId] = useState<number | null>(null);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [reactAnonymously, setReactAnonymously] = useState(false);
   const {
     camera,
     viewportRef,
@@ -96,14 +93,20 @@ function Debate({ token }: DebateProps) {
     }));
     const parents = findParents(replies);
     const ids = replies.map((message) => message.id);
-    const sags = replies.map((message) => wiltSag(countWilts(reactions, message.id)));
+    const sags = replies.map((message) => wiltSag(countWilts(reactions, message)));
     setPositions(placeMessages(sizes, parents, ids, sags));
   }, [replies, reactions]);
 
-  async function handleSendMessage(content: string, font: string | undefined, anonymous: boolean) {
-    const metadata: { replyTo?: number; font?: string } = {};
+  async function handleSendMessage(
+    content: string,
+    font: string | undefined,
+    effect: ReactionValue | undefined,
+    anonymous: boolean,
+  ) {
+    const metadata: { replyTo?: number; font?: string; effect?: ReactionValue } = {};
     if (replyingTo) metadata.replyTo = replyingTo.id;
     if (font) metadata.font = font;
+    if (effect) metadata.effect = effect;
 
     const response = await fetch(
       "http://localhost:4000/channel/message?namespace=conversus",
@@ -142,6 +145,7 @@ function Debate({ token }: DebateProps) {
           content: "",
           channel: Number(channelId),
           metadata: { reactTo: message.id, value },
+          anonymous: reactAnonymously,
         }),
       },
     );
@@ -170,25 +174,24 @@ function Debate({ token }: DebateProps) {
               if (!to) return null;
               const from = parent === null ? null : positions[parent];
               const own = reactions.filter((reaction) => reaction.metadata?.conversus?.reactTo === message.id);
-              const sag = wiltSag(countWilts(reactions, message.id));
-              const drawn = own.filter((reaction) => {
-                const value = reaction.metadata?.conversus?.value;
-                return value === "leaf" || value === "thorn";
-              });
+              const sag = wiltSag(countWilts(reactions, message));
+              const drawn = [
+                { key: `effect-${message.id}`, value: message.metadata?.conversus?.effect },
+                ...own.map((reaction) => ({ key: String(reaction.id), value: reaction.metadata?.conversus?.value })),
+              ].filter((item) => item.value === "leaf" || item.value === "thorn");
               return (
                 <g key={message.id}>
                   <path className="stem" d={stemPath(from, to, sag)} />
-                  {drawn.map((reaction, k) => {
-                    const value = reaction.metadata?.conversus?.value;
-                    if (!value) return null;
+                  {drawn.map((item, k) => {
+                    if (!item.value) return null;
                     const point = pointOnStem(from, to, (k + 1) / (drawn.length + 1), sag);
                     const side = k % 2 === 0 ? 1.5 : -1.5;
                     return (
                       <g
-                        key={reaction.id}
+                        key={item.key}
                         transform={`translate(${point.x} ${point.y}) rotate(${point.angle}) scale(1.5 ${side})`}
                       >
-                        <ReactionShape value={value} onStem />
+                        <ReactionShape value={item.value} onStem />
                       </g>
                     );
                   })}
@@ -213,13 +216,23 @@ function Debate({ token }: DebateProps) {
               <strong>{displayName(message)}</strong>
               <p style={{ fontFamily: fontFamily(message.metadata?.conversus?.font) }}>{message.content}</p>
               {openId === message.id && (
-                <div className="message-actions">
+                <div className="message-actions" onClick={(event) => event.stopPropagation()}>
                   {REACTIONS.map((reaction) => (
                     <button type="button" key={reaction.value} onClick={() => handleReact(message, reaction.value)}>
                       <ReactionIcon value={reaction.value} />
                       {reaction.label}
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    className={reactAnonymously ? "on" : undefined}
+                    title={reactAnonymously ? "Réaction anonyme" : "Réagir sans révéler mon identité"}
+                    aria-label="Réaction anonyme"
+                    aria-pressed={reactAnonymously}
+                    onClick={() => setReactAnonymously(!reactAnonymously)}
+                  >
+                    <img src="/anonyme.png" alt="" />
+                  </button>
                   <button type="button" onClick={() => setReplyingTo(message)}>Répondre</button>
                 </div>
               )}
