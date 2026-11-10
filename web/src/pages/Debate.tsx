@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router";
 import Navbar, { type Channel } from "../components/Navbar";
+import Flower from "../components/Flower";
 import type { Message } from "./Chat";
 
 type DebateProps = { token: string };
@@ -72,7 +73,9 @@ function Debate({ token }: DebateProps) {
       <Navbar channels={channels} />
       <h2 className="channel-title">{debate?.name.replace(/#\d+$/, "")}</h2>
       <div className="viewport">
-        <div className="board"></div>
+        <div className="board">
+          <Flower />
+        </div>
       </div>
       <ul className="messages">
         {replies.map((message) => (

@@ -411,3 +411,21 @@
   left: 50%;
   top: 50%;
 }
+
+.flower {
+  position: absolute;
+  left: -3rem;
+  top: -3rem;
+  width: 6rem;
+  height: 6rem;
+}
+
+.flower-petal {
+  fill: var(--lavender);
+  stroke: var(--white);
+  stroke-width: 1.5;
+}
+
+.flower-heart {
+  fill: var(--slate);
+}
