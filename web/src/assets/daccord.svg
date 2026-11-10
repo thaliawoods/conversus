@@ -1,0 +1,16 @@
+<svg width="400" height="400" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="Repeat group 1_inner" data-figma-trr="r6u1.3-0f">
+<path d="M200.001 16.2441C239.949 16.2442 273.047 45.5637 278.955 83.8574C235.435 84.5566 200.37 120.053 200.37 163.74C200.37 167.916 200.691 172.016 201.309 176.019C200.874 176.026 200.438 176.031 200.001 176.031C199.686 176.031 199.372 176.029 199.059 176.025C199.677 172.021 199.999 167.918 199.999 163.74C199.999 119.931 164.737 84.3563 121.047 83.8516C126.957 45.5606 160.055 16.2441 200.001 16.2441Z" fill="url(#paint0_linear_159_557)"/>
+</g>
+<use xlink:href="#Repeat%20group%201_inner" transform="translate(273.204 -73.2048) rotate(60)"/>
+<use xlink:href="#Repeat%20group%201_inner" transform="translate(473.203 126.794) rotate(120)"/>
+<use xlink:href="#Repeat%20group%201_inner" transform="translate(399.999 399.999) rotate(-180)"/>
+<use xlink:href="#Repeat%20group%201_inner" transform="translate(126.794 473.203) rotate(-120)"/>
+<use xlink:href="#Repeat%20group%201_inner" transform="translate(-73.2048 273.204) rotate(-60)"/>
+<defs>
+<linearGradient id="paint0_linear_159_557" x1="200.428" y1="16.2441" x2="200.374" y2="176.031" gradientUnits="userSpaceOnUse">
+<stop stop-color="#FFDF4E"/>
+<stop offset="1" stop-color="#E8372D"/>
+</linearGradient>
+</defs>
+</svg>

@@ -1,0 +1,16 @@
+<svg width="439" height="439" viewBox="0 0 439 439" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="r_inner" data-figma-trr="r6u1.2-0f">
+<path d="M314.834 84.8557C314.834 137.508 233.832 201.527 219.499 201.527C200.499 201.527 124.164 137.508 124.164 84.8557C124.164 32.2038 170.831 16.6596 219.499 23.1881C256.166 17.8574 314.834 32.2038 314.834 84.8557Z" fill="url(#paint0_linear_159_563)"/>
+</g>
+<use xlink:href="#r_inner" transform="translate(299.843 -80.3426) rotate(60)"/>
+<use xlink:href="#r_inner" transform="translate(519.343 139.157) rotate(120)"/>
+<use xlink:href="#r_inner" transform="translate(439 439) rotate(-180)"/>
+<use xlink:href="#r_inner" transform="translate(139.157 519.343) rotate(-120)"/>
+<use xlink:href="#r_inner" transform="translate(-80.3426 299.843) rotate(-60)"/>
+<defs>
+<linearGradient id="paint0_linear_159_563" x1="219.499" y1="21.7852" x2="219.499" y2="201.527" gradientUnits="userSpaceOnUse">
+<stop stop-color="#FFEA4F"/>
+<stop offset="1" stop-color="#FF4F4F"/>
+</linearGradient>
+</defs>
+</svg>

@@ -1,151 +1,235 @@
-import { useEffect, useRef, useState } from 'react'
-import { Etoile } from '../Etoile'
-import { EFFETS, EMOJIS, POLICES_LISIBLES, ROLES, type Role } from '../donnees'
-import type { MsgConv } from '../App'
-import type { Emotion } from '../emotions'
-import Arbre from '../Arbre'
+// L'écran d'un ConVersus : le board, et autour, la synthèse à la demande et le plein écran.
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import Carte, { type Mode } from '../Carte'
+import { couleursDe, fonce, vitalite } from '../plan'
+import { NOMS_ISSUE, type Debat, type MsgConv, type SyntheseFaite } from '../conversus'
+
+// En développement : écrire et donner son avis sous d'autres noms, pour simuler un vrai débat à plusieurs.
+const TESTS = import.meta.env.DEV
+const COMPTES_TEST = ['killian', 'thalia', 'clara', 'maya', 'enzo']
 
 type Props = {
-  sujet: string
-  question: { qui: string; dit: string } | null
-  duree: number
-  role: Role
-  setRole: (r: Role) => void
-  msgs: MsgConv[]
-  presents: string[]
+  debat: Debat
   moi: string
-  policeRepos: string
-  onEcrire: (texte: string, police: string, effet: string, anonyme: boolean, repondA?: number) => void
-  onReagir: (id: number, emotion: Emotion | null, anonyme: boolean) => void
-  onEpingler: (id: number) => void
-  onDeplacer: (id: number, vers?: number) => void
-  onClore: () => void
+  pleinEcran: boolean
+  setPleinEcran: (p: boolean) => void
+  iaErreur: string | null
+  onEcrire: (texte: string, anonyme: boolean, repondA?: number, comme?: string) => void
+  onAvis: (id: number, v: 1 | -1, comme?: string) => void
+  onSynthese: (ids: number[], portee: string) => Promise<SyntheseFaite | null>
 }
 
-export default function Jardin({
-  sujet, question, duree, role, setRole, msgs, presents, moi, policeRepos, onEcrire, onReagir, onEpingler, onDeplacer, onClore,
-}: Props) {
-  const [brouillon, setBrouillon] = useState('')
-  const [anonyme, setAnonyme]     = useState(false)
-  const [reste, setReste]         = useState(duree * 60)
-  const [reponse, setReponse]     = useState<number | null>(null)
-  const [panneau, setPanneau]     = useState<'' | 'emoji' | 'police' | 'effet'>('')
-  const [police, setPolice]       = useState(policeRepos)
-  const [effet, setEffet]         = useState('')
-  const champ = useRef<HTMLInputElement>(null)
+type Volet = { etat: 'attente'; portee: string; ids: number[] } | { etat: 'pret'; s: SyntheseFaite } | { etat: 'erreur'; message: string }
+
+const heure = (iso: string) => new Date(iso).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+
+export default function Jardin({ debat, moi, pleinEcran, setPleinEcran, iaErreur, onEcrire, onAvis, onSynthese }: Props) {
+  const { msgs } = debat
+  const [maintenant, setMaintenant] = useState(Date.now())
+  useEffect(() => {
+    const t = setInterval(() => setMaintenant(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [])
+  const vie = vitalite(debat, maintenant)
+
+  const [comme, setComme] = useState(moi)
+  const noms = TESTS ? [...new Set([moi, ...COMPTES_TEST])] : []
+
+  const [mode, setMode] = useState<Mode>('normal')
+  const [selection, setSelection] = useState<Set<number>>(new Set())
+  const [volet, setVolet] = useState<Volet | null>(null)
+  const [vise, setVise] = useState<{ id: number; n: number } | null>(null)
+  const voir = useCallback((id: number) => setVise(v => ({ id, n: (v?.n ?? 0) + 1 })), [])
+
+  const commencer = () => { setVolet(null); setSelection(new Set()); setMode('choix') }
+  const annuler = useCallback(() => { setMode('normal'); setSelection(new Set()) }, [])
+  // La fleur prend tout le débat ; si tout est déjà pris, un second clic désélectionne tout.
+  const onTout = useCallback(() => setSelection(s =>
+    msgs.length && msgs.every(m => s.has(m.id)) ? new Set() : new Set(msgs.map(m => m.id))), [msgs])
+  const onFil = useCallback((ids: number[]) => setSelection(new Set(ids)), [])
+  const onBasculer = useCallback((id: number) => setSelection(s => {
+    const n = new Set(s)
+    if (n.has(id)) n.delete(id); else n.add(id)
+    return n
+  }), [])
+  const avis = useCallback((id: number, v: 1 | -1) => onAvis(id, v, comme), [onAvis, comme])
+  const ecrire = useCallback((t: string, a: boolean, r?: number) => onEcrire(t, a, r, comme), [onEcrire, comme])
+
+  const lancerSynthese = async () => {
+    const ids = msgs.filter(m => selection.has(m.id)).map(m => m.id)
+    if (!ids.length) return
+    const portee = ids.length === msgs.length ? 'tout le débat' : `${ids.length} message${ids.length > 1 ? 's' : ''} choisi${ids.length > 1 ? 's' : ''}`
+    setMode('lecture')
+    setVolet({ etat: 'attente', portee, ids })
+    try {
+      const s = await onSynthese(ids, portee)
+      setVolet(s ? { etat: 'pret', s } : { etat: 'erreur', message: 'le débat est introuvable' })
+    } catch (e) {
+      setVolet({ etat: 'erreur', message: (e as Error).message })
+    }
+  }
+  const montrer = (s: SyntheseFaite) => { setVolet({ etat: 'pret', s }); setSelection(new Set(s.ids)); setMode('lecture') }
+  const fermer = () => { setVolet(null); annuler() }
 
   useEffect(() => {
-    if (reste <= 0) { onClore(); return }
-    const t = setTimeout(() => setReste(r => r - 1), 1000)
-    return () => clearTimeout(t)
-  }, [reste, onClore])
+    const touche = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || (e.target as Element).closest?.('textarea')) return
+      if (mode === 'choix') annuler()
+    }
+    addEventListener('keydown', touche)
+    return () => removeEventListener('keydown', touche)
+  }, [mode, annuler])
 
-  const mm = Math.floor(reste / 60)
-  const ss = String(reste % 60).padStart(2, '0')
-
-  const cible = msgs.find(m => m.id === reponse)
-  const envoyer = () => {
-    if (!brouillon.trim()) return
-    onEcrire(brouillon.trim(), police, effet, anonyme, cible?.id)
-    setBrouillon('')
-    setPanneau('')
-    setReponse(null)
-  }
-  const repondre = (id: number) => {
-    setReponse(id)
-    champ.current?.focus()
-  }
+  const gens = new Set([debat.question.qui, ...msgs.map(m => m.qui)]).size
 
   return (
-    <div className="conv">
-      <div className="conv-tete">
-        <Etoile className="tete-etoile" />
-        <h1>{sujet}</h1>
-        <span className="bascule">
-          {ROLES.map(r => (
-            <button key={r.id} className={role === r.id ? 'active' : undefined}
-                    onClick={() => { setRole(r.id); setReponse(null) }}>{r.nom}</button>
-          ))}
+    <div className={'bd' + (volet ? ' avec-volet' : '')}>
+      <Carte debat={debat} vie={vie} maintenant={maintenant} mode={mode} selection={selection}
+             comme={comme} noms={noms} setComme={setComme}
+             vise={vise}
+             onTout={onTout} onFil={onFil} onBasculer={onBasculer} onEcrire={ecrire} onAvis={avis} />
+
+      <div className="bd-titre">
+        <h1>{debat.sujet}</h1>
+        <span className="bd-infos">
+          {msgs.length} message{msgs.length > 1 ? 's' : ''} · {gens} personne{gens > 1 ? 's' : ''}
+          <span className="bd-vie" title="Vitalité de la fleur : elle fane quand personne ne participe">
+            <span style={{ width: `${Math.round(vie * 100)}%` }} />
+          </span>
+          {vie > .66 ? 'en pleine floraison' : vie > .33 ? 'en fleur' : vie > .1 ? 'commence à faner' : 'fanée'}
         </span>
-        <span className="participants">
-          <span className="compte">{presents.length} personnes</span>
-        </span>
-        <span className={'chrono' + (reste < 60 ? ' urgent' : '')}>{mm}:{ss}</span>
-        <button className="btn mini" title="Rallonger la conversation de deux minutes"
-                onClick={() => setReste(r => r + 120)}>+ 2 min</button>
-        <span className="compte">{msgs.filter(m => m.epingle).length} retenus</span>
-        <button className="btn fort" onClick={onClore}>Clore et faire la synthèse</button>
+        {iaErreur && <span className="bd-alerte" title={iaErreur}>lecture des messages en pause, nouvel essai…</span>}
       </div>
 
-      <Arbre msgs={msgs} audience={presents.length} moi={moi} question={question}
-             peutRepondre={role === 'debat'}
-             onReagir={onReagir} onEpingler={onEpingler} onRepondre={repondre} onDeplacer={onDeplacer} />
-
-      <div className="pied">
-        {role === 'debat' && panneau === 'emoji' && (
-          <div className="panneau">
-            {EMOJIS.map(e => (
-              <button key={e} className="emoji"
-                      onClick={() => { setBrouillon(b => b + e); setPanneau('') }}>{e}</button>
-            ))}
-          </div>
-        )}
-        {role === 'debat' && panneau === 'police' && (
-          <div className="panneau">
-            {POLICES_LISIBLES.map(p => (
-              <button key={p.id} className={'puce' + (police === p.id ? ' active' : '')}
-                      style={{ fontFamily: p.id }}
-                      onClick={() => { setPolice(p.id); setPanneau('') }}>{p.nom}</button>
-            ))}
-          </div>
-        )}
-        {role === 'debat' && panneau === 'effet' && (
-          <div className="panneau">
-            {EFFETS.map(f => (
-              <button key={f.id} className={'puce' + (effet === f.id ? ' active' : '')}
-                      onClick={() => { setEffet(f.id); setPanneau('') }}>
-                <span className={f.id}>{f.nom}</span>
-              </button>
-            ))}
-          </div>
-        )}
-        {role === 'debat' && brouillon && (
-          <div className="apercu">
-            <span className="etiq-apercu">aperçu</span>
-            <span className={effet} style={{ fontFamily: police }}>{brouillon}</span>
-          </div>
-        )}
-
-        {role === 'debat' && (
-          <div className="saisie conv-saisie">
-            <button className={'outil' + (panneau === 'emoji' ? ' on' : '')} title="Emoji"
-                    onClick={() => setPanneau(p => p === 'emoji' ? '' : 'emoji')}>☺</button>
-            <button className={'outil' + (panneau === 'police' ? ' on' : '')} title="Choisir la police"
-                    onClick={() => setPanneau(p => p === 'police' ? '' : 'police')}>Aa</button>
-            <button className={'outil' + (panneau === 'effet' ? ' on' : '')} title="Appliquer un effet"
-                    onClick={() => setPanneau(p => p === 'effet' ? '' : 'effet')}>✦</button>
-            <button className={'outil' + (anonyme ? ' on' : '')}
-                    title={anonyme ? 'Mode anonyme activé' : 'Écrire sans révéler mon identité'}
-                    aria-label="Mode anonyme"
-                    onClick={() => setAnonyme(a => !a)}>
-              <img src="/anonyme.png" alt="" />
-            </button>
-            {cible && (
-              <span className="jd-reponse">
-                en réponse à {cible.anonyme ? 'anonyme' : cible.qui}
-                <button aria-label="Annuler la réponse" onClick={() => setReponse(null)}>×</button>
-              </span>
-            )}
-            <input ref={champ} value={brouillon}
-                   onChange={e => setBrouillon(e.target.value)}
-                   onKeyDown={e => e.key === 'Enter' && envoyer()}
-                   placeholder="Continue le ConVersus…"
-                   aria-label="Continue le ConVersus"
-                   className={effet} style={{ fontFamily: police }} />
-            <button className="env" onClick={envoyer}>Envoyer</button>
-          </div>
-        )}
+      <div className="bd-outils">
+        <button className={'btn' + (mode === 'choix' ? ' fort' : '')} onClick={mode === 'choix' ? annuler : commencer}>
+          {mode === 'choix' ? 'Annuler' : 'Synthèse'}
+        </button>
+        <button className="btn bd-plein" title={pleinEcran ? 'Quitter le plein écran' : 'Plein écran'}
+                aria-label={pleinEcran ? 'Quitter le plein écran' : 'Plein écran'}
+                onClick={() => setPleinEcran(!pleinEcran)}>
+          <IconePlein dedans={pleinEcran} />
+        </button>
       </div>
+
+      {mode === 'choix' && (
+        <div className="bd-choix">
+          <p>
+            <b>Que veux-tu synthétiser ?</b> La fleur pour tout le débat, une racine pour un fil.
+            Clique un message pour l’exclure ou le reprendre.
+          </p>
+          <button className="btn fort" disabled={!selection.size} onClick={lancerSynthese}>
+            Faire la synthèse{selection.size ? ` (${selection.size})` : ''}
+          </button>
+        </div>
+      )}
+
+      {volet && (
+        <aside className="bd-volet">
+          <div className="bd-volet-tete">
+            <h3>Synthèse</h3>
+            <button aria-label="Fermer la synthèse" onClick={fermer}>×</button>
+          </div>
+          {volet.etat === 'attente' && <p className="sy-attente">La synthèse de {volet.portee} s’écrit…</p>}
+          {volet.etat === 'erreur' && <p className="sy-attente">La synthèse n’a pas pu être écrite ({volet.message}).</p>}
+          {volet.etat === 'pret' && <Lecture s={volet.s} debat={debat} onVoir={voir} />}
+
+          {debat.syntheses.length > 0 && (
+            <div className="sy-anciennes">
+              <h4>Synthèses déjà faites</h4>
+              {[...debat.syntheses].reverse().map(s => (
+                <button key={s.id} className={volet.etat === 'pret' && volet.s.id === s.id ? 'active' : undefined} onClick={() => montrer(s)}>
+                  <b>{s.portee}</b> <span>par {s.par} · {heure(s.date)}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </aside>
+      )}
     </div>
+  )
+}
+
+const extrait = (t: string) => ([...t].length > 160 ? [...t].slice(0, 157).join('') + '…' : t)
+
+function Lecture({ s, debat, onVoir }: { s: SyntheseFaite; debat: Debat; onVoir: (id: number) => void }) {
+  const couleur = useMemo(() => couleursDe(debat), [debat])
+  const choisis = debat.msgs.filter(m => s.ids.includes(m.id))
+  return (
+    <div className="sy-ia">
+      <span className="sy-portee">{s.portee} · par {s.par}</span>
+      <Participation msgs={choisis} couleur={couleur} />
+      <span className={'sy-issue ' + s.synthese.issue}>{NOMS_ISSUE[s.synthese.issue]}</span>
+      <p className="sy-resume">{s.synthese.resume}</p>
+      {s.synthese.camps.map(c => (
+        <div key={c.titre} className="sy-camp">
+          <b>{c.titre}</b>
+          <span>{c.idee}</span>
+          <span className="sy-auteurs">
+            {c.auteurs.map((a, i) => <span key={a} style={{ color: fonce(couleur(a)) }}>{i ? ', ' : ''}{a}</span>)}
+          </span>
+          {(c.exemples ?? []).map(e => {
+            const m = debat.msgs.find(x => x.id === e.id)
+            if (!m) return null
+            const nom = m.anonyme ? 'anonyme' : m.qui
+            return (
+              <button key={e.id} className="sy-exemple" title="Voir ce message sur le board" onClick={() => onVoir(e.id)}>
+                <span className="sy-citation">
+                  <b style={{ color: fonce(couleur(m.qui)) }}>{nom}</b> « {extrait(m.dit)} »
+                </span>
+                {e.pourquoi && <span className="sy-pourquoi">{e.pourquoi}</span>}
+              </button>
+            )
+          })}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// Un point par personne, d'autant plus gros qu'elle a participé ; la légende détaille.
+function Participation({ msgs, couleur }: { msgs: MsgConv[]; couleur: (n: string) => string }) {
+  const parNom = new Map<string, number>()
+  for (const m of msgs) parNom.set(m.qui, (parNom.get(m.qui) ?? 0) + 1)
+  const total = msgs.length || 1
+  const gens = [...parNom.entries()].sort((a, b) => b[1] - a[1])
+  return (
+    <div className="sy-part">
+      <div className="sy-points" aria-hidden>
+        {gens.map(([nom, n]) => {
+          const d = Math.round(14 + 50 * Math.sqrt(n / total))
+          return <span key={nom} style={{ width: d, height: d, background: couleur(nom) }} title={nom} />
+        })}
+      </div>
+      <ul className="sy-legende">
+        {gens.map(([nom, n]) => (
+          <li key={nom}>
+            <i style={{ background: couleur(nom) }} />
+            <b style={{ color: fonce(couleur(nom)) }}>{nom}</b>
+            <span>{n} message{n > 1 ? 's' : ''} · {Math.round(n / total * 100)} %</span>
+          </li>
+        ))}
+      </ul>
+      <p className="sy-note">Taille du point : part des messages écrits dans ce qui est synthétisé.</p>
+    </div>
+  )
+}
+
+// Double flèche en dégradé (maquette) ; vers l'intérieur pour quitter le plein écran.
+function IconePlein({ dedans }: { dedans: boolean }) {
+  return (
+    <svg viewBox="0 0 40 40" aria-hidden>
+      <defs>
+        <linearGradient id="bd-plein-degrade" x1="0" y1="1" x2="1" y2="0">
+          <stop stopColor="#FF4F4F" />
+          <stop offset="1" stopColor="#FFB84F" />
+        </linearGradient>
+      </defs>
+      <g fill="none" stroke="url(#bd-plein-degrade)" strokeWidth={3.2} strokeLinecap="round" strokeLinejoin="round">
+        {dedans
+          ? <><path d="M22 18 L33 7" /><path d="M23 9 V17 H31" /><path d="M18 22 L7 33" /><path d="M9 23 H17 V31" /></>
+          : <><path d="M10 30 L30 10" /><path d="M21 9 H31 V19" /><path d="M9 21 V31 H19" /></>}
+      </g>
+    </svg>
   )
 }

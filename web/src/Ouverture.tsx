@@ -18,7 +18,7 @@ export default function Ouverture({ sujet, onFini }: { sujet: string; onFini: ()
       <svg viewBox="0 0 400 240" className="scene" aria-hidden>
         <defs>
           <linearGradient id="oG" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#c07ae8" /><stop offset="100%" stopColor="#6f5fd6" />
+            <stop offset="0%" stopColor="#c4e6ff" /><stop offset="100%" stopColor="#2f62ff" />
           </linearGradient>
           <filter id="oLueur" x="-60%" y="-60%" width="220%" height="220%">
             <feGaussianBlur stdDeviation="7" result="f" />

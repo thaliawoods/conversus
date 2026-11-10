@@ -7,10 +7,10 @@ export function Etoile({ className }: { className?: string }) {
     <svg className={className} viewBox="0 0 100 100" aria-hidden>
       <defs>
         <linearGradient id="gA" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#9b7bf0" /><stop offset="100%" stopColor="#6f5fd6" />
+          <stop offset="0%" stopColor="#c4e6ff" /><stop offset="100%" stopColor="#2f62ff" />
         </linearGradient>
         <linearGradient id="gB" x1="1" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#c07ae8" /><stop offset="100%" stopColor="#8b5fd6" />
+          <stop offset="0%" stopColor="#ffffff" /><stop offset="100%" stopColor="#7fb4ff" />
         </linearGradient>
       </defs>
       <path d={BRANCHE} fill="url(#gA)" opacity=".92"
@@ -20,7 +20,7 @@ export function Etoile({ className }: { className?: string }) {
   )
 }
 
-export function EtoileMini({ className, couleur = '#8b5fd6' }:
+export function EtoileMini({ className, couleur = '#a9d4ff' }:
   { className?: string; couleur?: string }) {
   return (
     <svg className={className} viewBox="0 0 100 100" aria-hidden>

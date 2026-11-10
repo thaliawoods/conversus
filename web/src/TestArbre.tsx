@@ -1,9 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { MsgConv } from './App'
 import { CANAUX, GENS, REACTIONS_DEMO } from './donnees'
-import { styleDe, teintes } from './emotions'
+import { styleDe, teintes, type Reaction } from './emotions'
 import { Etoile } from './Etoile'
-import { BASE, HERBE, TEINTE_BRANCHE, geometrie } from './Arbre'
+import { BASE, HERBE, TEINTE_BRANCHE, geometrie } from './ancienArbre'
 import { brinD, chemin, contourBranche } from './contour'
 
 const AUDIENCE = 7
@@ -11,6 +10,9 @@ const LARGEUR = 1000
 const CX = LARGEUR / 2
 const HAUT = 70
 const PAS = 92
+
+// Banc d'essai de l'ancienne branche dessinée (réactions des personnes), indépendant du vrai débat.
+type MsgConv = { id: number; qui: string; dit: string; police: string; effet: string; anonyme: boolean; epingle: boolean; reactions: Reaction[] }
 
 const MSGS: MsgConv[] = CANAUX[0].messages.slice(2).map(m => ({
   id: m.id, qui: m.qui, dit: m.dit, police: 'Tremplin', effet: '',

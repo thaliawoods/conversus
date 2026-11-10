@@ -17,13 +17,22 @@ export const GENS: Record<string, Personne> = {
   Sacha:   { nom: 'Sacha',   pronom: 'iel · ellui', couleur: '#5fd6c4', enLigne: false },
 }
 
+// Les vrais comptes du backend n'ont ni pronom ni couleur : couleur stable tirée du nom.
+const TEINTES = ['#8b5fd6', '#5f8bd6', '#b06ae0', '#6ad6b0', '#d6a05f', '#d65f8b', '#5fd6c4', '#9d7be0', '#e0846a']
+export function personne(nom: string): Personne {
+  if (GENS[nom]) return GENS[nom]
+  let h = 0
+  for (const c of nom) h = (h * 31 + c.charCodeAt(0)) >>> 0
+  return { nom, pronom: '', couleur: nom === 'anonyme' ? '#9aa0b8' : TEINTES[h % TEINTES.length], enLigne: true }
+}
+
 export type Message = { id:number; qui:string; dit:string; heure:string; anonyme?:boolean }
 export type Canal   = { id:string; nom:string; messages:Message[] }
 
 export type Role = 'debat' | 'spectacle'
 export const ROLES: { id:Role; nom:string; aide:string }[] = [
   { id:'debat',     nom:'Débattant·e',    aide:'Tu prends position et tu écris.' },
-  { id:'spectacle', nom:'Spectateur·ice', aide:'Tu regardes, et tu épingles ce qui compte.' },
+  { id:'spectacle', nom:'Spectateur·ice', aide:'Tu regardes les racines pousser sans écrire.' },
 ]
 
 export const DUREES = [3, 5, 10, 20]
@@ -60,48 +69,6 @@ export const CANAUX: Canal[] = [
 ]
 
 export const POLICE_NEUTRE = 'Tremplin'
-
-export type Fiche = {
-  id:string; sujet:string; canal:string
-  statut:'active'|'close'
-  gens:string[]; retenus:number; reste:string
-  question:{qui:string;dit:string}
-  echange:{qui:string;dit:string;police:string}[]
-}
-
-export const FICHES: Fiche[] = [
-  { id:'f1', sujet:'Le dégradé est-il lisible ?', canal:'Lead créa',
-    statut:'active', gens:['Maya','Adrien','Thalia'], retenus:0, reste:'2:14',
-    question:{ qui:'Maya', dit:'le dégradé est-il lisible ?' },
-    echange:[
-      { qui:'Adrien', dit:'sur le bord sombre, non', police:'BS' },
-      { qui:'Thalia', dit:'ça dépend de la taille du texte', police:'Tremplin' },
-      { qui:'Maya',   dit:'on peut éclaircir le coin gauche', police:'Josafronde' },
-    ] },
-  { id:'f2', sujet:'On simule ou on branche ?', canal:'Lead tech',
-    statut:'active', gens:['Killian','Thalia'], retenus:1, reste:'0:48',
-    question:{ qui:'Killian', dit:'on simule ou on branche ?' },
-    echange:[
-      { qui:'Killian', dit:"l'API ne gère rien de tout ça", police:'BS' },
-      { qui:'Thalia',  dit:'on simule, on branchera après', police:'Josafronde' },
-    ] },
-  { id:'f3', sujet:'Écriture inclusive partout ?', canal:'Général',
-    statut:'close', gens:['Clara','Maya','Sacha','Enzo'], retenus:4, reste:'',
-    question:{ qui:'Sacha', dit:'écriture inclusive partout ?' },
-    echange:[
-      { qui:'Clara', dit:'oui, sans discussion', police:'PoppinsTN' },
-      { qui:'Maya',  dit:"c'est le sujet du projet", police:'PoppinsTN' },
-      { qui:'Enzo',  dit:'et la lisibilité alors ?', police:'NotCourier' },
-      { qui:'Sacha', dit:'les polices choisies gèrent les points médians', police:'PoppinsTN' },
-    ] },
-  { id:'f4', sujet:'Faut-il garder le minuteur ?', canal:'Général',
-    statut:'close', gens:['Killian','Clara'], retenus:2, reste:'',
-    question:{ qui:'Clara', dit:'faut-il garder le minuteur ?' },
-    echange:[
-      { qui:'Killian', dit:'ça met la pression pour rien', police:'BS' },
-      { qui:'Clara',   dit:'ça évite que ça traîne trois jours', police:'Tremplin' },
-    ] },
-]
 
 export const POLICES_LISIBLES = [
   { id:'Tremplin',  nom:'Tremplin' },

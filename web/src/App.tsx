@@ -1,60 +1,44 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import './styles.css'
 import { Etoile } from './Etoile'
-import {
-  CANAUX, GENS, POLICE_NEUTRE, REACTIONS_DEMO, REACTIONS_REPONSES_DEMO, REPONSES_DEMO, SPECTATEURS_DEMO,
-  type Fiche, type Role,
-} from './donnees'
-import type { Emotion, Reaction } from './emotions'
+import { personne } from './donnees'
 import Panneau from './Panneau'
 import ModaleOuvrir from './ModaleOuvrir'
 import Ouverture from './Ouverture'
+import Cosmos from './Cosmos'
 import Login from './ecrans/Login'
 import Chat from './ecrans/Chat'
 import Jardin from './ecrans/Jardin'
-import Synthese from './ecrans/Synthese'
 import Profil from './ecrans/Profil'
 import Messages from './ecrans/Messages'
 import Debats from './ecrans/Debats'
-import { descendance } from './Arbre'
 import TestArbre from './TestArbre'
-import Planche from './Planche'
+import TestCarte from './TestCarte'
+import { useConversus, versMsgCanal } from './useConversus'
 
-export type MsgConv = {
-  id: number
-  qui: string
-  dit: string
-  police: string
-  effet: string
-  anonyme: boolean
-  epingle: boolean
-  reactions: Reaction[]
-  repondA?: number
-}
+export type { MsgConv } from './conversus'
 
-// Simulation des réactions et réponses des autres pendant un ConVersus : désactivée pour tester
-// à la main (menu du compte, « être »). Passer à true pour la relancer.
-const SIMULATION = false
+type Ecran = 'canal' | 'conv' | 'profil' | 'parametres' | 'messages' | 'debats'
 
-type Evenement = { id: number; r: Reaction } | { msg: MsgConv }
-
-type Ecran = 'login'| 'canal' | 'conv' | 'synthese' | 'profil' | 'parametres' | 'messages' | 'debats'
+const EN_LIGNE = 15 * 60_000
 
 export default function App() {
-  const [ecran, setEcran]         = useState<Ecran>('login')
-  const [moi, setMoi]             = useState('Thalia')
-  const [canalId, setCanalId]     = useState(CANAUX[0].id)
+  const [ecran, setEcran]         = useState<Ecran>('canal')
+  const [canalId, setCanalId]     = useState<number | null>(null)
+  const [debatId, setDebatId]     = useState<number | null>(null)
   const [selection, setSelection] = useState<number[]>([])
   const [modale, setModale]       = useState(false)
-  const [anime, setAnime]         = useState(false)
-  const [close, setClose]         = useState(false)
-  const [sujet, setSujet]         = useState('')
-  const [question, setQuestion]   = useState<{qui:string;dit:string} | null>(null)
-  const [duree, setDuree]         = useState(5)
-  const [role, setRole]           = useState<Role>('debat')
-  const [msgs, setMsgs]           = useState<MsgConv[]>([])
-  const [presents, setPresents]   = useState<string[]>([])
-  const [aVenir, setAVenir]       = useState<Evenement[]>([])
+  const [anime, setAnime]         = useState<string | null>(null)
+  const [pleinEcran, setPleinEcran] = useState(false)               // le board sans le chat de gauche
+  const [lancement, setLancement] = useState<string | null>(null)
+  const [canalLat, setCanalLat]   = useState<number | null>(null)   // le canal ouvert à gauche pendant un débat
+
+  const [policeRepos, setPoliceRepos] = useState('Tremplin')
+  const [effets, setEffets]           = useState(true)
+  const [visibilite, setVisibilite]   = useState('promo')
+
+  const c = useConversus()
+  const moi = c.session?.nom ?? ''
 
   const [hash, setHash] = useState(location.hash)
   useEffect(() => {
@@ -63,133 +47,85 @@ export default function App() {
     return () => removeEventListener('hashchange', suivre)
   }, [])
 
-  const [policeRepos, setPoliceRepos] = useState('Tremplin')
-  const [effets, setEffets]           = useState(true)
-  const [visibilite, setVisibilite]   = useState('promo')
+  // Premier canal par défaut (en général « general »).
+  useEffect(() => {
+    if (canalId === null && c.canaux.length) setCanalId(c.canaux[0].id)
+  }, [c.canaux, canalId])
 
-  const canal    = CANAUX.find(c => c.id === canalId)!
-  const extraits = canal.messages.filter(m => selection.includes(m.id))
+  const canal    = c.canaux.find(x => x.id === canalId) ?? null
+  const fil      = useMemo(() => (canalId !== null ? (c.fils[canalId] ?? []).map(versMsgCanal) : []), [c.fils, canalId])
+  const extraits = fil.filter(m => selection.includes(m.id))
+  const debat    = debatId !== null ? c.debats[debatId] ?? null : null
+  const debats   = Object.values(c.debats).sort((a, b) => b.debut - a.debut)
+  const enDebat  = ecran === 'conv'
+  const latId    = canalLat ?? debat?.source.id ?? canalId
+  const filLat   = useMemo(() => (latId !== null ? (c.fils[latId] ?? []).map(versMsgCanal) : []), [c.fils, latId])
 
-  const lancer = (s: string, d: number, r: Role) => {
-    setSujet(s || 'Nouvelle conversation')
-    setDuree(d)
-    setRole(r)
-    const [tete, ...suite] = extraits
-    setQuestion(tete ? { qui: tete.qui, dit: tete.dit } : null)
-    setMsgs(suite.map(m => ({
-      id: m.id, qui: m.qui, dit: m.dit,
-      police: POLICE_NEUTRE,
-      effet: '', anonyme: false,
-      epingle: false,
-      reactions: [],
-    })))
-    const reactionsDe = (id: number, liste: Reaction[] = []) => liste
-      .filter(r => r.qui !== moi)
-      .map((r, k) => ({ id, r, k }))
-    const file: Evenement[] = suite
-      .flatMap(m => reactionsDe(m.id, REACTIONS_DEMO[m.id]))
-      .sort((a, b) => a.k - b.k)
-      .map(({ id, r }) => ({ id, r }))
-    const ids = new Set(suite.map(m => m.id))
-    const reponses = REPONSES_DEMO.filter(rep => rep.qui !== moi && ids.has(rep.repondA) && ids.add(rep.id))
-    reponses.forEach((rep, j) => file.splice(Math.min(2 + 4 * j, file.length), 0, { msg: {
-      id: rep.id, qui: rep.qui, dit: rep.dit, police: POLICE_NEUTRE, effet: '',
-      anonyme: false, epingle: false, reactions: [], repondA: rep.repondA,
-    } }))
-    file.push(...reponses.flatMap(rep => reactionsDe(rep.id, REACTIONS_REPONSES_DEMO[rep.id]))
-      .map(({ id, r }) => ({ id, r })))
-    setAVenir(file)
-    setPresents([...new Set([...extraits.map(m => m.qui), moi, ...SPECTATEURS_DEMO])])
+  const lancer = async (sujet: string) => {
+    if (!canal) return
     setModale(false)
-    setSelection([])
-    setAnime(true)
-    setClose(false)
+    setLancement(sujet || 'Nouvelle conversation')
+    try {
+      const id = await c.lancer(canal, extraits.map(m => m.brut), sujet || 'Nouvelle conversation')
+      if (id === null) return
+      setSelection([])
+      setCanalLat(null)
+      setDebatId(id)
+      setAnime(sujet || 'Nouvelle conversation')
+      setEcran('conv')
+    } catch (e) {
+      alert(`Le ConVersus n’a pas pu être lancé : ${(e as Error).message}`)
+    } finally {
+      setLancement(null)
+    }
+  }
+
+  const ouvrirDebat = (id: number) => {
+    c.rejoindre(id)
+    setCanalLat(null)
+    setDebatId(id)
     setEcran('conv')
   }
 
-  const epingler = (id: number) =>
-    setMsgs(m => m.map(x => x.id === id ? { ...x, epingle: !x.epingle } : x))
+  const finAnime = useCallback(() => setAnime(null), [])
+  const debatOuvert = debat?.canalId
+  const { ecrire, donnerAvis } = c
+  const ecrireDebat = useCallback((t: string, a: boolean, r?: number, comme?: string) => {
+    if (debatOuvert !== undefined) ecrire(debatOuvert, t, a, r, comme)
+  }, [ecrire, debatOuvert])
+  const avisDebat = useCallback((id: number, v: 1 | -1, comme?: string) => {
+    if (debatOuvert !== undefined) donnerAvis(debatOuvert, id, v, comme)
+  }, [donnerAvis, debatOuvert])
 
-  const poser = (id: number, qui: string, r: Reaction | null) =>
-    setMsgs(ms => ms.map(m => m.id !== id ? m : {
-      ...m,
-      reactions: [...m.reactions.filter(x => x.qui !== qui), ...(r ? [r] : [])],
-    }))
-
-  const reagir = (id: number, emotion: Emotion | null, anonyme: boolean) =>
-    poser(id, moi, emotion ? { qui: moi, emotion, anonyme } : null)
-
-  useEffect(() => {
-    if (!SIMULATION || ecran !== 'conv' || close || anime || !aVenir.length) return
-    const t = setTimeout(() => {
-      const [suivant, ...reste] = aVenir
-      if ('msg' in suivant) {
-        const { msg } = suivant
-        setMsgs(ms => [...ms, msg])
-        setPresents(p => (p.includes(msg.qui) ? p : [...p, msg.qui]))
-      } else {
-        poser(suivant.id, suivant.r.qui, suivant.r)
-      }
-      setAVenir(reste)
-    }, 4000)
-    return () => clearTimeout(t)
-  }, [ecran, close, anime, aVenir])
-
-  const ecrire = (texte: string, police: string, effet: string, anonyme: boolean, repondA?: number) =>
-    setMsgs(m => [...m, {
-      id: Date.now(), qui: moi, dit: texte, police, effet, anonyme, epingle: false, reactions: [], repondA,
-    }])
-
-  // Interdit sur lui-même ou sur une de ses réponses : la branche se grefferait sur elle-même.
-  const deplacer = (id: number, vers?: number) =>
-    setMsgs(ms => {
-      const m = ms.find(x => x.id === id)
-      if (!m || m.qui !== moi || m.repondA === vers) return ms
-      if (vers !== undefined && (vers === id || descendance(ms, id).has(vers))) return ms
-      return ms.map(x => x.id === id ? { ...x, repondA: vers } : x)
-    })
-
-  const ouvrirFiche = (f: Fiche) => {
-    setSujet(f.sujet)
-    setQuestion(f.question)
-    setDuree(f.statut === 'active' ? 3 : 5)
-    setRole('debat')
-    setMsgs(f.echange.map((m, i) => ({
-      id: 9000 + i, qui: m.qui, dit: m.dit, police: m.police,
-      effet: '', anonyme: false, epingle: false, reactions: [],
-    })))
-    setPresents([...new Set([...f.gens, f.question.qui, moi])])
-    setAVenir([])
-    setClose(f.statut === 'close')
-    setEcran(f.statut === 'close' ? 'synthese' : 'conv')
-  }
-
-  const devenir = (qui: string) => {
-    setMoi(qui)
-    setAVenir(f => f.filter(e => ('msg' in e ? e.msg.qui : e.r.qui) !== qui))
-    if (msgs.length) setPresents(p => (p.includes(qui) ? p : [...p, qui]))
-  }
-
-  const revenirAuCanal = () => { setSelection([]); setEcran('canal') }
-  const deconnexion    = () => { setMsgs([]); setSelection([]); setEcran('login') }
+  // Présence approximative : a écrit dans le canal depuis moins de 15 minutes.
+  const presence = useMemo(() => {
+    const dernier = new Map<string, number>()
+    for (const m of fil) if (!m.anonyme) dernier.set(m.qui, Math.max(dernier.get(m.qui) ?? 0, new Date(m.brut.posted_at).getTime()))
+    if (moi) dernier.set(moi, Date.now())
+    const gens = [...dernier.entries()].map(([nom, t]) => ({ ...personne(nom), enLigne: Date.now() - t < EN_LIGNE }))
+    return { on: gens.filter(g => g.enLigne), off: gens.filter(g => !g.enLigne) }
+  }, [fil, moi])
 
   if (hash === '#test-arbre') return <div className="app"><TestArbre /></div>
-  if (hash.startsWith('#planche-')) return <div className="app"><Planche key={hash} n={Number(hash.slice(9))} /></div>
+  if (hash === '#test-carte') return <TestCarte />
 
-  if (ecran === 'login') {
-    return <div className="app"><Login onEntrer={() => setEcran('canal')} /></div>
+  if (!c.session) {
+    return <div className="app"><Login onEntrer={c.connecter} /></div>
   }
+
+  const deconnexion = () => { setSelection([]); setDebatId(null); setCanalId(null); setEcran('canal'); c.deconnecter() }
 
   return (
     <div className="app">
+      <Cosmos />
       <nav className="nav">
         <span className="marque"><Etoile />ConVersus</span>
 
-        {CANAUX.map(c => (
-          <button key={c.id}
-                  className={'onglet' + (ecran === 'canal' && canalId === c.id ? ' actif' : '')}
-                  onClick={() => { setCanalId(c.id); setSelection([]); setEcran('canal') }}>
-            {c.nom}
+        {c.canaux.map(x => (
+          <button key={x.id}
+                  className={'onglet' + (ecran === 'canal' && canalId === x.id ? ' actif' : '')}
+                  onClick={() => { setCanalId(x.id); setSelection([]); setEcran('canal') }}>
+            {x.nom}
           </button>
         ))}
 
@@ -197,90 +133,81 @@ export default function App() {
                 onClick={() => setEcran('messages')}>Mes messages</button>
         <button className={'onglet' + (ecran === 'debats' ? ' actif' : '')}
                 onClick={() => setEcran('debats')}>
-          Les ConVersus {msgs.length ? <i className="pastille-nav" /> : null}
+          Les ConVersus
         </button>
 
         <span className="pousse" />
 
-        {(['en ligne', 'hors ligne'] as const).map(etat => {
-          const liste = Object.values(GENS)
-            .filter(g => (etat === 'en ligne' ? g.enLigne : !g.enLigne))
-          return (
-            <span key={etat} className={'presence' + (etat === 'en ligne' ? ' on' : '')}>
-              <span className={'point' + (etat === 'en ligne' ? ' on' : '')} />
-              {etat} <b>{liste.length}</b>
-              <span className="presence-liste">
-                {liste.length === 0
-                  ? <i className="presence-vide">personne</i>
-                  : liste.map(g => (
-                      <span key={g.nom} className="presence-item">
-                        <span className="mini-av" style={{ background: g.couleur }}>{g.nom[0]}</span>
-                        <span className="gens-nom">{g.nom}</span>
-                        <span className="gens-pronom">{g.pronom}</span>
-                      </span>
-                    ))}
-              </span>
+        {([['en ligne', presence.on], ['hors ligne', presence.off]] as const).map(([etat, liste]) => (
+          <span key={etat} className={'presence' + (etat === 'en ligne' ? ' on' : '')}>
+            {etat} <b>{liste.length}</b>
+            <span className="presence-liste">
+              {liste.length === 0
+                ? <i className="presence-vide">personne</i>
+                : liste.map(g => (
+                    <span key={g.nom} className="presence-item">
+                      <span className="mini-av" style={{ background: g.couleur }}>{g.nom[0]}</span>
+                      <span className="gens-nom">{g.nom}</span>
+                      <span className="gens-pronom">{g.pronom}</span>
+                    </span>
+                  ))}
             </span>
-          )
-        })}
+          </span>
+        ))}
 
         <span className="moi">
-          <span className="compte">{moi === 'Thalia' ? 'thalia_woods' : moi} <i>{GENS[moi].pronom}</i></span>
+          <span className="compte">{moi} <i>{personne(moi).pronom}</i></span>
           <span className={'avatar' + (ecran === 'profil' || ecran === 'parametres' ? ' actif' : '')}
-                style={moi === 'Thalia' ? undefined : { background: GENS[moi].couleur }}
+                style={{ background: personne(moi).couleur }}
                 onClick={() => setEcran('profil')}>{moi[0]}</span>
           <span className="moi-menu">
             <button onClick={() => setEcran('profil')}>Mon profil</button>
             <button onClick={() => setEcran('parametres')}>Paramètres</button>
-            <span className="moi-etre">être</span>
-            {Object.values(GENS).map(g => (
-              <button key={g.nom} className={'moi-qui' + (g.nom === moi ? ' actif' : '')} onClick={() => devenir(g.nom)}>
-                <span className="mini-av" style={{ background: g.couleur }}>{g.nom[0]}</span>
-                {g.nom} <i>{g.pronom}</i>
-              </button>
-            ))}
             <button className="moi-sortir" onClick={deconnexion}>Déconnexion</button>
           </span>
         </span>
       </nav>
 
+      {c.erreur && <div className="bandeau-erreur">{c.erreur}</div>}
+
       <div className="corps-app">
-        <Panneau
-          mode={ecran === 'conv' || ecran === 'synthese' ? 'debat' : 'canal'}
-          canalId={canalId}
-          onAller={() => setEcran('canal')}
-        />
+        {enDebat && !pleinEcran && (
+          <Panneau
+            canaux={c.canaux} canalId={latId} setCanal={setCanalLat}
+            messages={filLat}
+            onEnvoyer={t => { if (latId !== null) c.envoyerChat(latId, t, policeRepos, '', false) }}
+            onDebat={ouvrirDebat}
+            onAller={() => { setSelection([]); if (latId !== null) setCanalId(latId); setEcran('canal') }}
+          />
+        )}
 
         <div className="zone">
-          {ecran === 'canal' && (
-            <Chat canalId={canalId} selection={selection} policeRepos={policeRepos}
+          {ecran === 'canal' && canal && (
+            <Chat canal={canal} messages={fil} selection={selection} policeRepos={policeRepos}
                   setSelection={setSelection}
-                  onOuvrir={() => setModale(true)} />
+                  onOuvrir={() => setModale(true)}
+                  onEnvoyer={(t, p, e, a) => c.envoyerChat(canal.id, t, p, e, a)}
+                  onDebat={ouvrirDebat} />
+          )}
+          {ecran === 'canal' && !canal && <p className="vide">Chargement des canaux…</p>}
+
+          {ecran === 'conv' && !debat && (
+            <p className="vide">{lancement ? `Ouverture de « ${lancement} »…` : 'Chargement du ConVersus…'}</p>
           )}
 
-          {ecran === 'conv' && (
+          {ecran === 'conv' && debat && (
             <Jardin
-              sujet={sujet} question={question} duree={duree} role={role} setRole={setRole}
-              msgs={msgs} presents={presents} moi={moi} policeRepos={policeRepos} onEcrire={ecrire} onReagir={reagir} onEpingler={epingler}
-              onDeplacer={deplacer}
-              onClore={() => { setClose(true); setEcran('synthese') }}
+              key={debat.canalId}
+              debat={debat} moi={moi} iaErreur={c.iaErreur}
+              pleinEcran={pleinEcran} setPleinEcran={setPleinEcran}
+              onEcrire={ecrireDebat} onAvis={avisDebat}
+              onSynthese={(ids, portee) => c.synthetiser(debat.canalId, ids, portee)}
             />
           )}
 
           {ecran === 'messages' && <Messages policeRepos={policeRepos} />}
 
-          {ecran === 'debats' && (
-            <Debats
-              courante={msgs.length ? {
-                sujet,
-                close,
-                gens: [...new Set(msgs.map(m => m.qui))],
-                retenus: msgs.filter(m => m.epingle).length,
-              } : null}
-              onAller={() => setEcran(close ? 'synthese' : 'conv')}
-              onFiche={ouvrirFiche}
-            />
-          )}
+          {ecran === 'debats' && <Debats debats={debats} moi={moi} onOuvrir={ouvrirDebat} />}
 
           {(ecran === 'profil' || ecran === 'parametres') && (
             <Profil vue={ecran}
@@ -290,15 +217,10 @@ export default function App() {
                     onDeconnexion={deconnexion} />
           )}
 
-          {ecran === 'synthese' && (
-            <Synthese sujet={sujet} question={question} msgs={msgs} presents={presents} moi={moi}
-                      onRetour={() => { setClose(false); setEcran('conv') }}
-                      onCanal={revenirAuCanal} />
-          )}
         </div>
       </div>
 
-      {anime && <Ouverture sujet={sujet} onFini={() => setAnime(false)} />}
+      {anime && <Ouverture sujet={anime} onFini={finAnime} />}
 
       {modale && (
         <ModaleOuvrir extraits={extraits}

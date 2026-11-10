@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { CANAUX, POLICES_LISIBLES, GENS } from '../donnees'
+import { useEffect, useRef, useState } from 'react'
+import { POLICES_LISIBLES, personne } from '../donnees'
 import { Etoile } from '../Etoile'
+import type { Canal, MsgCanal } from '../useConversus'
 
 const EMOJIS = ['🥐', '🍫', '🔥', '😭', '😤', '✨', '👀', '💜', '🙃', '🤝']
 
@@ -12,14 +13,17 @@ const EFFETS = [
 ]
 
 type Props = {
-  canalId: string
+  canal: Canal
+  messages: MsgCanal[]
   selection: number[]
   setSelection: (ids: number[]) => void
   onOuvrir: () => void
+  onEnvoyer: (texte: string, police: string, effet: string, anonyme: boolean) => void
+  onDebat: (canalId: number) => void
   policeRepos: string
 }
 
-export default function Chat({ canalId, selection, setSelection, onOuvrir, policeRepos }: Props) {
+export default function Chat({ canal, messages, selection, setSelection, onOuvrir, onEnvoyer, onDebat, policeRepos }: Props) {
   const [brouillon, setBrouillon] = useState('')
   const [cible, setCible]         = useState(false)
   const [panneau, setPanneau]     = useState<'' | 'emoji' | 'police' | 'effet'>('')
@@ -27,7 +31,17 @@ export default function Chat({ canalId, selection, setSelection, onOuvrir, polic
   const [effet, setEffet]         = useState('')
   const [anonyme, setAnonyme]     = useState(false)
 
-  const canal = CANAUX.find(c => c.id === canalId)!
+  const envoyer = () => {
+    if (!brouillon.trim()) return
+    onEnvoyer(brouillon.trim(), police, effet, anonyme)
+    setBrouillon('')
+    setPanneau('')
+  }
+
+  // On suit le bas du fil quand un message arrive.
+  const fil = useRef<HTMLDivElement>(null)
+  const dernier = messages[messages.length - 1]?.id
+  useEffect(() => { fil.current?.scrollTo({ top: fil.current.scrollHeight }) }, [dernier])
 
   const cocher = (id: number) => {
     if (!cible) return
@@ -53,8 +67,19 @@ export default function Chat({ canalId, selection, setSelection, onOuvrir, polic
             </button>}
       </div>
 
-      <div className="fil">
-        {canal.messages.map(m => {
+      <div className="fil" ref={fil}>
+        {messages.length === 0 && <p className="vide">Aucun message dans ce canal pour l’instant.</p>}
+        {messages.map(m => {
+          if (m.annonce) {
+            const a = m.annonce
+            return (
+              <button key={m.id} className="ligne annonce" onClick={() => onDebat(a.canalId)}>
+                <Etoile />
+                <span><b>{m.qui}</b> a lancé un ConVersus : <i>{a.sujet}</i></span>
+                <span className="annonce-aller">Rejoindre</span>
+              </button>
+            )
+          }
           const coche = selection.includes(m.id)
           return (
             <div
@@ -64,16 +89,16 @@ export default function Chat({ canalId, selection, setSelection, onOuvrir, polic
             >
               {cible && <span className="case">{coche ? '✓' : ''}</span>}
               <span className="mini-av gros"
-                    style={{ background: GENS[m.qui]?.couleur ?? '#999' }}>
+                    style={{ background: personne(m.qui).couleur }}>
                 {m.qui[0]}
               </span>
               <div className="corps">
                 <div className="qui">
                   <b>{m.qui}</b>
-                  <span className="pronom">{GENS[m.qui]?.pronom ?? ''}</span>
+                  <span className="pronom">{personne(m.qui).pronom}</span>
                   <span className="heure">{m.heure}</span>
                 </div>
-                <div className="dit">{m.dit}</div>
+                <div className={'dit ' + (m.effet ?? '')} style={m.police ? { fontFamily: m.police } : undefined}>{m.dit}</div>
               </div>
             </div>
           )
@@ -156,11 +181,12 @@ export default function Chat({ canalId, selection, setSelection, onOuvrir, polic
           <input
             value={brouillon}
             onChange={e => setBrouillon(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && envoyer()}
             placeholder="Écris ton message…"
             aria-label="Écris ton message"
             style={{ fontFamily: police }}
           />
-          <button className="env" onClick={() => { setBrouillon(''); setPanneau('') }}>
+          <button className="env" onClick={envoyer}>
             Envoyer
           </button>
         </div>

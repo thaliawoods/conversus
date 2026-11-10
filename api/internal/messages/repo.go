@@ -57,11 +57,11 @@ func (r *repo) GetByChannel(ctx context.Context, channel channels.Channel) ([]Me
 		if message.Anonymous {
 			messages[i].User = "anonymous"
 		}
+		// Old rows may hold non-object metadata (e.g. the clock's "[]"): ignore it instead of failing the whole channel
 		var metadata map[string]json.RawMessage
 		if len(message.RawMetadata) > 0 {
-			err = json.Unmarshal(message.RawMetadata, &metadata)
-			if err != nil {
-				return messages, fmt.Errorf("Error unmarshaling metadata: %w for %s", err, message.RawMetadata)
+			if err := json.Unmarshal(message.RawMetadata, &metadata); err != nil {
+				metadata = map[string]json.RawMessage{}
 			}
 		}
 		messages[i].Metadata = metadata
@@ -91,10 +91,11 @@ func (r *repo) GetByID(ctx context.Context, id int64) (*Message, error) {
 		return &message, fmt.Errorf("Error retrieving message by id: %w", err)
 	}
 
-	var metadata map[string]json.RawMessage
-	err = json.Unmarshal(message.RawMetadata, &metadata)
-	if err != nil {
-		return &message, fmt.Errorf("Error unmarshaling metadata: %w", err)
+	metadata := map[string]json.RawMessage{}
+	if len(message.RawMetadata) > 0 {
+		if err := json.Unmarshal(message.RawMetadata, &metadata); err != nil {
+			metadata = map[string]json.RawMessage{}
+		}
 	}
 	message.Metadata = metadata
 
@@ -102,6 +103,10 @@ func (r *repo) GetByID(ctx context.Context, id int64) (*Message, error) {
 }
 
 func (r *repo) Create(ctx context.Context, content string, rawMetadata json.RawMessage, channel channels.Channel, user users.User, anonymous bool, createdAt *time.Time) (*Message, error) {
+	// metadata column is NOT NULL: a message sent without metadata would be inserted as NULL
+	if len(rawMetadata) == 0 {
+		rawMetadata = json.RawMessage(`{}`)
+	}
 	var message Message
 	if createdAt == nil {
 		query := `INSERT INTO messages
