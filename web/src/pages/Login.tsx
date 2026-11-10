@@ -1,40 +1,41 @@
-import { useEffect, useState } from "react";
-import Glaieul from "../filaments/Glaieul";
+import { Suspense, lazy, useEffect, useState } from "react";
+
+const Gladiolus = lazy(() => import("../login-flower/Gladiolus"));
 
 type LoginProps = { onLogin: (newToken: string) => void };
 
 const API = "http://localhost:4000";
-const FORMES = ["PicNic", "Coxinelle", "Nudles", "FixelPont", "LoveAndRage", "Frames"];
+const SHAPE_FONTS = ["PicNic", "Coxinelle", "Nudles", "FixelPont", "LoveAndRage", "Frames"];
 
 function Login({ onLogin }: LoginProps) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [formeIndex, setFormeIndex] = useState(0);
-  const [creer, setCreer] = useState(false);
-  const [erreur, setErreur] = useState("");
-  const [attente, setAttente] = useState(false);
+  const [fontIndex, setFontIndex] = useState(0);
+  const [signingUp, setSigningUp] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const timer = setInterval(() => setFormeIndex((n) => (n + 1) % FORMES.length), 4000);
+    const timer = setInterval(() => setFontIndex((index) => (index + 1) % SHAPE_FONTS.length), 4000);
     return () => clearInterval(timer);
   }, []);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const nom = username.trim();
-    if (!nom || !password) return;
+    const name = username.trim();
+    if (!name || !password) return;
 
-    setErreur("");
-    setAttente(true);
+    setError("");
+    setLoading(true);
     try {
-      if (creer) {
-        const inscription = await fetch(`${API}/user`, {
+      if (signingUp) {
+        const signup = await fetch(`${API}/user`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username: nom, password }),
+          body: JSON.stringify({ username: name, password }),
         });
-        if (!inscription.ok) {
-          setErreur("Impossible de créer ce compte (le nom est peut-être déjà pris).");
+        if (!signup.ok) {
+          setError("Impossible de créer ce compte (le nom est peut-être déjà pris).");
           return;
         }
       }
@@ -42,11 +43,11 @@ function Login({ onLogin }: LoginProps) {
       const response = await fetch(`${API}/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: nom, password }),
+        body: JSON.stringify({ username: name, password }),
       });
 
       if (!response.ok) {
-        setErreur(response.status === 401 ? "Nom ou mot de passe incorrect." : `Erreur ${response.status}`);
+        setError(response.status === 401 ? "Nom ou mot de passe incorrect." : `Erreur ${response.status}`);
         return;
       }
 
@@ -54,26 +55,28 @@ function Login({ onLogin }: LoginProps) {
       localStorage.setItem("token", newToken);
       onLogin(newToken);
     } catch {
-      setErreur("Le backend ne répond pas. Il tourne bien (docker compose up) ?");
+      setError("Le serveur ne répond pas. Réessaie dans un instant.");
     } finally {
-      setAttente(false);
+      setLoading(false);
     }
   }
 
   return (
     <main className="login">
-      <Glaieul />
+      <Suspense fallback={null}>
+        <Gladiolus />
+      </Suspense>
 
       <form className="login-card" onSubmit={handleSubmit}>
-        <p className="login-marque">ConVersus</p>
+        <p className="login-brand">ConVersus</p>
         <h2>
           Ici exprime toi librement avec tes messages qui{" "}
-          <span className="mot-forme" style={{ fontFamily: FORMES[formeIndex] }}>
+          <span className="shape-word" style={{ fontFamily: SHAPE_FONTS[fontIndex] }}>
             changent de forme
           </span>
         </h2>
 
-        <label className="login-champ">
+        <label className="login-field">
           <span>Nom d'utilisateur</span>
           <input
             value={username}
@@ -81,29 +84,29 @@ function Login({ onLogin }: LoginProps) {
             autoComplete="username"
           />
         </label>
-        <label className="login-champ">
+        <label className="login-field">
           <span>Mot de passe</span>
           <input
             type="password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            autoComplete={creer ? "new-password" : "current-password"}
+            autoComplete={signingUp ? "new-password" : "current-password"}
           />
         </label>
 
-        {erreur && <p className="login-erreur">{erreur}</p>}
-        <button className="login-button" type="submit" disabled={attente}>
-          {attente ? "…" : creer ? "Créer mon compte" : "Se connecter"}
+        {error && <p className="login-error">{error}</p>}
+        <button className="login-button" type="submit" disabled={loading}>
+          {loading ? "…" : signingUp ? "Créer mon compte" : "Se connecter"}
         </button>
         <button
           type="button"
-          className="login-bascule"
+          className="login-switch"
           onClick={() => {
-            setCreer((c) => !c);
-            setErreur("");
+            setSigningUp((current) => !current);
+            setError("");
           }}
         >
-          {creer ? "J’ai déjà un compte" : "Pas encore de compte ? En créer un"}
+          {signingUp ? "J’ai déjà un compte" : "Pas encore de compte ? En créer un"}
         </button>
       </form>
     </main>

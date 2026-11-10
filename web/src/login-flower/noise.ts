@@ -1,7 +1,5 @@
-// Bruit simplex 3D en GLSL (Ian McEwan, Ashima Arts — licence MIT).
-// C'est lui qui fait bouger les filaments : un champ continu qui évolue avec le temps,
-// jamais une boucle d'animation écrite à l'avance.
-export const BRUIT = /* glsl */ `
+// Simplex noise by Ian McEwan, Ashima Arts (MIT License)
+export const NOISE = `
 vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
 vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
 vec4 permute(vec4 x) { return mod289(((x * 34.0) + 10.0) * x); }
@@ -49,12 +47,11 @@ float snoise(vec3 v) {
   m = m * m;
   return 105.0 * dot(m * m, vec4(dot(p0, x0), dot(p1, x1), dot(p2, x2), dot(p3, x3)));
 }
-`
+`;
 
-// Un point lumineux rond et doux.
-export const POINT_DOUX = /* glsl */ `
-float pointDoux() {
+export const SOFT_POINT = `
+float softPoint() {
   float d = length(gl_PointCoord - 0.5);
   return smoothstep(0.5, 0.0, d);
 }
-`
+`;
