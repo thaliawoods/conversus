@@ -33,6 +33,17 @@ function displayName(message: Message) {
   return message.anonymous || name === "anonymous" ? "Anonyme" : name;
 }
 
+function whoReacted(reactions: Message[], message: Message) {
+  const own = reactions.filter((reaction) => reaction.metadata?.conversus?.reactTo === message.id);
+  return REACTIONS.map((reaction) => {
+    const names = own
+      .filter((item) => item.metadata?.conversus?.value === reaction.value)
+      .map(displayName);
+    if (message.metadata?.conversus?.effect === reaction.value) names.unshift(displayName(message));
+    return { ...reaction, names };
+  }).filter((reaction) => reaction.names.length > 0);
+}
+
 function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
   const { channelId } = useParams();
   const [channels, setChannels] = useState<Channel[]>([]);
@@ -54,6 +65,7 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
   } = useCamera();
   const debate = channels.find((channel) => channel.id === Number(channelId));
   const parents = findParents(replies);
+  const reactedBy = replies.map((message) => whoReacted(reactions, message));
 
   useEffect(() => {
     async function loadChannels() {
@@ -215,6 +227,16 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
             >
               <strong>{displayName(message)}</strong>
               <p style={{ fontFamily: fontFamily(message.metadata?.conversus?.font) }}>{message.content}</p>
+              {reactedBy[index].length > 0 && (
+                <div className="who-reacted">
+                  {reactedBy[index].map((reaction) => (
+                    <div key={reaction.value}>
+                      <ReactionIcon value={reaction.value} />
+                      {reaction.label} : <span>{reaction.names.join(", ")}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
               {openId === message.id && (
                 <div className="message-actions" onClick={(event) => event.stopPropagation()}>
                   {REACTIONS.map((reaction) => (

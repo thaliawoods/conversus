@@ -674,6 +674,49 @@
   z-index: 1;
 }
 
+.board-message:hover {
+  z-index: 2;
+}
+
+.who-reacted {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  margin-bottom: 0.4rem;
+  display: none;
+  flex-direction: column;
+  gap: 0.3rem;
+  width: max-content;
+  max-width: 20rem;
+  padding: 0.5rem 0.8rem;
+  border: 1px solid var(--line);
+  background: var(--night);
+  color: var(--ice-soft);
+  font-size: 0.8rem;
+  pointer-events: none;
+}
+
+.board-message:hover .who-reacted,
+.board-message.open .who-reacted {
+  display: flex;
+}
+
+.who-reacted div {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.who-reacted .reaction-icon {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.who-reacted span {
+  color: var(--white);
+  text-transform: capitalize;
+}
+
 .message-actions {
   position: absolute;
   left: 0;
