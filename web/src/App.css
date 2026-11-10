@@ -404,10 +404,151 @@
   margin: 0 1rem;
   border-radius: 1.4rem;
   background: var(--surface);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.viewport:active {
+  cursor: grabbing;
 }
 
 .board {
   position: absolute;
   left: 50%;
   top: 50%;
+}
+
+.recenter {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  cursor: pointer;
+}
+
+.recenter-icon {
+  display: block;
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.stems {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  overflow: visible;
+}
+
+.stem {
+  fill: none;
+  stroke: var(--slate);
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+
+.flower {
+  position: absolute;
+  left: -3rem;
+  top: -3rem;
+  width: 6rem;
+  height: 6rem;
+}
+
+.flower-petal {
+  fill: var(--lavender);
+  stroke: var(--white);
+  stroke-width: 1.5;
+}
+
+.flower-heart {
+  fill: var(--slate);
+}
+
+.board-message {
+  position: absolute;
+  width: max-content;
+  max-width: 26rem;
+  overflow-wrap: anywhere;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+}
+
+.board-message strong {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--slate);
+}
+
+.board-message p {
+  margin: 0;
+  font-size: 1.1rem;
+  line-height: 1.4;
+}
+
+.board-message.open {
+  z-index: 1;
+}
+
+.message-actions {
+  position: absolute;
+  left: 0;
+  top: 100%;
+  margin-top: 0.4rem;
+  display: flex;
+  gap: 0.4rem;
+  width: max-content;
+}
+
+.message-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.reaction-icon {
+  display: block;
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.reaction-fill {
+  fill: var(--lavender);
+  stroke: var(--slate);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.reaction-vein,
+.reaction-line {
+  fill: none;
+  stroke: var(--slate);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.reaction-vein {
+  stroke-width: 1.2;
+}
+
+.reaction-solid {
+  fill: var(--slate);
+}
+
+.reply-banner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 0.5rem 1rem 0;
+}
+
+.reply-banner p {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
