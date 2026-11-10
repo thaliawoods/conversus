@@ -7,7 +7,7 @@ export type Message = {
   id: number;
   content: string;
   user: string;
-  metadata?: { conversus?: { channelName?: string } };
+  metadata?: { conversus?: { channelName?: string; author?: string } };
 };
 
 type ChatProps = { token: string; onTokenExpired: () => void };
@@ -99,14 +99,23 @@ function Chat({ token, onTokenExpired }: ChatProps) {
       body: JSON.stringify({
         content: subject,
         channel: debate.id,
-        metadata: {
-          origin: selectedMessages.map((message) => ({
-            user: message.user,
-            content: message.content,
-          })),
-        },
+        metadata: {},
       }),
     });
+    for (const message of selectedMessages) {
+      await fetch("http://localhost:4000/channel/message?namespace=conversus", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          content: message.content,
+          channel: debate.id,
+          metadata: { author: message.user },
+        }),
+      });
+    }
     await fetch("http://localhost:4000/channel/message?namespace=conversus", {
       method: "POST",
       headers: {

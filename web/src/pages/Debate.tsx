@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router";
 import Navbar, { type Channel } from "../components/Navbar";
+import type { Message } from "./Chat";
 
 type DebateProps = { token: string };
 
 function Debate({ token }: DebateProps) {
   const { channelId } = useParams();
   const [channels, setChannels] = useState<Channel[]>([]);
-  const [origin, setOrigin] = useState<{ user: string; content: string }[]>([]);
   const [content, setContent] = useState("");
-  const [replies, setReplies] = useState<{ user: string; content: string }[]>([]);
+  const [replies, setReplies] = useState<Message[]>([]);
   const debate = channels.find((channel) => channel.id === Number(channelId));
 
   useEffect(() => {
@@ -33,7 +33,6 @@ function Debate({ token }: DebateProps) {
       );
       if (!response.ok) return;
       const data = await response.json();
-      setOrigin(data?.at(-1)?.metadata?.conversus?.origin ?? []);
       setReplies((data ?? []).toReversed().slice(1));
     }
 
@@ -72,12 +71,15 @@ function Debate({ token }: DebateProps) {
     <main className="chat debate">
       <Navbar channels={channels} />
       <h2 className="channel-title">{debate?.name.replace(/#\d+$/, "")}</h2>
+      <div className="viewport">
+        <div className="board"></div>
+      </div>
       <ul className="messages">
-        {[...origin, ...replies].map((message, index) => (
-          <li className="message" key={index}>
-            <span className="avatar">{message.user[0]}</span>
+        {replies.map((message) => (
+          <li className="message" key={message.id}>
+            <span className="avatar">{(message.metadata?.conversus?.author ?? message.user)[0]}</span>
             <div className="message-body">
-              <strong>{message.user}</strong>
+              <strong>{message.metadata?.conversus?.author ?? message.user}</strong>
               <p>{message.content}</p>
             </div>
           </li>

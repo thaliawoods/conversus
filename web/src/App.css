@@ -395,3 +395,19 @@
 .account-dropdown button.active {
   background: var(--lavender-light);
 }
+
+.viewport {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  margin: 0 1rem;
+  border-radius: 1.4rem;
+  background: var(--surface);
+}
+
+.board {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+}
