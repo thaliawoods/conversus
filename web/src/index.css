@@ -35,6 +35,26 @@
   src: url("/fonts/coxinelle.otf");
 }
 
+@font-face {
+  font-family: "PicNic";
+  src: url("/fonts/picnic.otf");
+}
+
+@font-face {
+  font-family: "Nudles";
+  src: url("/fonts/nudles.ttf");
+}
+
+@font-face {
+  font-family: "FixelPont";
+  src: url("/fonts/fixelpont.otf");
+}
+
+@font-face {
+  font-family: "LoveAndRage";
+  src: url("/fonts/love-and-rage.otf");
+}
+
 :root {
   --slate: #4e5675;
   --lavender: #aab1d6;
