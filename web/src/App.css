@@ -299,8 +299,9 @@
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: var(--accent);
-  color: var(--white);
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ice);
   font-size: 0.8rem;
   text-transform: uppercase;
 }
@@ -314,7 +315,8 @@
   display: block;
   font-size: 0.76rem;
   font-weight: 600;
-  color: var(--slate);
+  color: var(--ice-soft);
+  text-transform: capitalize;
 }
 
 .message-body p {
@@ -331,23 +333,62 @@
 
 .message-form input {
   flex: 1;
-  padding: 0.72rem 1.15rem;
+  padding: 0.45rem 0.1rem 0.55rem;
   border: none;
-  border-radius: 999px;
-  background: var(--white);
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--white);
+  outline: none;
+  transition: border-color 0.25s;
 }
 
-.message-form button {
-  padding: 0.72rem 1.4rem;
-  border: none;
-  border-radius: 999px;
-  background: var(--accent);
-  color: var(--white);
-  cursor: pointer;
+.message-form input:focus {
+  border-bottom-color: var(--ice);
 }
 
 .message-form input::placeholder {
-  color: var(--lavender);
+  color: var(--ice-soft);
+}
+
+.message-form button,
+.chat-actions button,
+.selection-bar button,
+.join-button,
+.modal-actions button,
+.message-actions button,
+.reply-banner button,
+.recenter,
+.composer-panel button {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 0;
+  background: rgba(196, 230, 255, 0.06);
+  color: var(--ice-soft);
+  font-size: 0.66rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 0.25s, color 0.25s;
+}
+
+.message-form button:hover,
+.chat-actions button:hover,
+.selection-bar button:hover,
+.join-button:hover,
+.modal-actions button:hover,
+.message-actions button:hover,
+.reply-banner button:hover,
+.recenter:hover,
+.composer-panel button:hover {
+  background: rgba(196, 230, 255, 0.14);
+  color: var(--white);
+}
+
+.selection-bar button:disabled,
+.modal-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .chat-actions {
@@ -359,20 +400,10 @@
 
 .channel-title {
   margin: 0;
-  font-family: var(--font-title);
-  font-size: 1rem;
+  font-family: "OpenSans", var(--font-text);
+  font-size: 1.1rem;
   font-weight: 400;
-  color: var(--lavender-light);
-}
-
-.chat-actions button {
-  padding: 0.45rem 0.95rem;
-  border: none;
-  border-radius: 999px;
-  background: var(--white);
-  color: var(--slate);
-  font-size: 0.8rem;
-  cursor: pointer;
+  color: var(--white);
 }
 
 .selection-bar {
@@ -381,25 +412,9 @@
   align-items: center;
   margin: 0 1rem;
   padding: 0.5rem 0.5rem 0.5rem 1.2rem;
-  border-radius: 999px;
-  background: var(--accent);
-  color: var(--white);
+  border: 1px solid var(--line);
+  color: var(--ice-soft);
   font-size: 0.8rem;
-}
-
-.selection-bar button {
-  padding: 0.45rem 0.95rem;
-  border: none;
-  border-radius: 999px;
-  background: var(--white);
-  color: var(--slate);
-  font-size: 0.8rem;
-  cursor: pointer;
-}
-
-.selection-bar button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 .modal-backdrop {
@@ -407,39 +422,50 @@
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgba(32, 38, 66, 0.55);
+  background: rgba(9, 11, 23, 0.75);
 }
 
 .modal {
   width: min(32rem, 90vw);
   padding: 2rem;
-  border-radius: 1.8rem;
-  background: var(--surface);
+  border: 1px solid var(--line);
+  background: var(--night);
 }
 
 .modal h2 {
   margin: 0 0 1.2rem;
-  font-family: var(--font-title);
+  font-family: "OpenSans", var(--font-text);
   font-size: 1.4rem;
-  font-weight: 700;
-  text-align: center;
-  color: var(--slate);
+  font-weight: 400;
+  color: var(--white);
 }
 
 .modal-label {
   display: block;
   margin: 0 0 0.4rem;
-  font-size: 0.72rem;
-  color: var(--slate);
+  font-size: 0.66rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ice-soft);
 }
 
 .modal-label input {
   width: 100%;
   margin: 0.4rem 0 0.8rem;
-  padding: 0.72rem 1.15rem;
+  padding: 0.45rem 0.1rem 0.55rem;
   border: none;
-  border-radius: 999px;
-  background: var(--white);
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--white);
+  font-size: 0.98rem;
+  letter-spacing: normal;
+  text-transform: none;
+  outline: none;
+}
+
+.modal-label input:focus {
+  border-bottom-color: var(--ice);
 }
 
 .modal-messages {
@@ -454,8 +480,7 @@
 .modal-messages li {
   margin-bottom: 0.4rem;
   padding: 0.5rem 0.9rem;
-  border-radius: 0.8rem;
-  background: var(--white);
+  border: 1px solid var(--line);
   overflow-wrap: anywhere;
 }
 
@@ -465,24 +490,9 @@
   gap: 0.6rem;
 }
 
-.modal-actions button {
-  padding: 0.6rem 1.2rem;
-  border: none;
-  border-radius: 999px;
-  background: var(--white);
-  color: var(--slate);
-  font-size: 0.8rem;
-  cursor: pointer;
-}
-
 .modal-actions button[type="submit"] {
-  background: var(--accent);
+  background: rgba(196, 230, 255, 0.14);
   color: var(--white);
-}
-
-.modal-actions button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 .debate .channel-title {
@@ -491,13 +501,6 @@
 
 .join-button {
   margin-top: 0.3rem;
-  padding: 0.35rem 0.9rem;
-  border: none;
-  border-radius: 999px;
-  background: var(--accent);
-  color: var(--white);
-  font-size: 0.76rem;
-  cursor: pointer;
 }
 
 .account-menu {
@@ -516,6 +519,11 @@
   border: 1px solid var(--line);
   background: transparent;
   color: var(--ice);
+}
+
+.account-name,
+.account-dropdown button {
+  text-transform: capitalize;
 }
 
 .account-dropdown {
@@ -601,7 +609,7 @@
   position: absolute;
   right: 1rem;
   bottom: 1rem;
-  cursor: pointer;
+  padding: 0.4rem;
 }
 
 .recenter-icon {
@@ -621,7 +629,7 @@
 
 .stem {
   fill: none;
-  stroke: var(--slate);
+  stroke: var(--line);
   stroke-width: 6;
   stroke-linecap: round;
 }
@@ -635,13 +643,13 @@
 }
 
 .flower-petal {
-  fill: var(--lavender);
-  stroke: var(--white);
+  fill: var(--deep-blue);
+  stroke: var(--ice);
   stroke-width: 1.5;
 }
 
 .flower-heart {
-  fill: var(--slate);
+  fill: var(--bright-blue);
 }
 
 .board-message {
@@ -657,7 +665,8 @@
   display: block;
   font-size: 0.72rem;
   font-weight: 600;
-  color: var(--slate);
+  color: var(--ice-soft);
+  text-transform: capitalize;
 }
 
 .board-message p {
@@ -687,12 +696,14 @@
 }
 
 .message-actions button.on {
-  background: var(--lavender-light);
+  background: rgba(196, 230, 255, 0.14);
+  color: var(--white);
 }
 
 .message-actions img {
   width: 1.4rem;
   height: 1.4rem;
+  filter: invert(1);
 }
 
 .reaction-icon {
@@ -702,8 +713,8 @@
 }
 
 .reaction-fill {
-  fill: var(--lavender);
-  stroke: var(--slate);
+  fill: var(--line);
+  stroke: var(--ice);
   stroke-width: 1.5;
   stroke-linejoin: round;
 }
@@ -711,7 +722,7 @@
 .reaction-vein,
 .reaction-line {
   fill: none;
-  stroke: var(--slate);
+  stroke: var(--ice);
   stroke-width: 2;
   stroke-linecap: round;
 }
@@ -721,7 +732,7 @@
 }
 
 .reaction-solid {
-  fill: var(--slate);
+  fill: var(--ice);
 }
 
 .reply-banner {
@@ -761,20 +772,30 @@
   flex-wrap: wrap;
   gap: 0.4rem;
   padding: 0.5rem;
-  border-radius: 1rem;
-  background: var(--white);
+  border: 1px solid var(--line);
+  background: var(--night);
 }
 
-.composer-panel .active {
-  outline: 2px solid var(--slate);
+.composer-panel button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.95rem;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.composer-panel button.active {
+  background: rgba(196, 230, 255, 0.14);
+  color: var(--white);
 }
 
 .composer-preview {
   max-width: 26rem;
   margin: 0;
   padding: 0.5rem 1rem;
-  border-radius: 1rem;
-  background: var(--white);
+  border: 1px solid var(--line);
+  background: var(--night);
   font-size: 1.1rem;
   overflow-wrap: anywhere;
 }
@@ -786,16 +807,19 @@
   width: 2.6rem;
   height: 2.6rem;
   padding: 0;
-  background: var(--white);
-  color: var(--slate);
+  font-size: 1rem;
   font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
 }
 
 .message-form .composer-tool.on {
-  background: var(--lavender-light);
+  background: rgba(196, 230, 255, 0.14);
+  color: var(--white);
 }
 
 .composer-tool img {
   width: 1.4rem;
   height: 1.4rem;
+  filter: invert(1);
 }

@@ -35,7 +35,7 @@ function AccountMenu({ onSwitch, onLogout }: AccountMenuProps) {
 
   return (
     <div className="account-menu">
-      <span>{current}</span>
+      <span className="account-name">{current}</span>
       <span className="avatar">{current[0]}</span>
       <div className="account-dropdown">
         <span className="account-label">utilisateurices</span>
