@@ -20,10 +20,18 @@ function spiralPoint(k: number) {
   return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
 }
 
+const STEM_MIN = 30;
+const STEM_MAX = 120;
+
+function stemLength(id: number) {
+  const noise = Math.sin(id * 12.9898) * 43758.5453;
+  return STEM_MIN + (noise - Math.floor(noise)) * (STEM_MAX - STEM_MIN);
+}
+
 export type Size = { width: number; height: number };
 export type Placement = { x: number; y: number; width: number; height: number };
 
-export function placeMessages(sizes: Size[], parents: (number | null)[]) {
+export function placeMessages(sizes: Size[], parents: (number | null)[], ids: number[]) {
   const placed: Box[] = [
     { left: -FLOWER_RADIUS, top: -FLOWER_RADIUS, right: FLOWER_RADIUS, bottom: FLOWER_RADIUS },
   ];
@@ -32,6 +40,14 @@ export function placeMessages(sizes: Size[], parents: (number | null)[]) {
   for (const [index, size] of sizes.entries()) {
     const parent = parents[index];
     const origin = parent === null ? { x: 0, y: 0 } : positions[parent];
+    const parentBox = placed[parent === null ? 0 : parent + 1];
+    const length = stemLength(ids[index]);
+    const reserved = {
+      left: parentBox.left - length,
+      top: parentBox.top - length,
+      right: parentBox.right + length,
+      bottom: parentBox.bottom + length,
+    };
     for (let k = 0; ; k++) {
       const spiral = spiralPoint(k);
       const point = { x: origin.x + spiral.x, y: origin.y + spiral.y };
@@ -41,7 +57,7 @@ export function placeMessages(sizes: Size[], parents: (number | null)[]) {
         right: point.x + size.width / 2 + GAP / 2,
         bottom: point.y + size.height / 2 + GAP / 2,
       };
-      if (placed.every((other) => !overlaps(box, other))) {
+      if (!overlaps(box, reserved) && placed.every((other) => !overlaps(box, other))) {
         placed.push(box);
         positions.push({ ...point, ...size });
         break;

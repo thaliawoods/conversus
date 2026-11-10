@@ -61,7 +61,8 @@ function Debate({ token }: DebateProps) {
       height: element.offsetHeight,
     }));
     const parents = findParents(replies);
-    setPositions(placeMessages(sizes, parents));
+    const ids = replies.map((message) => message.id);
+    setPositions(placeMessages(sizes, parents, ids));
   }, [replies]);
 
   async function handleSendMessage(event: React.FormEvent<HTMLFormElement>) {
