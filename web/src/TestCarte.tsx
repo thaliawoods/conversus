@@ -66,10 +66,21 @@ export default function TestCarte() {
     setDebat(d => ({ ...d, syntheses: [...d.syntheses, s] }))
     return s
   }
+  // Un like / dislike sur le faux débat (même règle que le vrai : re-cliquer le même avis l'annule).
+  const avis = (id: number, v: 1 | -1, comme = 'killian') => setDebat(d => ({
+    ...d,
+    msgs: d.msgs.map(m => {
+      if (m.id !== id) return m
+      const a: Avis = { ...m.avis }
+      if (a[comme]?.v === v) delete a[comme]; else a[comme] = { v, t: new Date().toISOString() }
+      const vals = Object.values(a)
+      return { ...m, avis: a, pour: vals.filter(x => x.v === 1).length, contre: vals.filter(x => x.v === -1).length }
+    }),
+  }))
   return (
     <div className="app" style={{ padding: '1rem' }}>
       <Jardin debat={debat} moi="killian" iaErreur={null} pleinEcran={plein} setPleinEcran={setPlein}
-              onEcrire={() => null} onAvis={() => null} onSynthese={synthese} />
+              onEcrire={() => null} onAvis={avis} onSynthese={synthese} />
     </div>
   )
 }

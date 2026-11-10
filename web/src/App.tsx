@@ -32,6 +32,7 @@ export default function App() {
   const [pleinEcran, setPleinEcran] = useState(false)               // le board sans le chat de gauche
   const [lancement, setLancement] = useState<string | null>(null)
   const [canalLat, setCanalLat]   = useState<number | null>(null)   // le canal ouvert à gauche pendant un débat
+  const [arrivee, setArrivee]     = useState(false)                 // on vient de se connecter : l'appli entre en scène
 
   const [policeRepos, setPoliceRepos] = useState('Tremplin')
   const [effets, setEffets]           = useState(true)
@@ -110,13 +111,15 @@ export default function App() {
   if (hash === '#test-carte') return <TestCarte />
 
   if (!c.session) {
-    return <div className="app"><Login onEntrer={c.connecter} /></div>
+    const entrer = (nom: string, mdp: string, creer: boolean, avant: () => Promise<void>) =>
+      c.connecter(nom, mdp, creer, async () => { await avant(); setArrivee(true) })
+    return <div className="app"><Login onEntrer={entrer} /></div>
   }
 
   const deconnexion = () => { setSelection([]); setDebatId(null); setCanalId(null); setEcran('canal'); c.deconnecter() }
 
   return (
-    <div className="app">
+    <div className={'app' + (arrivee ? ' arrivee' : '')}>
       <Cosmos />
       <nav className="nav">
         <span className="marque"><Etoile />ConVersus</span>

@@ -80,8 +80,6 @@ export default function Jardin({ debat, moi, pleinEcran, setPleinEcran, iaErreur
     return () => removeEventListener('keydown', touche)
   }, [mode, annuler])
 
-  const gens = new Set([debat.question.qui, ...msgs.map(m => m.qui)]).size
-
   return (
     <div className={'bd' + (volet ? ' avec-volet' : '')}>
       <Carte debat={debat} vie={vie} maintenant={maintenant} mode={mode} selection={selection}
@@ -91,13 +89,6 @@ export default function Jardin({ debat, moi, pleinEcran, setPleinEcran, iaErreur
 
       <div className="bd-titre">
         <h1>{debat.sujet}</h1>
-        <span className="bd-infos">
-          {msgs.length} message{msgs.length > 1 ? 's' : ''} · {gens} personne{gens > 1 ? 's' : ''}
-          <span className="bd-vie" title="Vitalité de la fleur : elle fane quand personne ne participe">
-            <span style={{ width: `${Math.round(vie * 100)}%` }} />
-          </span>
-          {vie > .66 ? 'en pleine floraison' : vie > .33 ? 'en fleur' : vie > .1 ? 'commence à faner' : 'fanée'}
-        </span>
         {iaErreur && <span className="bd-alerte" title={iaErreur}>lecture des messages en pause, nouvel essai…</span>}
       </div>
 
@@ -215,17 +206,11 @@ function Participation({ msgs, couleur }: { msgs: MsgConv[]; couleur: (n: string
   )
 }
 
-// Double flèche en dégradé (maquette) ; vers l'intérieur pour quitter le plein écran.
+// Double flèche bleue ; vers l'intérieur pour quitter le plein écran.
 function IconePlein({ dedans }: { dedans: boolean }) {
   return (
     <svg viewBox="0 0 40 40" aria-hidden>
-      <defs>
-        <linearGradient id="bd-plein-degrade" x1="0" y1="1" x2="1" y2="0">
-          <stop stopColor="#FF4F4F" />
-          <stop offset="1" stopColor="#FFB84F" />
-        </linearGradient>
-      </defs>
-      <g fill="none" stroke="url(#bd-plein-degrade)" strokeWidth={3.2} strokeLinecap="round" strokeLinejoin="round">
+      <g fill="none" stroke="#4f8bff" strokeWidth={3.2} strokeLinecap="round" strokeLinejoin="round">
         {dedans
           ? <><path d="M22 18 L33 7" /><path d="M23 9 V17 H31" /><path d="M18 22 L7 33" /><path d="M9 23 H17 V31" /></>
           : <><path d="M10 30 L30 10" /><path d="M21 9 H31 V19" /><path d="M9 21 V31 H19" /></>}

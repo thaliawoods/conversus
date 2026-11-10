@@ -8,6 +8,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 export type Rendu = {
   renderer: THREE.WebGLRenderer
   scene: THREE.Scene
+  nette: THREE.Scene         // ce qui est dessiné après le bloom : net, sans lueur autour
   dimensionner: (largeur: number, hauteur: number) => void
   dessiner: (camera: THREE.Camera) => void
   liberer: () => void
@@ -35,13 +36,18 @@ export function creerRendu(canvas: HTMLCanvasElement, o: { fond: string; bloom: 
   const camFactice = new THREE.Camera()
   const passeScene = new RenderPass(scene, camFactice)
   const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), o.bloom.force, o.bloom.rayon, o.bloom.seuil)
+  // La scène « nette » se dessine par-dessus, une fois le bloom passé : elle ne reçoit aucune lueur.
+  const nette = new THREE.Scene()
+  const passeNette = new RenderPass(nette, camFactice)
+  passeNette.clear = false
   const composer = new EffectComposer(renderer)
   composer.addPass(passeScene)
   composer.addPass(bloom)
+  composer.addPass(passeNette)
   composer.addPass(new OutputPass())
 
   return {
-    renderer, scene, ratio,
+    renderer, scene, nette, ratio,
     dimensionner(l, h) {
       renderer.setSize(l, h, false)
       composer.setPixelRatio(ratio)
@@ -49,6 +55,7 @@ export function creerRendu(canvas: HTMLCanvasElement, o: { fond: string; bloom: 
     },
     dessiner(camera) {
       passeScene.camera = camera
+      passeNette.camera = camera
       composer.render()
     },
     liberer() {

@@ -1,15 +1,14 @@
-// L'espace 3D d'un ConVersus : la fleur au centre, les racines de lumière, la poussière, et la caméra
+// L'espace 3D d'un ConVersus : la fleur au centre (Fleur.tsx, posée en HTML), les racines de lumière, la poussière, et la caméra
 // qui tourne toujours autour de la fleur (glisser pour tourner, molette ou pincement pour zoomer).
 // Les messages restent du HTML (polices, effets, clics) : à chaque image, la scène projette leur position 3D
 // sur l'écran et place chaque élément enregistré (étiquette) au bon endroit, à la bonne taille,
 // plus ou moins voilé selon sa profondeur. Chaque message flotte un peu ; sa racine le suit.
 import * as THREE from 'three'
 import { creerRendu, mouvementReduit, type Rendu } from './rendu'
-import { Faisceaux, type Def, type Reglage } from './faisceaux'
+import { Faisceaux, type Def } from './faisceaux'
 import { creerPoussiere } from './poussiere'
-import { PETALES, allure, couleursFleur, petale } from './liens'
 import { courbe3, departFleur, derive, plus, unitaire, type Noeud, type V3 } from './espace'
-import { BRIN, FLEUR_TAILLE, type Place } from '../plan'
+import { BRIN, FLEUR_TAILLE, melange, type Place } from '../plan'
 import type { Mode } from '../Carte'
 
 export const FOND_DEBAT = '#080a18'
@@ -37,6 +36,25 @@ const FLOTTEMENT = 9                   // amplitude du flottement des messages (
 const VUE_DEPART = { theta: -.38, phi: .2 }
 const TOUR_LENT = .022                 // rad/s : la scène tourne doucement quand personne n'y touche
 const REPOS = 9000                     // ms sans interaction avant que la scène se remette à tourner
+
+// Les couleurs des racines : lavande pour les idées qui partent de la fleur, bleu ciel pour les réponses ;
+// un message rejeté tire vers le rouge, un message très aimé devient doré.
+const RACINE_IDEE = '#dbd7f5'
+const RACINE_REPONSE = '#A9D4FF'
+const ROUGE = '#FF4A4A'
+const OR = '#FFDF4E'
+const AVIS_PLEIN = 3                   // solde de likes (ou de dislikes) à partir duquel l'effet est complet
+// Le texte d'un message est posé au-delà du bout de sa racine : ses réponses partent de l'autre côté du texte.
+const AU_DELA_IDEE = 225, AU_DELA_REPONSE = 150
+// Une racine est un trait de lumière simple, comme une fibre nerveuse : près du message, elle se ramifie
+// en quelques fines terminaisons qui s'écartent en éventail. [départ sur la racine (rang du point), écart, avancée]
+const TERMINAISONS: [number, number, number][] = [[23, -30, 10], [26, 22, 16], [28, -9, 22], [29, 34, 4]]
+
+// Une petite courbe douce de a à b, qui passe près de `vers`.
+const courbe = (a: V3, vers: V3, b: V3, n = 10): V3[] => Array.from({ length: n }, (_, i) => {
+  const t = i / (n - 1), s = 1 - t
+  return [0, 1, 2].map(k => s * s * a[k] + 2 * s * t * vers[k] + t * t * b[k]) as V3
+})
 
 type Cam = { theta: number; phi: number; dist: number; cible: THREE.Vector3 }
 
@@ -79,7 +97,9 @@ export class Espace {
   private constructor(rendu: Rendu, conteneur: HTMLElement) {
     this.rendu = rendu
     this.conteneur = conteneur
-    this.faisceaux = new Faisceaux({ taillePoint: 2.4 * rendu.ratio, portee: 80, mouvement: this.mouvement, intensite: .32 })
+    this.faisceaux = new Faisceaux({
+      taillePoint: 2.4 * rendu.ratio, portee: 80, mouvement: this.mouvement, intensite: .32,
+    })
     this.poussiere = creerPoussiere({
       nombre: 1600, etendue: { x: 2600, y: 2600, z: 2600 }, taille: 2.6 * rendu.ratio, mouvement: this.mouvement,
       couleurs: ['#7CFFB2', '#AEB3FF', '#FF9AA8', '#FFE27A', '#6FE3D2', '#c4e6ff'],
@@ -200,51 +220,63 @@ export class Espace {
 
     const f = this.faisceaux
     const defs: Def[] = []
-    for (let i = 0; i < PETALES; i++) {
-      defs.push({ cle: 'p' + i, brins: 16, etincelles: 12, torsion: 3, pinceDebut: true, pinceFin: true, graine: 101 + i * 17, symetrique: true })
-    }
     let rang = 0
     for (const p of d.places.values()) {
-      const force = p.m.analyse?.force ?? .4
       const nouveau = !this.dejaVus.has(p.m.id)
       this.dejaVus.add(p.m.id)
-      defs.push({
-        cle: 'm' + p.m.id, brins: 10 + Math.round(8 * force), etincelles: 5 + Math.round(9 * force),
-        torsion: allure(p.m).torsion, pinceDebut: true, pinceFin: true, graine: p.m.id,
-        // au premier affichage, les racines poussent les unes après les autres, depuis la fleur
-        attente: nouveau && this.premier ? Math.min(2.2, .35 + rang++ * .06) : 0,
-      })
+      // Une racine : un trait de lumière (deux brins presque confondus, pour un peu d'épaisseur), sans grains
+      // ni étincelles autour, et ses fines terminaisons. Elles poussent après la racine, comme si elle s'ouvrait.
+      // au premier affichage, les racines poussent les unes après les autres, depuis la fleur
+      const attente = nouveau && this.premier ? Math.min(2.2, .35 + rang++ * .06) : 0
+      defs.push({ cle: 'm' + p.m.id, brins: 2, etincelles: 0, torsion: 1, pinceDebut: true, pinceFin: true, graine: p.m.id, attente })
+      TERMINAISONS.forEach((_, k) => defs.push({
+        cle: `m${p.m.id}t${k}`, brins: 1, etincelles: 0, torsion: 0, pinceDebut: true, pinceFin: false,
+        graine: p.m.id * 7 + k, attente: attente + .5 + k * .08,
+      }))
     }
-    for (const b of d.brins) defs.push({ cle: b.cle, brins: 7, etincelles: 4, torsion: 2.5, pinceDebut: true, pinceFin: true, graine: b.id * 31 + b.cle.length })
+    for (const b of d.brins) defs.push({ cle: b.cle, brins: 2, etincelles: 0, torsion: 1, pinceDebut: true, pinceFin: true, graine: b.id * 31 + b.cle.length })
     f.definir(defs)
     this.premier = false
 
     const regarde = typeof d.regard === 'number' ? d.regard : null
     for (const p of d.places.values()) {
-      const a = allure(p.m), n = d.noeuds.get(p.m.id)
+      const n = d.noeuds.get(p.m.id)
       if (!n) continue
       const depart = n.parent !== null ? d.noeuds.get(n.parent)!.base : departFleur(n)
       const L = Math.hypot(n.base[0] - depart[0], n.base[1] - depart[1], n.base[2] - depart[2])
-      let eclat = a.eclat, rayon = 5 + 8 * (p.m.analyse?.force ?? .4)
+      let eclat = 1.5 + .4 * (p.m.analyse?.force ?? .4)
       if (d.mode !== 'normal') eclat *= d.selection.has(p.m.id) ? 1.35 : .14
-      // Survoler ou regarder un message resserre et allume ses racines (vers son parent et vers ses réponses).
+      // Survoler ou regarder un message allume ses racines (vers son parent et vers ses réponses).
       const vise = (id: number | null) => id !== null && (p.m.id === id || n.parent === id)
-      if (vise(d.survol) || vise(regarde)) { eclat *= 1.6; rayon *= .55 }
+      if (vise(d.survol) || vise(regarde)) eclat *= 1.6
       else if (regarde !== null && d.mode === 'normal') eclat *= .45
-      f.regler('m' + p.m.id, { couleurA: a.A, couleurB: a.B, eclat, rayon, energie: a.energie, frise: a.frise, ampleur: 4 + L * .025, pousse: 1 })
+      const solde = p.m.pour - p.m.contre
+      const rejet = Math.min(1, Math.max(0, -solde / AVIS_PLEIN)), adhesion = Math.min(1, Math.max(0, solde / AVIS_PLEIN))
+      const base = n.parent === null ? RACINE_IDEE : RACINE_REPONSE
+      const teinte = adhesion > 0 ? melange(base, OR, adhesion) : melange(base, ROUGE, rejet * .85)
+      // Un trait fin qui ondule à peine, comme une fibre nerveuse ; ses terminaisons, plus fines et plus pâles.
+      f.regler('m' + p.m.id, {
+        couleurA: teinte, couleurB: melange(teinte, '#ffffff', .25), eclat, rayon: .9, energie: .25,
+        frise: 0, ampleur: 3 + L * .02, pousse: 1,
+      })
+      TERMINAISONS.forEach((_, k) => f.regler(`m${p.m.id}t${k}`, {
+        couleurA: melange(teinte, '#ffffff', .25), couleurB: teinte, eclat: eclat * .7, rayon: .4, energie: .2,
+        frise: 0, ampleur: 1.5, pousse: 1,
+      }))
     }
     for (const b of d.brins) {
       const eteint = d.mode !== 'normal' && !d.selection.has(b.id)
-      f.regler(b.cle, { couleurA: '#7CFFB2', couleurB: '#E8FF8A', eclat: eteint ? .12 : .8, rayon: 3.5, energie: .5, frise: 0, ampleur: 5, pousse: b.tombe ? 0 : 1 })
+      // la tige au bout d'un message sans réponse : violet clair, comme les racines des idées
+      f.regler(b.cle, { couleurA: RACINE_IDEE, couleurB: melange(RACINE_IDEE, '#ffffff', .25), eclat: eteint ? .12 : 1.3, rayon: .9, energie: .25, frise: 0, ampleur: 4, pousse: b.tombe ? 0 : 1 })
     }
   }
 
   // Le bout d'une tige de fleur, au-delà d'un message qui attend une réponse.
   private tige(n: Noeud, a: V3) {
-    // une idée flottante a son texte posé au-delà du bout de sa racine : la tige part de l'autre côté du texte
-    const depart = n.libre ? 300 : 130
+    // le texte est posé au-delà du bout de la racine : la tige part de l'autre côté du texte
+    const depart = n.libre ? 300 : 200
     const pied = plus(a, n.dir, depart), tete = plus(a, n.dir, depart + BRIN * .8)
-    return { debut: n.libre ? plus(a, n.dir, depart * .75) : a, pied, tete }
+    return { debut: plus(a, n.dir, depart * .75), pied, tete }
   }
 
   // ------------------------------------------------------------ une image
@@ -278,8 +310,6 @@ export class Espace {
     cam.lookAt(c.cible)
     cam.updateMatrixWorld()
     const avant = new THREE.Vector3(); cam.getWorldDirection(avant)
-    const droite = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0)
-    const haut = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 1)
 
     // Chaque message flotte ; sa racine part de son parent (qui flotte aussi) ou du cœur de la fleur.
     const amp = FLOTTEMENT * this.mouvement
@@ -287,32 +317,26 @@ export class Espace {
     for (const n of d.noeuds.values()) {
       // une réponse à une idée flottante part de l'autre côté de son texte (comme sa tige), pas à travers
       const P = n.parent !== null ? d.noeuds.get(n.parent) : undefined, aP = P && this.ancres.get(P.id)
-      const S = P && aP ? (P.libre ? plus(aP, P.dir, 225) : aP) : departFleur(n)
+      const S = P && aP ? plus(aP, P.dir, P.libre ? AU_DELA_IDEE : AU_DELA_REPONSE) : departFleur(n)
       const pts = courbe3(S, this.ancres.get(n.id)!, n.id)
       this.traces.set(n.id, pts)
       this.faisceaux.tracer('m' + n.id, pts)
+      // Les terminaisons : elles quittent la racine peu avant le message et s'ouvrent en éventail, de part et
+      // d'autre de la racine telle qu'on la voit (perpendiculairement à la caméra).
+      const fin = pts[pts.length - 1], u = unitaire([fin[0] - pts[28][0], fin[1] - pts[28][1], fin[2] - pts[28][2]])
+      const cote = unitaire([u[1] * avant.z - u[2] * avant.y, u[2] * avant.x - u[0] * avant.z, u[0] * avant.y - u[1] * avant.x])
+      TERMINAISONS.forEach(([i, ecart, avance], k) => {
+        const depart = pts[i]
+        const bout = plus(plus(fin, cote, ecart), u, avance)
+        const vers = plus(plus(depart, u, avance * .6 + 8), cote, ecart * .35)
+        this.faisceaux.tracer(`m${n.id}t${k}`, courbe(depart, vers, bout))
+      })
     }
     for (const br of d.brins) {
       const n = d.noeuds.get(br.id), a = this.ancres.get(br.id)
       if (!n || !a) continue
       const { debut, pied, tete } = this.tige(n, a)
       this.faisceaux.tracer(br.cle, [debut, pied, tete])
-    }
-
-    // La fleur fait toujours face à la caméra, ses pétales un peu creusés vers nous, comme une corolle.
-    const fl = couleursFleur(d.vie)
-    const R = FLEUR_TAILLE / 2
-    for (let i = 0; i < PETALES; i++) {
-      const cle = 'p' + i
-      const pts = petale(i, d.vie, temps, this.mouvement).map(([x, y]): V3 => {
-        const r = Math.hypot(x, y), creux = r * r / R * .35
-        return [droite.x * x - haut.x * y - avant.x * creux, droite.y * x - haut.y * y - avant.y * creux, droite.z * x - haut.z * y - avant.z * creux]
-      })
-      this.faisceaux.tracer(cle, pts)
-      this.faisceaux.regler(cle, {
-        couleurA: fl.A, couleurB: fl.B, eclat: fl.eclat * (d.fleurPrise ? 1.35 : 1),
-        rayon: 9 + 5 * d.vie, energie: fl.energie, frise: .05, ampleur: 3, pousse: 1,
-      } satisfies Reglage)
     }
 
     // Le pointeur dans l'espace : là où la souris vise, à la profondeur de ce qu'on regarde.
@@ -375,8 +399,17 @@ export class Espace {
         const q = projeter(a)
         const s = Math.min(2.4, Math.max(.22, focale / Math.max(20, q.prof)))
         const dessous = d.regard === 'fleur' ? FLEUR_TAILLE * .45 * s : 60 * s + 18
-        const x = Math.max(12, Math.min(l - compose.offsetWidth - 12, q.x - compose.offsetWidth / 2))
-        const y = Math.max(12, Math.min(h - compose.offsetHeight - 12, q.y + dessous))
+        const W = compose.offsetWidth, H = compose.offsetHeight
+        let x = q.x - W / 2, y = q.y + dessous
+        // Pas la place dessous (l'historique de la branche la rend haute) : elle se met à côté du message,
+        // du côté où il y a le plus d'espace, pour ne jamais le cacher.
+        if (y + H > h - 12 && d.regard !== 'fleur') {
+          const ecart = 200 * s + 24
+          x = q.x < l / 2 ? q.x + ecart : q.x - ecart - W
+          y = q.y - H / 2
+        }
+        x = Math.max(12, Math.min(l - W - 12, x))
+        y = Math.max(12, Math.min(h - H - 12, y))
         compose.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`
       }
     }

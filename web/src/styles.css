@@ -62,12 +62,12 @@ h1,h2,h3,h4{margin:0}
 ::placeholder{color:var(--lavande)}
 select option{background:var(--nuit-2);color:var(--encre)}
 
-/* Le ciel de neurones derrière toute l'appli (Cosmos.tsx). */
+/* Le ciel étoilé derrière toute l'appli (Cosmos.tsx). */
 .cosmos{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
 
 /* Le verre : un panneau sombre et flouté, bordé d'un filet, avec un trait de lumière sur l'arête du haut. */
 .verre,.fil,.msgs-liste,.msgs-bulles,.synth .bloc,.panneau-lat,.modale,.bd-volet,.panneau,.apercu{
-  /* assez transparent pour que le réseau de neurones se devine derrière, adouci par le flou */
+  /* assez transparent pour que les étoiles se devinent derrière, adoucies par le flou */
   background:linear-gradient(165deg,rgba(18,24,58,.36),rgba(8,10,26,.5));
   -webkit-backdrop-filter:blur(5px) saturate(1.2);backdrop-filter:blur(5px) saturate(1.2);
   border:1px solid var(--filet);
@@ -77,7 +77,7 @@ select option{background:var(--nuit-2);color:var(--encre)}
 /* ---------- squelette ---------- */
 
 .app{height:100%;display:flex;flex-direction:column;padding:.8rem 1rem 1rem;gap:1rem}
-/* tout ce qui est posé sur le ciel de neurones passe devant lui */
+/* tout ce qui est posé sur le ciel étoilé passe devant lui */
 .app > .nav{position:relative;z-index:20}
 .app > .corps-app,.app > .bandeau-erreur{position:relative;z-index:1}
 .corps-app{flex:1;min-height:0;display:flex;gap:1rem}
@@ -296,10 +296,56 @@ select option{background:var(--nuit-2);color:var(--encre)}
 }
 .carte-login .login-bascule:hover{color:var(--glacier);border-bottom-color:var(--glacier)}
 .mot-forme{display:inline}
+/* La connexion est acceptée : d'abord le bloc disparaît entièrement… */
+.login.part .carte-login{animation:login-part .7s cubic-bezier(.5,0,.75,0) forwards;pointer-events:none}
+@keyframes login-part{to{opacity:0;visibility:hidden;transform:translateY(-14px) scale(.94);filter:blur(10px)}}
+/* … puis la fleur éclate (Glaieul.tsx) ; à la fin de l'éclatement, la page s'éteint dans la nuit. */
+.login.eclate .login-fond{animation:login-fond-part .5s ease-in 1.55s forwards}
+@keyframes login-fond-part{to{opacity:0}}
+
+/* Puis l'appli apparaît en fondu : un voile de nuit (la couleur de la fin de l'éclatement) se lève lentement
+   sur le fond, ses lueurs et les étoiles ; les blocs viennent ensuite, doucement, l'un après l'autre. */
+.app.arrivee::before{content:"";position:fixed;inset:0;z-index:100;background:#090b17;pointer-events:none;
+  animation:voile-leve 2.2s cubic-bezier(.45,0,.25,1) forwards}
+@keyframes voile-leve{to{opacity:0;visibility:hidden}}
+.app.arrivee > .cosmos{animation:fondu 3s ease-out .2s backwards}
+@keyframes fondu{from{opacity:0}}
+.app.arrivee > .nav{animation:arrivee-haut 1.4s cubic-bezier(.25,.7,.25,1) .9s backwards}
+@keyframes arrivee-haut{from{opacity:0;transform:translateY(-10px)}}
+.app.arrivee > .corps-app{animation:arrivee-bas 1.6s cubic-bezier(.25,.7,.25,1) 1.2s backwards}
+@keyframes arrivee-bas{from{opacity:0;transform:translateY(12px)}}
 
 /* ---------- canal ---------- */
 
 .chat{flex:1;display:flex;flex-direction:column;min-height:0;gap:.9rem}
+/* Le canal : le fil, plus étroit, et à côté le panneau du canal (son glaïeul, ses ConVersus, ses voix). */
+.canal-page{flex:1;min-height:0;display:flex;gap:1.4rem;justify-content:center}
+.canal-page > .chat{max-width:760px;min-width:0}
+.canal-cote{flex:none;width:300px;display:flex;flex-direction:column;gap:.9rem;min-height:0;overflow-y:auto;scrollbar-width:none}
+.cote-fleur{position:relative;flex:none;height:min(340px,42vh);border-radius:var(--r);overflow:hidden;
+  border:1px solid var(--filet);box-shadow:0 18px 50px rgba(0,0,0,.45),inset 0 1px 0 rgba(196,230,255,.08)}
+.cote-glaieul{position:absolute;inset:0;width:100%;height:100%;display:block}
+.cote-fleur-legende{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;gap:.1rem;
+  padding:1.6rem 1rem .8rem;background:linear-gradient(to bottom,transparent,rgba(9,11,23,.88));pointer-events:none}
+.cote-fleur-legende b{font-family:var(--titre);font-size:1rem;letter-spacing:.06em;color:var(--blanc)}
+.cote-fleur-legende span{font-size:.7rem;color:var(--ardoise-cl)}
+.cote-carte{flex:none;display:flex;flex-direction:column;gap:.45rem;padding:.9rem 1rem;border-radius:var(--r);
+  background:var(--surface);border:1px solid var(--filet);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.cote-carte h3{margin:0 0 .2rem;font-family:var(--titre);font-weight:400;font-size:.68rem;letter-spacing:.22em;text-transform:uppercase;color:var(--glacier)}
+.cote-vide{margin:0;font-size:.76rem;line-height:1.45;color:var(--ardoise-cl);font-style:italic}
+.cote-debat{display:flex;align-items:center;gap:.55rem;width:100%;border:none;cursor:pointer;text-align:left;font:inherit;color:inherit;
+  padding:.5rem .6rem;border-radius:.8rem;background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--filet);transition:box-shadow .2s,background .2s}
+.cote-debat:hover{background:rgba(196,230,255,.1);box-shadow:inset 0 0 0 1px rgba(196,230,255,.4),0 0 18px rgba(47,98,255,.25)}
+.cote-debat svg{width:1rem;height:1rem;flex:none;filter:drop-shadow(0 0 6px rgba(47,98,255,.8))}
+.cote-debat-txt{display:flex;flex-direction:column;min-width:0}
+.cote-debat-txt b{font-size:.8rem;font-weight:600;color:var(--encre);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cote-debat-txt i{font-style:normal;font-size:.64rem;color:var(--ardoise-cl)}
+.cote-voix{display:flex;align-items:center;gap:.5rem;font-size:.76rem}
+.cote-voix-nom{width:5.5rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--encre)}
+.cote-voix-barre{flex:1;height:4px;border-radius:999px;background:rgba(196,230,255,.08);overflow:hidden}
+.cote-voix-barre span{display:block;height:100%;border-radius:inherit;background:#4f8bff;box-shadow:0 0 8px rgba(79,139,255,.6)}
+.cote-voix-n{width:1.6rem;text-align:right;font-size:.68rem;color:var(--ardoise-cl)}
+@media (max-width:1100px){.canal-cote{display:none}}
 .barre-canal{display:flex;align-items:center;gap:.7rem;flex:none;padding:0 .3rem}
 .nom-canal{font-family:var(--titre);font-size:1.25rem;letter-spacing:.06em;color:var(--blanc);
   text-shadow:0 0 18px rgba(47,98,255,.6)}
@@ -681,6 +727,11 @@ select option{background:var(--nuit-2);color:var(--encre)}
 .bd-mot.estompe,.bd-bulle.estompe{opacity:.25;filter:blur(1.5px)}
 .bd-mot.brille{animation:bd-mot-brille 1.8s ease-out}
 @keyframes bd-mot-brille{20%,60%{text-shadow:0 0 30px #ffd36e,0 0 60px rgba(255,211,110,.6)}}
+/* Une réponse : du texte qui flotte aussi, plus petit, dans la police des messages. */
+.bd-mot.reponse{padding:.25rem .4rem;text-shadow:0 0 14px rgba(169,212,255,.55),0 0 3px rgba(4,6,20,.9)}
+.bd-mot.reponse .bd-dit{font-family:"Tremplin",var(--ui);line-height:1.3}
+.bd-mot.reponse .bd-qui b{font-size:.68rem}
+.bd-mot.reponse .bd-qui span{font-size:.58rem}
 .bd-bulle{cursor:pointer;outline:none}
 .bd-bulle.regarde .bd-fond{box-shadow:0 0 0 2px var(--glacier),0 0 30px rgba(47,98,255,.55)}
 
@@ -751,6 +802,23 @@ button.fleur:hover .fl-ouvre{transform:scale(calc(.82 + .24 * var(--vie)))}
 .bd-avis .puce{padding:.22rem .55rem;font-size:.8rem;display:inline-flex;align-items:center;gap:.25rem}
 .bd-avis .puce i{font-style:normal;font-size:.66rem;opacity:.8}
 .bd-compose-tete .bd-fermer{margin-left:auto;border:none;background:rgba(196,230,255,.1);border-radius:50%;width:1.5rem;height:1.5rem;cursor:pointer;color:var(--ardoise)}
+/* L'historique de la branche, au-dessus du champ de réponse : une conversation de messagerie. */
+.bd-compose:has(.bd-histo){width:400px}
+.bd-histo{display:flex;flex-direction:column;gap:.45rem;max-height:min(300px,42vh);overflow-y:auto;overscroll-behavior:contain;
+  padding:.4rem .25rem .4rem 0;margin:0 -.2rem 0 0;scrollbar-width:thin;scrollbar-color:rgba(196,230,255,.25) transparent;
+  mask-image:linear-gradient(to bottom,transparent 0,#000 14px,#000 calc(100% - 6px),transparent 100%)}
+.bd-histo-msg{align-self:flex-start;max-width:82%;display:flex;flex-direction:column;gap:.15rem;cursor:pointer;
+  padding:.45rem .7rem .4rem;border-radius:14px 14px 14px 4px;background:rgba(196,230,255,.08);
+  box-shadow:inset 0 0 0 1px rgba(196,230,255,.1);transition:background .2s,box-shadow .2s}
+.bd-histo-msg:hover{background:rgba(196,230,255,.13)}
+.bd-histo-msg.moi{align-self:flex-end;border-radius:14px 14px 4px 14px;background:#061D3D;box-shadow:none}
+.bd-histo-msg.moi:hover{background:#0a2850}
+.bd-histo-msg.idee{background:rgba(219,215,245,.13);box-shadow:inset 0 0 0 1px rgba(219,215,245,.28)}
+.bd-histo-msg.cible{box-shadow:inset 0 0 0 1px var(--glacier),0 0 18px rgba(47,98,255,.45)}
+.bd-histo-nom{font-size:.66rem;font-weight:700}
+.bd-histo-cite{font-size:.66rem;line-height:1.3;color:var(--ardoise-cl);border-left:2px solid rgba(196,230,255,.3);padding-left:.4rem;font-style:italic}
+.bd-histo-texte{font-family:"Tremplin",var(--ui);font-size:.86rem;line-height:1.35;color:var(--encre);overflow-wrap:anywhere;white-space:pre-wrap}
+.bd-histo-pied{align-self:flex-end;font-size:.58rem;color:rgba(196,230,255,.5)}
 .bd-compose textarea{border:1px solid var(--verre-bord);resize:none;border-radius:12px;background:rgba(4,6,18,.6);padding:.6rem .75rem;
   font-family:"Tremplin",var(--ui);font-size:1rem;color:var(--encre);transition:border-color .25s,box-shadow .25s}
 .bd-compose textarea:focus{outline:none;border-color:rgba(196,230,255,.6);box-shadow:0 0 20px rgba(47,98,255,.3)}

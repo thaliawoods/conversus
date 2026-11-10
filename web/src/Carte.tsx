@@ -4,13 +4,14 @@
 // fait venir la caméra jusqu'à lui (focus) et ouvre de quoi y répondre.
 // Une bulle restée une minute sans réponse fait pousser une tige et une fleur ;
 // quand quelqu'un lui répond enfin, la fleur tombe et la nouvelle racine prend sa place.
-import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Espace, type Brin, type Regard } from './filaments/Toile'
 import { spatialiser } from './filaments/espace'
+import Fleur from './Fleur'
 import type { Debat, MsgConv } from './conversus'
 import {
   BULLE_L, FLEUR_TAILLE, FLEURS,
-  couleursDe, disposer, fil, genreBulle, teinteBulle, typo,
+  couleursDe, disposer, fil, typo,
   type Place,
 } from './plan'
 
@@ -47,7 +48,6 @@ export default function Carte({
   const couleur = useMemo(() => couleursDe(debat), [debat])
   const participants = useMemo(() => new Set([debat.question.qui, ...msgs.map(m => m.qui)]).size, [debat.question.qui, msgs])
   const liste = [...places.values()]
-  const idFiltre = useId().replace(/:/g, '')
   const choix = mode === 'choix'
 
   // Les messages restés une minute sans réponse portent une fleur.
@@ -181,12 +181,6 @@ export default function Carte({
          onClickCapture={e => { if (espace.current?.vientDeGlisser()) e.stopPropagation() }}
          onClick={quitter}>
       <canvas className="bd-toile" ref={canvas} aria-hidden />
-      <svg width={0} height={0} style={{ position: 'absolute' }} aria-hidden>
-        <filter id={idFiltre} x="-10%" y="-20%" width="120%" height="140%">
-          <feTurbulence type="fractalNoise" baseFrequency=".75" numOctaves={2} seed={3} />
-          <feDisplacementMap in="SourceGraphic" scale={9} />
-        </filter>
-      </svg>
 
       {choix && (
         <svg className="bd-prises" aria-hidden>
@@ -199,13 +193,12 @@ export default function Carte({
       )}
 
       <div className="bd-espace">
-        {/* La fleur est dessinée en filaments par la scène ; ici, sa zone cliquable.
-            Le clic ne doit pas remonter jusqu'au board, qui quitterait aussitôt le focus. */}
+        {/* La fleur orange du cœur du débat (Fleur.tsx) : elle suit le centre de la scène et fait toujours face à la
+            caméra ; elle vit et fane avec le débat. Le clic ne doit pas remonter jusqu'au board (il quitterait le focus). */}
         <div className="bd-ancre" ref={accrocher('fleur')}>
           <div className={'bd-coeur' + (choix ? ' prenable' : '') + (toutPris ? ' choisie' : '')} onClick={e => e.stopPropagation()}>
-            <button className="bd-fleur" style={{ width: FLEUR_TAILLE * .82, height: FLEUR_TAILLE * .82 }} onClick={clicFleur}
-                    title={!choix ? 'Proposer une nouvelle idée' : toutPris ? 'Tout désélectionner' : 'Synthèse de tout le débat'}
-                    aria-label={!choix ? 'Proposer une nouvelle idée' : toutPris ? 'Tout désélectionner' : 'Synthèse de tout le débat'} />
+            <Fleur vie={vie} taille={FLEUR_TAILLE} className="bd-fleur" onClick={clicFleur}
+                   titre={!choix ? 'Proposer une nouvelle idée' : toutPris ? 'Tout désélectionner' : 'Synthèse de tout le débat'} />
           </div>
         </div>
 
@@ -214,7 +207,7 @@ export default function Carte({
 
         {liste.map(p => (
           <Message key={p.m.id} p={p} accroche={accrocher('m' + p.m.id)}
-                   couleur={couleur(p.m.qui)} participants={participants} filtre={idFiltre}
+                   couleur={couleur(p.m.qui)} participants={participants}
                    mode={mode} choisie={selection.has(p.m.id)} mien={p.m.qui === comme}
                    regarde={regard === p.m.id} estompe={typeof regard === 'number' && regard !== p.m.id && mode === 'normal'}
                    brille={brille === p.m.id}
@@ -236,6 +229,9 @@ export default function Carte({
             )}
             <button className="bd-fermer" aria-label="Fermer" onClick={quitter}>×</button>
           </div>
+          {typeof cible === 'number' && places.has(cible) && (
+            <Historique branche={branche(places.get(cible)!)} cible={cible} comme={comme} couleur={couleur} onFocus={focus} />
+          )}
           <textarea autoFocus value={brouillon} rows={3}
                     onChange={e => setBrouillon(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); envoyer() } }}
@@ -267,8 +263,67 @@ export default function Carte({
                 onClick={() => { quitter(); espace.current?.recentrer() }}>⊙</button>
         <button className="outil" title="Tout voir" aria-label="Tout voir"
                 onClick={() => { quitter(); espace.current?.ensemble() }}>⤢</button>
-        <span className="bd-aide">glisser pour tourner · molette pour zoomer</span>
       </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------- l'historique d'une branche
+
+// Toute la branche d'un message : l'idée posée sur la fleur dont il descend, et toutes les réponses
+// qui en partent (pas seulement celles au-dessus du message), dans l'ordre où elles ont été écrites.
+function branche(p: Place): Place[] {
+  let racine = p
+  while (racine.parent) racine = racine.parent
+  const tout: Place[] = []
+  const descendre = (q: Place) => { tout.push(q); q.enfants.forEach(descendre) }
+  descendre(racine)
+  return tout.sort((a, b) => Date.parse(a.m.date) - Date.parse(b.m.date) || a.m.id - b.m.id)
+}
+
+// La branche affichée comme une conversation de messagerie : mes messages à droite, les autres à gauche,
+// le message auquel je réponds mis en avant. Quand une réponse ne suit pas directement son parent,
+// une petite citation rappelle à quoi elle répond. Cliquer une bulle y amène la caméra.
+function Historique({ branche, cible, comme, couleur, onFocus }: {
+  branche: Place[]
+  cible: number
+  comme: string
+  couleur: (nom: string) => string
+  onFocus: (id: number) => void
+}) {
+  const liste = useRef<HTMLDivElement>(null)
+  const visee = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const l = liste.current, v = visee.current
+    if (!l || !v) return
+    l.scrollTop = Math.max(0, v.offsetTop - l.clientHeight + v.offsetHeight + 12)
+  }, [cible, branche.length])
+
+  return (
+    <div className="bd-histo" ref={liste} onWheel={e => e.stopPropagation()}>
+      {branche.map((p, i) => {
+        const m = p.m, moi = m.qui === comme, nom = m.anonyme ? 'anonyme' : m.qui
+        const parent = p.parent?.m
+        const cite = parent && branche[i - 1]?.m.id !== parent.id
+        return (
+          <div key={m.id} ref={m.id === cible ? visee : undefined}
+               className={'bd-histo-msg' + (moi ? ' moi' : '') + (m.id === cible ? ' cible' : '') + (p.parent ? '' : ' idee')}
+               onClick={() => onFocus(m.id)} title="Voir ce message sur le board">
+            {!moi && <b className="bd-histo-nom" style={{ color: couleur(m.qui) }}>{nom}</b>}
+            {cite && (
+              <span className="bd-histo-cite">
+                ↳ {parent.anonyme ? 'anonyme' : parent.qui} : « {[...parent.dit].slice(0, 60).join('')}{[...parent.dit].length > 60 ? '…' : ''} »
+              </span>
+            )}
+            <span className="bd-histo-texte">{m.dit}</span>
+            <span className="bd-histo-pied">
+              {heure(m.date)}
+              {m.pour > 0 && <> · 👍 {m.pour}</>}
+              {m.contre > 0 && <> · 👎 {m.contre}</>}
+            </span>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -292,15 +347,15 @@ const STYLE_LETTRE = {
   rejete: { fontFamily: 'Nudles', color: '#aab0c8' },
 }
 
-// Les idées posées sur la fleur : du texte qui flotte, sans bulle. Les réponses : de petites bulles.
+// Tous les messages sont du texte qui flotte dans l'espace, sans bulle : les idées posées sur la fleur en grand,
+// les réponses plus petites. Le texte se range au-delà du bout de sa racine (la scène règle --dx / --dy).
 const Message = memo(function Message({
-  p, accroche, couleur, participants, filtre, mode, choisie, mien, regarde, estompe, brille, onFocus, onBasculer, onSurvol,
+  p, accroche, couleur, participants, mode, choisie, mien, regarde, estompe, brille, onFocus, onBasculer, onSurvol,
 }: {
   p: Place
   accroche: (el: HTMLElement | null) => void
   couleur: string
   participants: number
-  filtre: string
   mode: Mode
   choisie: boolean
   mien: boolean
@@ -315,10 +370,9 @@ const Message = memo(function Message({
   const libre = !p.parent
   const { lettres, taille } = typo(m, participants)
   const nom = m.anonyme ? 'anonyme' : m.qui
-  const teinte = teinteBulle(m)
   const etat = (mode === 'normal' ? '' : choisie ? ' choisie' : ' exclue') + (regarde ? ' regarde' : '') + (estompe ? ' estompe' : '')
     + (brille ? ' brille' : '') + (mode === 'choix' ? ' prenable' : '') + (mien ? ' mienne' : '')
-  const classe = libre ? 'bd-mot' + etat : 'bd-bulle ' + teinte + genreBulle(m) + etat
+  const classe = 'bd-mot' + (libre ? '' : ' reponse') + etat
   const texte = (
     <div className="bd-dit" style={{ fontSize: libre ? taille * 1.6 : taille }}>
       {[...m.dit].map((l, i) => {
@@ -335,7 +389,6 @@ const Message = memo(function Message({
            onPointerEnter={() => onSurvol(m.id)} onPointerLeave={() => onSurvol(null)}
            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (mode === 'choix') onBasculer(m.id); else onFocus(m.id) } }}
            onClick={e => { e.stopPropagation(); if (mode === 'choix') onBasculer(m.id); else onFocus(m.id) }}>
-        {!libre && <span className="bd-fond" style={teinte === 'rongee' ? { filter: `url(#${filtre})` } : undefined} />}
         <div className="bd-qui">
           <b style={{ color: couleur }}>{nom}</b>
           <span>{heure(m.date)}</span>

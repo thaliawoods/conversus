@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { POLICES_LISIBLES, personne } from '../donnees'
 import { Etoile } from '../Etoile'
+import Glaieul from '../filaments/Glaieul'
 import type { Canal, MsgCanal } from '../useConversus'
 
 const EMOJIS = ['🥐', '🍫', '🔥', '😭', '😤', '✨', '👀', '💜', '🙃', '🤝']
@@ -53,6 +54,7 @@ export default function Chat({ canal, messages, selection, setSelection, onOuvri
   const annuler = () => { setCible(false); setSelection([]) }
 
   return (
+    <div className="canal-page">
     <div className="chat">
 
       <div className="barre-canal">
@@ -192,5 +194,68 @@ export default function Chat({ canal, messages, selection, setSelection, onOuvri
         </div>
       </div>
     </div>
+    <CoteCanal canal={canal} messages={messages} onDebat={onDebat} />
+    </div>
   )
 }
+
+// ---------------------------------------------------------------- le panneau à côté du canal
+
+// À côté du fil : le glaïeul du canal (le même qu'à la connexion, en entier), les ConVersus nés dans ce canal,
+// et les voix qui l'animent le plus.
+function CoteCanal({ canal, messages, onDebat }: { canal: Canal; messages: MsgCanal[]; onDebat: (canalId: number) => void }) {
+  const { annonces, voix, total } = useMemo(() => {
+    const annonces = messages.filter(m => m.annonce).reverse()
+    const parNom = new Map<string, number>()
+    let total = 0
+    for (const m of messages) {
+      if (m.annonce) continue
+      total++
+      if (!m.anonyme) parNom.set(m.qui, (parNom.get(m.qui) ?? 0) + 1)
+    }
+    const voix = [...parNom.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6)
+    return { annonces, voix, total }
+  }, [messages])
+  const max = voix[0]?.[1] ?? 1
+
+  return (
+    <aside className="canal-cote">
+      <section className="cote-fleur">
+        <Glaieul cadrage="entier" className="cote-glaieul" />
+        <div className="cote-fleur-legende">
+          <b>{canal.nom}</b>
+          <span>{total} message{total > 1 ? 's' : ''} · {voix.length} voix</span>
+        </div>
+      </section>
+
+      <section className="cote-carte">
+        <h3>ConVersus nés ici</h3>
+        {annonces.length === 0
+          ? <p className="cote-vide">Aucun pour l’instant. Coche quelques messages et lance le premier !</p>
+          : annonces.slice(0, 5).map(m => (
+              <button key={m.id} className="cote-debat" onClick={() => onDebat(m.annonce!.canalId)}>
+                <Etoile />
+                <span className="cote-debat-txt">
+                  <b>{m.annonce!.sujet}</b>
+                  <i>par {m.qui} · {m.heure}</i>
+                </span>
+              </button>
+            ))}
+      </section>
+
+      <section className="cote-carte">
+        <h3>Les voix du canal</h3>
+        {voix.length === 0 && <p className="cote-vide">Personne n’a encore parlé ici.</p>}
+        {voix.map(([nom, n]) => (
+          <div key={nom} className="cote-voix">
+            <span className="mini-av" style={{ background: personne(nom).couleur }}>{nom[0]}</span>
+            <span className="cote-voix-nom">{nom}</span>
+            <span className="cote-voix-barre"><span style={{ width: `${Math.round(n / max * 100)}%` }} /></span>
+            <span className="cote-voix-n">{n}</span>
+          </div>
+        ))}
+      </section>
+    </aside>
+  )
+}
+

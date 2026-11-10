@@ -78,10 +78,12 @@ export function useConversus() {
     setErreur(e instanceof TypeError ? `Backend injoignable (${api.API})` : (e as Error).message)
   }, [deconnecter])
 
-  const connecter = useCallback(async (nom: string, mdp: string, creer: boolean) => {
+  // `avant` : ce qui se joue une fois la connexion acceptée, avant d'entrer dans l'appli (l'animation de sortie).
+  const connecter = useCallback(async (nom: string, mdp: string, creer: boolean, avant?: () => Promise<void>) => {
     if (creer) await api.inscription(nom, mdp)
     const jeton = await api.connexion(nom, mdp)
     const m = await api.moi(jeton)
+    if (avant) await avant()
     const s = { jeton, nom: m.username, id: m.id }
     ecrireSession(s)
     setSession(s)
