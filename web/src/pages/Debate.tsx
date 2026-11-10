@@ -2,11 +2,18 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
 import Navbar, { type Channel } from "../components/Navbar";
 import Flower from "../components/Flower";
-import type { Message } from "./Chat";
-import { placeMessages, stemPath, type Placement } from "../layout";
+import ReactionIcon, { ReactionShape } from "../components/ReactionIcon";
+import type { Message, ReactionValue } from "./Chat";
+import { placeMessages, pointOnStem, stemPath, wiltSag, type Placement } from "../layout";
 import { useCamera } from "../hooks/useCamera";
 
 type DebateProps = { token: string };
+
+const REACTIONS: { value: ReactionValue; label: string }[] = [
+  { value: "leaf", label: "Feuille" },
+  { value: "thorn", label: "Épine" },
+  { value: "wilt", label: "Faner" },
+];
 
 function findParents(replies: Message[]) {
   return replies.map((message) => {
@@ -15,11 +22,20 @@ function findParents(replies: Message[]) {
   });
 }
 
+function countWilts(reactions: Message[], messageId: number) {
+  return reactions.filter(
+    (reaction) =>
+      reaction.metadata?.conversus?.reactTo === messageId &&
+      reaction.metadata?.conversus?.value === "wilt",
+  ).length;
+}
+
 function Debate({ token }: DebateProps) {
   const { channelId } = useParams();
   const [channels, setChannels] = useState<Channel[]>([]);
   const [content, setContent] = useState("");
   const [replies, setReplies] = useState<Message[]>([]);
+  const [reactions, setReactions] = useState<Message[]>([]);
   const [positions, setPositions] = useState<Placement[]>([]);
   const messageRefs = useRef<HTMLDivElement[]>([]);
   const [openId, setOpenId] = useState<number | null>(null);
@@ -57,7 +73,9 @@ function Debate({ token }: DebateProps) {
       );
       if (!response.ok) return;
       const data = await response.json();
-      setReplies((data ?? []).toReversed().slice(1));
+      const messages: Message[] = (data ?? []).toReversed().slice(1);
+      setReplies(messages.filter((message) => message.metadata?.conversus?.reactTo === undefined));
+      setReactions(messages.filter((message) => message.metadata?.conversus?.reactTo !== undefined));
     }
 
     loadMessages();
@@ -72,8 +90,9 @@ function Debate({ token }: DebateProps) {
     }));
     const parents = findParents(replies);
     const ids = replies.map((message) => message.id);
-    setPositions(placeMessages(sizes, parents, ids));
-  }, [replies]);
+    const sags = replies.map((message) => wiltSag(countWilts(reactions, message.id)));
+    setPositions(placeMessages(sizes, parents, ids, sags));
+  }, [replies, reactions]);
 
   async function handleSendMessage(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -102,6 +121,25 @@ function Debate({ token }: DebateProps) {
     setReplyingTo(null);
   }
 
+  async function handleReact(message: Message, value: ReactionValue) {
+    const response = await fetch(
+      "http://localhost:4000/channel/message?namespace=conversus",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          content: "",
+          channel: Number(channelId),
+          metadata: { reactTo: message.id, value },
+        }),
+      },
+    );
+    if (!response.ok) console.log("réaction refusée", response.status);
+  }
+
   return (
     <main className="chat debate">
       <Navbar channels={channels} />
@@ -120,12 +158,33 @@ function Debate({ token }: DebateProps) {
           <svg className="stems">
             {replies.map((message, index) => {
               const parent = parents[index];
-              return positions[index] && (
-                <path
-                  className="stem"
-                  key={message.id}
-                  d={stemPath(parent === null ? null : positions[parent], positions[index])}
-                />
+              const to = positions[index];
+              if (!to) return null;
+              const from = parent === null ? null : positions[parent];
+              const own = reactions.filter((reaction) => reaction.metadata?.conversus?.reactTo === message.id);
+              const sag = wiltSag(countWilts(reactions, message.id));
+              const drawn = own.filter((reaction) => {
+                const value = reaction.metadata?.conversus?.value;
+                return value === "leaf" || value === "thorn";
+              });
+              return (
+                <g key={message.id}>
+                  <path className="stem" d={stemPath(from, to, sag)} />
+                  {drawn.map((reaction, k) => {
+                    const value = reaction.metadata?.conversus?.value;
+                    if (!value) return null;
+                    const point = pointOnStem(from, to, (k + 1) / (drawn.length + 1), sag);
+                    const side = k % 2 === 0 ? 1.5 : -1.5;
+                    return (
+                      <g
+                        key={reaction.id}
+                        transform={`translate(${point.x} ${point.y}) rotate(${point.angle}) scale(1.5 ${side})`}
+                      >
+                        <ReactionShape value={value} onStem />
+                      </g>
+                    );
+                  })}
+                </g>
               );
             })}
           </svg>
@@ -147,6 +206,12 @@ function Debate({ token }: DebateProps) {
               <p>{message.content}</p>
               {openId === message.id && (
                 <div className="message-actions">
+                  {REACTIONS.map((reaction) => (
+                    <button type="button" key={reaction.value} onClick={() => handleReact(message, reaction.value)}>
+                      <ReactionIcon value={reaction.value} />
+                      {reaction.label}
+                    </button>
+                  ))}
                   <button type="button" onClick={() => setReplyingTo(message)}>Répondre</button>
                 </div>
               )}

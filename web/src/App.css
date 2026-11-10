@@ -502,6 +502,41 @@
   width: max-content;
 }
 
+.message-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.reaction-icon {
+  display: block;
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.reaction-fill {
+  fill: var(--lavender);
+  stroke: var(--slate);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.reaction-vein,
+.reaction-line {
+  fill: none;
+  stroke: var(--slate);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.reaction-vein {
+  stroke-width: 1.2;
+}
+
+.reaction-solid {
+  fill: var(--slate);
+}
+
 .reply-banner {
   display: flex;
   align-items: center;

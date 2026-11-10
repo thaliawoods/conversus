@@ -3,11 +3,21 @@ import { useNavigate, useParams } from "react-router";
 import Navbar, { type Channel } from "../components/Navbar";
 import LaunchModal from "../components/LaunchModal";
 
+export type ReactionValue = "leaf" | "thorn" | "wilt";
+
 export type Message = {
   id: number;
   content: string;
   user: string;
-  metadata?: { conversus?: { channelName?: string; author?: string; replyTo?: number } };
+  metadata?: {
+    conversus?: {
+      channelName?: string;
+      author?: string;
+      replyTo?: number;
+      reactTo?: number;
+      value?: ReactionValue;
+    };
+  };
 };
 
 type ChatProps = { token: string; onTokenExpired: () => void };
