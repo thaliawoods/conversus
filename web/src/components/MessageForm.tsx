@@ -1,5 +1,5 @@
 import { useState } from "react";
-import EmojiPicker, { EmojiStyle } from "emoji-picker-react";
+import EmojiPicker, { EmojiStyle, Theme } from "emoji-picker-react";
 import { FONTS, fontFamily } from "../fonts";
 import ReactionIcon, { REACTIONS } from "./ReactionIcon";
 import type { ReactionValue } from "../pages/Chat";
@@ -42,6 +42,7 @@ function MessageForm({ onSend }: MessageFormProps) {
         {panel === "emoji" && (
           <EmojiPicker
             emojiStyle={EmojiStyle.NATIVE}
+            theme={Theme.DARK}
             emojiData={() => import("emoji-picker-react/data/emojis-fr")}
             labels={{ searchPlaceholder: "Rechercher" }}
             previewConfig={{ showPreview: false }}

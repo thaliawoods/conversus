@@ -19,8 +19,6 @@
 }
 
 .login-card {
-  --ice: #c4e6ff;
-  --bright-blue: #2f62ff;
   position: relative;
   z-index: 2;
   width: min(30rem, 84vw);
@@ -516,9 +514,6 @@
 .account-menu .avatar {
   width: 1.7rem;
   height: 1.7rem;
-  border: 1px solid var(--line);
-  background: transparent;
-  color: var(--ice);
 }
 
 .account-name,
@@ -765,6 +760,21 @@
   align-items: flex-start;
   gap: 0.5rem;
   z-index: 2;
+}
+
+.composer-above .EmojiPickerReact.epr-dark-theme {
+  --epr-bg-color: var(--night);
+  --epr-category-label-bg-color: var(--night);
+  --epr-picker-border-color: var(--line);
+  --epr-picker-border-radius: 0;
+  --epr-search-input-bg-color: transparent;
+  --epr-search-input-bg-color-active: transparent;
+  --epr-search-border-color: var(--line);
+  --epr-search-input-border-radius: 0;
+  --epr-search-input-text-color: var(--white);
+  --epr-text-color: var(--ice-soft);
+  --epr-highlight-color: var(--ice);
+  --epr-hover-bg-color: rgba(196, 230, 255, 0.14);
 }
 
 .composer-panel {
