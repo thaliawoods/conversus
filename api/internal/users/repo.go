@@ -42,9 +42,11 @@ func (r *repo) GetByUserName(ctx context.Context, username string) (*User, error
 	}
 
 	var metadata map[string]json.RawMessage
-	err = json.Unmarshal(user.RawMetadata, &metadata)
-	if err != nil {
-		return &user, fmt.Errorf("Error unmarshaling metadata: %w", err)
+	if len(user.RawMetadata) > 0 {
+		err = json.Unmarshal(user.RawMetadata, &metadata)
+		if err != nil {
+			return &user, fmt.Errorf("Error unmarshaling metadata: %w", err)
+		}
 	}
 	user.Metadata = metadata
 
@@ -67,9 +69,11 @@ func (r *repo) GetByID(ctx context.Context, id int64) (*User, error) {
 	}
 
 	var metadata map[string]json.RawMessage
-	err = json.Unmarshal(user.RawMetadata, &metadata)
-	if err != nil {
-		return &user, fmt.Errorf("Error unmarshaling metadata: %w", err)
+	if len(user.RawMetadata) > 0 {
+		err = json.Unmarshal(user.RawMetadata, &metadata)
+		if err != nil {
+			return &user, fmt.Errorf("Error unmarshaling metadata: %w", err)
+		}
 	}
 	user.Metadata = metadata
 
