@@ -7,7 +7,7 @@ export type Message = {
   id: number;
   content: string;
   user: string;
-  metadata?: { conversus?: { channelName?: string; author?: string } };
+  metadata?: { conversus?: { channelName?: string; author?: string; replyTo?: number } };
 };
 
 type ChatProps = { token: string; onTokenExpired: () => void };

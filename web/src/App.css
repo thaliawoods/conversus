@@ -452,6 +452,7 @@
   max-width: 26rem;
   overflow-wrap: anywhere;
   transform: translate(-50%, -50%);
+  cursor: pointer;
 }
 
 .board-message strong {
@@ -465,4 +466,34 @@
   margin: 0;
   font-size: 1.1rem;
   line-height: 1.4;
+}
+
+.board-message.open {
+  z-index: 1;
+}
+
+.message-actions {
+  position: absolute;
+  left: 0;
+  top: 100%;
+  margin-top: 0.4rem;
+  display: flex;
+  gap: 0.4rem;
+  width: max-content;
+}
+
+.reply-banner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 0.5rem 1rem 0;
+}
+
+.reply-banner p {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

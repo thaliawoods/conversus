@@ -7,6 +7,13 @@ import { placeMessages, stemPath, type Placement } from "../layout";
 
 type DebateProps = { token: string };
 
+function findParents(replies: Message[]) {
+  return replies.map((message) => {
+    const index = replies.findIndex((other) => other.id === message.metadata?.conversus?.replyTo);
+    return index === -1 ? null : index;
+  });
+}
+
 function Debate({ token }: DebateProps) {
   const { channelId } = useParams();
   const [channels, setChannels] = useState<Channel[]>([]);
@@ -14,7 +21,10 @@ function Debate({ token }: DebateProps) {
   const [replies, setReplies] = useState<Message[]>([]);
   const [positions, setPositions] = useState<Placement[]>([]);
   const messageRefs = useRef<HTMLDivElement[]>([]);
+  const [openId, setOpenId] = useState<number | null>(null);
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const debate = channels.find((channel) => channel.id === Number(channelId));
+  const parents = findParents(replies);
 
   useEffect(() => {
     async function loadChannels() {
@@ -50,7 +60,8 @@ function Debate({ token }: DebateProps) {
       width: element.offsetWidth,
       height: element.offsetHeight,
     }));
-    setPositions(placeMessages(sizes));
+    const parents = findParents(replies);
+    setPositions(placeMessages(sizes, parents));
   }, [replies]);
 
   async function handleSendMessage(event: React.FormEvent<HTMLFormElement>) {
@@ -68,7 +79,7 @@ function Debate({ token }: DebateProps) {
         body: JSON.stringify({
           content,
           channel: Number(channelId),
-          metadata: {},
+          metadata: replyingTo ? { replyTo: replyingTo.id } : {},
         }),
       },
     );
@@ -77,53 +88,60 @@ function Debate({ token }: DebateProps) {
       return;
     }
     setContent("");
+    setReplyingTo(null);
   }
 
   return (
     <main className="chat debate">
       <Navbar channels={channels} />
       <h2 className="channel-title">{debate?.name.replace(/#\d+$/, "")}</h2>
-      <div className="viewport">
+      <div className="viewport" onClick={() => setOpenId(null)}>
         <div className="board">
           <svg className="stems">
-            {replies.map(
-              (message, index) =>
-                positions[index] && (
-                  <path
-                    className="stem"
-                    key={message.id}
-                    d={stemPath({ x: 0, y: 0 }, positions[index])}
-                  />
-                ),
-            )}
+            {replies.map((message, index) => {
+              const parent = parents[index];
+              return positions[index] && (
+                <path
+                  className="stem"
+                  key={message.id}
+                  d={stemPath(parent === null ? null : positions[parent], positions[index])}
+                />
+              );
+            })}
           </svg>
           <Flower />
           {replies.map((message, index) => (
             <div
-              className="board-message"
+              className={openId === message.id ? "board-message open" : "board-message"}
               key={message.id}
               style={{ left: positions[index]?.x, top: positions[index]?.y }}
               ref={(element) => {
                 if (element) messageRefs.current[index] = element;
               }}
+              onClick={(event) => {
+                event.stopPropagation();
+                setOpenId(openId === message.id ? null : message.id);
+              }}
             >
               <strong>{message.metadata?.conversus?.author ?? message.user}</strong>
               <p>{message.content}</p>
+              {openId === message.id && (
+                <div className="message-actions">
+                  <button type="button" onClick={() => setReplyingTo(message)}>Répondre</button>
+                </div>
+              )}
             </div>
           ))}
         </div>
       </div>
-      <ul className="messages">
-        {replies.map((message) => (
-          <li className="message" key={message.id}>
-            <span className="avatar">{(message.metadata?.conversus?.author ?? message.user)[0]}</span>
-            <div className="message-body">
-              <strong>{message.metadata?.conversus?.author ?? message.user}</strong>
-              <p>{message.content}</p>
-            </div>
-          </li>
-        ))}
-      </ul>
+      {replyingTo && (
+        <div className="reply-banner">
+          <p>
+            Réponse à {replyingTo.metadata?.conversus?.author ?? replyingTo.user} : « {replyingTo.content} »
+          </p>
+          <button type="button" onClick={() => setReplyingTo(null)}>Annuler</button>
+        </div>
+      )}
       <form className="message-form" onSubmit={handleSendMessage}>
         <input
           value={content}

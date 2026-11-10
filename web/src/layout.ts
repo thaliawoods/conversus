@@ -23,15 +23,18 @@ function spiralPoint(k: number) {
 export type Size = { width: number; height: number };
 export type Placement = { x: number; y: number; width: number; height: number };
 
-export function placeMessages(sizes: Size[]) {
+export function placeMessages(sizes: Size[], parents: (number | null)[]) {
   const placed: Box[] = [
     { left: -FLOWER_RADIUS, top: -FLOWER_RADIUS, right: FLOWER_RADIUS, bottom: FLOWER_RADIUS },
   ];
   const positions: Placement[] = [];
 
-  for (const size of sizes) {
+  for (const [index, size] of sizes.entries()) {
+    const parent = parents[index];
+    const origin = parent === null ? { x: 0, y: 0 } : positions[parent];
     for (let k = 0; ; k++) {
-      const point = spiralPoint(k);
+      const spiral = spiralPoint(k);
+      const point = { x: origin.x + spiral.x, y: origin.y + spiral.y };
       const box = {
         left: point.x - size.width / 2 - GAP / 2,
         top: point.y - size.height / 2 - GAP / 2,
@@ -52,21 +55,27 @@ export function placeMessages(sizes: Size[]) {
 const STEM_MARGIN = 6;
 const STEM_BEND = 0.15;
 
-export function stemPath(from: { x: number; y: number }, to: Placement) {
-  const dx = from.x - to.x;
-  const dy = from.y - to.y;
+function edgePoint(box: Placement, toward: { x: number; y: number }) {
+  const dx = toward.x - box.x;
+  const dy = toward.y - box.y;
   const t = Math.min(
-    (to.width / 2 + STEM_MARGIN) / Math.abs(dx),
-    (to.height / 2 + STEM_MARGIN) / Math.abs(dy),
+    (box.width / 2 + STEM_MARGIN) / Math.abs(dx),
+    (box.height / 2 + STEM_MARGIN) / Math.abs(dy),
   );
-  const end = { x: to.x + dx * t, y: to.y + dy * t };
+  return { x: box.x + dx * t, y: box.y + dy * t };
+}
 
-  const vx = end.x - from.x;
-  const vy = end.y - from.y;
+export function stemPath(from: Placement | null, to: Placement) {
+  const center = from ?? { x: 0, y: 0 };
+  const start = from ? edgePoint(from, to) : center;
+  const end = edgePoint(to, center);
+
+  const vx = end.x - start.x;
+  const vy = end.y - start.y;
   const nx = -vy * STEM_BEND;
   const ny = vx * STEM_BEND;
-  const c1 = { x: from.x + vx / 3 + nx, y: from.y + vy / 3 + ny };
-  const c2 = { x: from.x + (2 * vx) / 3 - nx, y: from.y + (2 * vy) / 3 - ny };
+  const c1 = { x: start.x + vx / 3 + nx, y: start.y + vy / 3 + ny };
+  const c2 = { x: start.x + (2 * vx) / 3 - nx, y: start.y + (2 * vy) / 3 - ny };
 
-  return `M ${from.x} ${from.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${end.x} ${end.y}`;
+  return `M ${start.x} ${start.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${end.x} ${end.y}`;
 }
