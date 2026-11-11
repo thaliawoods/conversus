@@ -3,6 +3,7 @@ import EmojiPicker, { EmojiStyle, Theme } from "emoji-picker-react";
 import { FONTS, fontFamily } from "../fonts";
 import ReactionIcon, { REACTIONS } from "./ReactionIcon";
 import AnonymousIcon from "./AnonymousIcon";
+import SendArrow from "./SendArrow";
 import type { ReactionValue } from "../pages/Chat";
 
 type MessageFormProps = {
@@ -105,11 +106,6 @@ function MessageForm({ onSend, placeholder, error }: MessageFormProps) {
             ))}
           </div>
         )}
-        {content && (
-          <p className="composer-preview" style={{ fontFamily: fontFamily(font) }}>
-            {content}
-          </p>
-        )}
         {error && <p className="login-error" role="alert">{error}</p>}
       </div>
       <form className="message-form" onSubmit={handleSubmit}>
@@ -153,13 +149,18 @@ function MessageForm({ onSend, placeholder, error }: MessageFormProps) {
         >
           <AnonymousIcon lit={anonymous} />
         </button>
-        <input
-          value={content}
-          onChange={(event) => setContent(event.target.value)}
-          placeholder={placeholder}
-          style={{ fontFamily: fontFamily(font) }}
-        />
-        <button type="submit" disabled={sending}>Envoyer</button>
+        {/* The text is written directly in the chosen font, the arrow ends the line */}
+        <div className="send-line">
+          <input
+            value={content}
+            onChange={(event) => setContent(event.target.value)}
+            placeholder={placeholder}
+            style={{ fontFamily: fontFamily(font) }}
+          />
+          <button className="send-button" type="submit" disabled={sending} aria-label="Envoyer" data-tip="Envoyer">
+            <SendArrow />
+          </button>
+        </div>
       </form>
     </div>
   );

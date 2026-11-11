@@ -12,13 +12,13 @@ type NavbarProps = {
   onLogout: () => void;
 };
 
-function isDebate(channel: Channel) {
+export function isDebate(channel: Channel) {
   return /#\d+$/.test(channel.name);
 }
 
 // "general" can't be read: the back's clock posts metadata "[]" in it, and the back fails on them.
 // Hidden until the back is fixed (we don't touch it).
-const HIDDEN_CHANNELS = ["general"];
+export const HIDDEN_CHANNELS = ["general"];
 
 function Navbar({ channels, username, onSwitch, onLogout }: NavbarProps) {
   const [open, setOpen] = useState(false);

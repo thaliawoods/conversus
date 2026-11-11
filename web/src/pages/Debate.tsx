@@ -1,12 +1,14 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { useParams } from "react-router";
-import Navbar, { type Channel } from "../components/Navbar";
+import { useNavigate, useParams } from "react-router";
+import Navbar, { HIDDEN_CHANNELS, isDebate, type Channel } from "../components/Navbar";
+import SynthesisModal from "../components/SynthesisModal";
 import CameraIcon from "../components/CameraIcon";
 import Branches, { type Arrival, type Mark, type Stem } from "../components/Branches";
 import Rain, { type Shower } from "../components/Rain";
 import Leaves from "../components/Leaves";
 import ReactionIcon, { REACTIONS } from "../components/ReactionIcon";
 import AnonymousIcon from "../components/AnonymousIcon";
+import StarIcon from "../components/StarIcon";
 import type { Message, ReactionValue } from "./Chat";
 import { placeMessages, wiltSag, type Placement } from "../layout";
 import { useCamera } from "../hooks/useCamera";
@@ -37,6 +39,21 @@ function hasReacted(reactions: Message[], message: Message, value: ReactionValue
       reaction.metadata?.conversus?.value === value,
   );
 }
+
+// Retenir is shared: messages come oldest first, so the last one about a message decides.
+function retainedIds(retains: Message[]) {
+  const retained = new Set<number>();
+  for (const message of retains) {
+    const target = message.metadata?.conversus?.retain;
+    if (target === undefined) continue;
+    if (message.metadata?.conversus?.value === true) retained.add(target);
+    else retained.delete(target);
+  }
+  return retained;
+}
+
+// A synthesis being previewed: the plant it describes is the debate up to upTo, retained ones highlighted.
+type Synthesis = { text: string | null; error: string; upTo: number; retained: number[] };
 
 type DebateProps = { token: string; onTokenExpired: () => void; onSwitch: (newToken: string) => void };
 
@@ -118,6 +135,10 @@ function whoReacted(reactions: Message[], message: Message) {
 
 function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
   const { channelId } = useParams();
+  const navigate = useNavigate();
+  const [subject, setSubject] = useState<Message | null>(null);
+  const [synthesis, setSynthesis] = useState<Synthesis | null>(null);
+  const [sharing, setSharing] = useState(false);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [username, setUsername] = useState("");
   const [myId, setMyId] = useState<number | null>(null);
@@ -128,6 +149,7 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
   const [pendingReactions, setPendingReactions] = useState<string[]>([]);
   const [replies, setReplies] = useState<Message[]>([]);
   const [reactions, setReactions] = useState<Message[]>([]);
+  const [retains, setRetains] = useState<Message[]>([]);
   const [positions, setPositions] = useState<Placement[]>([]);
   const messageRefs = useRef<HTMLDivElement[]>([]);
   const [openId, setOpenId] = useState<number | null>(null);
@@ -152,6 +174,8 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
   } = useCamera();
   const debate = channels.find((channel) => channel.id === Number(channelId));
   const reactedBy = replies.map((message) => whoReacted(reactions, message));
+  const retained = useMemo(() => retainedIds(retains), [retains]);
+  // Only messages still in the debate count (a retained message is never deleted, but stay safe).
   // Where each message should be, then where it is shown while it slides there.
   const targets = useMemo(
     () =>
@@ -218,9 +242,18 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
       }
       setConnectionError("");
       const data = await response.json();
-      const messages: Message[] = (data ?? []).toReversed().slice(1);
-      setReplies(messages.filter((message) => message.metadata?.conversus?.reactTo === undefined));
+      const all: Message[] = (data ?? []).toReversed();
+      // The first message is the subject: not on the plant, but it may know the channel of origin.
+      setSubject(all[0] ?? null);
+      const messages = all.slice(1);
+      setReplies(
+        messages.filter(
+          (message) =>
+            message.metadata?.conversus?.reactTo === undefined && message.metadata?.conversus?.retain === undefined,
+        ),
+      );
       setReactions(messages.filter((message) => message.metadata?.conversus?.reactTo !== undefined));
+      setRetains(messages.filter((message) => message.metadata?.conversus?.retain !== undefined));
 
       const wilts = arrivalsOf(messages, "wilt");
       const thorns = arrivalsOf(messages, "thorn");
@@ -270,7 +303,8 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
     const sags = replies.map((message) => wiltSag(countWilts(reactions, message)));
     const marks = replies.map((message) => marksOf(reactions, message).length);
     setPositions(placeMessages(sizes, parents, ids, sags, marks));
-  }, [replies, reactions]);
+    // retained: the star next to the name makes the message a little wider.
+  }, [replies, reactions, retained]);
 
   async function handleSendMessage(
     content: string,
@@ -345,10 +379,124 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
     setPendingReactions((current) => current.filter((item) => item !== key));
   }
 
+  // Anyone can retain or take back any message: a hidden message says which.
+  async function handleRetain(message: Message) {
+    const key = `${message.id}-retain`;
+    if (pendingReactions.includes(key)) return;
+    setPendingReactions((current) => [...current, key]);
+    const response = await request(token, MESSAGES, {
+      content: "",
+      channel: Number(channelId),
+      metadata: { retain: message.id, value: !retained.has(message.id) },
+      anonymous: false,
+    });
+    if (checkResponse(response, "Message non retenu. Réessaie.")) {
+      const created: Message = await response!.json();
+      setRetains((current) => [...current, created]);
+    }
+    setPendingReactions((current) => current.filter((item) => item !== key));
+  }
+
+  // Asks the AI for a synthesis of the debate as it is now: the retained messages, or all of them.
+  async function handleSynthesis() {
+    const snapshot: Synthesis = {
+      text: null,
+      error: "",
+      upTo: replies[replies.length - 1]?.id ?? 0,
+      retained: replies.filter((message) => retained.has(message.id)).map((message) => message.id),
+    };
+    setSynthesis(snapshot);
+    const response = await fetch("/ia/synthese", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sujet: debate?.name.replace(/#\d+$/, "") ?? "",
+        messages: replies.map((message) => ({
+          id: message.id,
+          auteur: displayName(message),
+          texte: message.content,
+          repond_a: message.metadata?.conversus?.replyTo ?? null,
+          retenu: retained.has(message.id),
+        })),
+      }),
+    }).catch(() => null);
+    const result = response?.ok ? await response.json() : null;
+    setSynthesis((current) =>
+      current === null
+        ? null
+        : result?.synthese
+          ? { ...current, text: result.synthese }
+          : { ...current, error: "La synthèse n'a pas pu être faite. Réessaie." },
+    );
+  }
+
+  // New debates keep their channel in the subject; older ones are found by their "a ouvert" message.
+  async function findOrigin() {
+    const origin = subject?.metadata?.conversus?.origin;
+    if (origin !== undefined) return origin;
+    const candidates = channels.filter((channel) => !isDebate(channel) && !HIDDEN_CHANNELS.includes(channel.name));
+    for (const channel of candidates) {
+      const response = await request(token, `/channel/message?channel=${channel.id}&namespace=conversus`);
+      if (!response?.ok) continue;
+      const messages: Message[] = (await response.json()) ?? [];
+      if (messages.some((message) => message.metadata?.conversus?.channelName === debate?.name)) return channel.id;
+    }
+    return null;
+  }
+
+  async function handleShare() {
+    if (!synthesis?.text || !debate || sharing) return;
+    setSharing(true);
+    const origin = await findOrigin();
+    if (origin === null) {
+      setSynthesis({ ...synthesis, error: "Le canal d'origine est introuvable." });
+      setSharing(false);
+      return;
+    }
+    const response = await request(token, MESSAGES, {
+      content: synthesis.text,
+      channel: origin,
+      metadata: { synthesisOf: debate.name, upTo: synthesis.upTo, retained: synthesis.retained },
+    });
+    setSharing(false);
+    if (response?.status === 401) {
+      onTokenExpired();
+      return;
+    }
+    if (!response?.ok) {
+      setSynthesis({ ...synthesis, error: response ? "La synthèse n'a pas pu être partagée. Réessaie." : SERVER_DOWN });
+      return;
+    }
+    setSynthesis(null);
+    navigate(`/channel/${origin}`);
+  }
+
   return (
     <main className="chat debate">
       <Navbar channels={channels} username={username} onSwitch={onSwitch} onLogout={onTokenExpired} />
-      <h2 className="channel-title">{debate?.name.replace(/#\d+$/, "")}</h2>
+      <div className="debate-header">
+        <h2 className="channel-title">
+          {debate?.name.replace(/#\d+$/, "")}
+        </h2>
+        <button
+          type="button"
+          className="synthesis-button"
+          disabled={replies.length === 0 || synthesis !== null}
+          onClick={handleSynthesis}
+        >
+          Synthèse
+        </button>
+      </div>
+      {synthesis && (
+        <SynthesisModal
+          retainedCount={synthesis.retained.length}
+          text={synthesis.text}
+          error={synthesis.error}
+          sharing={sharing}
+          onCancel={() => setSynthesis(null)}
+          onShare={handleShare}
+        />
+      )}
       <div
         className="viewport"
         ref={viewportRef}
@@ -395,6 +543,11 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
             >
               <strong>
                 {displayName(message)}
+                {retained.has(message.id) && (
+                  <span className="retained-star" aria-label="Retenu">
+                    <StarIcon lit />
+                  </span>
+                )}
                 {openId === message.id && message.posted_at && (
                   <time className="message-time" dateTime={message.posted_at}>{formatTime(message.posted_at)}</time>
                 )}
@@ -417,7 +570,7 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
               )}
               {openId === message.id && (
                 <div className="message-actions" onClick={(event) => event.stopPropagation()}>
-                  <button type="button" onClick={() => handleReply(message)}>Répondre</button>
+                  <button type="button" className="reply-link" onClick={() => handleReply(message)}>Répondre</button>
                   {REACTIONS.map((reaction) => (
                     <button
                       type="button"
@@ -433,6 +586,17 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
                       <ReactionIcon value={reaction.value} />
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    className={retained.has(message.id) ? "on" : undefined}
+                    disabled={pendingReactions.includes(`${message.id}-retain`)}
+                    data-tip={retained.has(message.id) ? "Ne plus retenir" : "Retenir"}
+                    aria-label="Retenir"
+                    aria-pressed={retained.has(message.id)}
+                    onClick={() => handleRetain(message)}
+                  >
+                    <StarIcon lit={retained.has(message.id)} />
+                  </button>
                   <button
                     type="button"
                     className={reactAnonymously ? "on" : undefined}

@@ -276,18 +276,52 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 0.7rem;
+  gap: 0.9rem;
   margin: 0 1rem;
-  padding: 1.4rem;
-  border: 1px solid var(--line);
+  padding: 1.6rem 0.2rem;
+  border: none;
   background: transparent;
   list-style: none;
+  /* Messages fade out at the top instead of being cut */
+  mask-image: linear-gradient(transparent, black 2.5rem);
 }
 
+/* Names and times in a thin column on the left, texts next to them */
 .message {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.6rem;
+  display: grid;
+  grid-template-columns: 7rem 1fr;
+  gap: 1.4rem;
+  align-items: baseline;
+}
+
+/* Choosing messages for a ConVersus: the checkbox comes first */
+.message:has(input[type="checkbox"]) {
+  grid-template-columns: auto 7rem 1fr;
+}
+
+.message-author {
+  text-align: right;
+  font-size: 0.74rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: var(--ice-soft);
+  text-transform: capitalize;
+}
+
+.message-author time {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.7rem;
+  opacity: 0.7;
+  text-transform: none;
+}
+
+/* Subject of a debate opened, or of a synthesis shared */
+.message-body .message-subject {
+  margin: 0.1rem 0 0.4rem;
+  font-family: "OpenSans", var(--font-text);
+  font-size: 1.1rem;
+  color: var(--white);
 }
 
 .avatar {
@@ -319,8 +353,53 @@
 
 .message-body p {
   margin: 0;
-  font-size: 0.98rem;
-  line-height: 1.4;
+  max-width: 44rem;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: rgba(235, 244, 255, 0.92);
+}
+
+/* 1B: the writing line and an arrow at its end, no box */
+.send-line {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  border-bottom: 1px solid var(--line);
+  transition: border-color 0.25s;
+}
+
+.send-line:focus-within {
+  border-bottom-color: var(--ice);
+}
+
+.message-form .send-line input {
+  border-bottom: none;
+}
+
+.message-form .send-button {
+  flex: none;
+  padding: 0.3rem 0.2rem;
+  border: none;
+  color: rgba(196, 230, 255, 0.85);
+}
+
+.message-form .send-button:hover {
+  color: var(--white);
+}
+
+.message-form .send-button:disabled {
+  opacity: 0.4;
+  cursor: wait;
+}
+
+.send-arrow {
+  display: block;
+  width: 1.3rem;
+  height: 1.3rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
 }
 
 .message-form {
@@ -349,38 +428,59 @@
   color: var(--ice-soft);
 }
 
+/* Same button as the login page: thin outline, transparent */
 .message-form button,
 .chat-actions button,
 .selection-bar button,
-.join-button,
 .modal-actions button,
 .message-actions button,
-.reply-banner button,
 .camera-controls button,
 .composer-panel button {
-  padding: 0.5rem 1rem;
-  border: none;
+  padding: 0.6rem 1.1rem;
+  border: 1px solid var(--line);
   border-radius: 0;
-  background: rgba(196, 230, 255, 0.06);
-  color: var(--ice-soft);
+  background: transparent;
+  color: rgba(196, 230, 255, 0.85);
   font-size: 0.66rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   cursor: pointer;
-  transition: border-color 0.25s, color 0.25s;
+  transition: border-color 0.25s, color 0.25s, background 0.25s;
 }
 
 .message-form button:hover,
 .chat-actions button:hover,
 .selection-bar button:hover,
-.join-button:hover,
 .modal-actions button:hover,
 .message-actions button:hover,
-.reply-banner button:hover,
 .camera-controls button:hover,
 .composer-panel button:hover {
-  background: rgba(196, 230, 255, 0.14);
+  border-color: var(--ice);
   color: var(--white);
+}
+
+/* Grey links, like « Inscris toi » on the login page */
+.join-button,
+.reply-banner button,
+.message-actions .reply-link {
+  padding: 0 0 0.1rem;
+  border: none;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  background: none;
+  color: rgba(196, 230, 255, 0.7);
+  font-size: 0.78rem;
+  letter-spacing: normal;
+  text-transform: none;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.join-button:hover,
+.reply-banner button:hover,
+.message-actions .reply-link:hover {
+  color: var(--white);
+  border-bottom-color: var(--ice);
 }
 
 .selection-bar button:disabled,
@@ -409,8 +509,8 @@
   justify-content: space-between;
   align-items: center;
   margin: 0 1rem;
-  padding: 0.5rem 0.5rem 0.5rem 1.2rem;
-  border: 1px solid var(--line);
+  padding: 0;
+  border: none;
   color: var(--ice-soft);
   font-size: 0.8rem;
 }
@@ -418,16 +518,21 @@
 .modal-backdrop {
   position: fixed;
   inset: 0;
+  /* Above the plant and the board of a debate */
+  z-index: 20;
   display: grid;
   place-items: center;
-  background: rgba(9, 11, 23, 0.75);
+  background: rgba(9, 11, 23, 0.72);
+  backdrop-filter: blur(8px);
 }
 
+/* No box: the window floats on the blurred page, like the login form */
 .modal {
   width: min(32rem, 90vw);
   padding: 2rem;
-  border: 1px solid var(--line);
-  background: var(--night);
+  border: none;
+  background: transparent;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.8);
 }
 
 .modal h2 {
@@ -477,24 +582,90 @@
 
 .modal-messages li {
   margin-bottom: 0.4rem;
-  padding: 0.5rem 0.9rem;
-  border: 1px solid var(--line);
+  padding: 0.3rem 0 0.3rem 0.9rem;
+  border-left: 1px solid var(--line);
+  color: rgba(235, 244, 255, 0.85);
   overflow-wrap: anywhere;
 }
 
 .modal-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.6rem;
+  gap: 0.8rem;
+}
+
+/* Cancel is a text link, the main action keeps the outline */
+.modal-actions button[type="button"] {
+  border-color: transparent;
+}
+
+.modal-actions button[type="button"]:hover {
+  border-color: transparent;
 }
 
 .modal-actions button[type="submit"] {
-  background: rgba(196, 230, 255, 0.14);
+  border-color: rgba(196, 230, 255, 0.5);
   color: var(--white);
 }
 
 .debate .channel-title {
+  margin: 0;
+}
+
+/* Title on the left, Synthèse at the top right */
+.debate-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
   margin: 0 1rem;
+}
+
+.synthesis-button {
+  padding: 0.6rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: rgba(196, 230, 255, 0.85);
+  font-size: 0.66rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 0.25s, color 0.25s;
+}
+
+.synthesis-button:hover:not(:disabled) {
+  border-color: var(--ice);
+  color: var(--white);
+}
+
+.synthesis-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.synthesis-modal {
+  width: min(38rem, 90vw);
+}
+
+.synthesis-text {
+  max-height: 50vh;
+  overflow-y: auto;
+  margin: 0.6rem 0 1.4rem;
+  font-size: 0.92rem;
+  line-height: 1.7;
+  color: rgba(235, 244, 255, 0.88);
+}
+
+.synthesis-text.waiting {
+  color: var(--ice-soft);
+  font-style: italic;
+}
+
+.synthesis-error {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+  color: #ff6b6b;
 }
 
 .join-button {
@@ -583,8 +754,10 @@
   position: relative;
   overflow: hidden;
   margin: 0 1rem;
-  border: 1px solid var(--line);
+  border: none;
   background: transparent;
+  /* The plant fades out at the top and the bottom instead of being cut */
+  mask-image: linear-gradient(transparent, black 2.5rem);
   cursor: grab;
   user-select: none;
   touch-action: none;
@@ -603,15 +776,22 @@
 .camera-controls {
   position: absolute;
   right: 1rem;
-  bottom: 1rem;
+  bottom: 1.4rem;
   display: flex;
   flex-direction: row;
   gap: 0.4rem;
 }
 
+/* Icons only, they light up on hover */
 .camera-controls button {
   padding: 0.4rem;
-  color: #9ba0ad;
+  border-color: transparent;
+  color: rgba(196, 230, 255, 0.55);
+}
+
+.camera-controls button:hover {
+  border-color: transparent;
+  color: var(--ice);
 }
 
 .camera-icon {
@@ -823,13 +1003,14 @@
 .message-actions button {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  background: linear-gradient(rgba(196, 230, 255, 0.06), rgba(196, 230, 255, 0.06)), var(--night);
+  /* 2A: icons alone, nothing hides the plant */
+  padding: 0.2rem;
+  border: none;
+  background: none;
 }
 
 .message-actions button:hover,
 .message-actions button.on {
-  background: linear-gradient(rgba(196, 230, 255, 0.14), rgba(196, 230, 255, 0.14)), var(--night);
   color: var(--white);
 }
 
@@ -850,6 +1031,47 @@
 
 .anonymous-icon.plain circle {
   fill: currentColor;
+}
+
+.star-icon {
+  display: block;
+  width: 1.4rem;
+  height: 1.4rem;
+  overflow: visible;
+}
+
+.star-icon.plain path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+/* Small star after the name of a retained message, seen by everyone */
+.retained-star {
+  display: inline-block;
+  margin-left: 0.35rem;
+  vertical-align: -0.1em;
+}
+
+.retained-star .star-icon {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+/* Number of retained messages, after the debate title */
+.retained-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: 0.8rem;
+  font-size: 0.85rem;
+  color: var(--ice-soft);
+}
+
+.retained-count .star-icon {
+  width: 0.9rem;
+  height: 0.9rem;
 }
 
 .reaction-icon {
@@ -921,11 +1143,14 @@
   fill: var(--white);
 }
 
+/* Small grey line above the writing line */
 .reply-banner {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 1rem;
   margin: 0.5rem 1rem 0;
+  font-size: 0.78rem;
+  color: var(--ice-soft);
 }
 
 .reply-banner p {
@@ -981,13 +1206,14 @@
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
+  border-color: transparent;
   font-size: 0.95rem;
   letter-spacing: normal;
   text-transform: none;
 }
 
 .composer-panel button.active {
-  background: rgba(196, 230, 255, 0.14);
+  border-color: var(--ice);
   color: var(--white);
 }
 
@@ -1008,14 +1234,23 @@
   width: 2.6rem;
   height: 2.6rem;
   padding: 0;
+  border-color: transparent;
+  color: rgba(196, 230, 255, 0.6);
   font-size: 1rem;
   font-weight: 600;
   letter-spacing: normal;
   text-transform: none;
 }
 
+/* Icons only: lit on hover, a fine line under the active one */
+.message-form .composer-tool:hover {
+  border-color: transparent;
+  color: var(--white);
+}
+
 .message-form .composer-tool.on {
-  background: rgba(196, 230, 255, 0.14);
+  border-color: transparent;
+  border-bottom-color: var(--ice);
   color: var(--white);
 }
 

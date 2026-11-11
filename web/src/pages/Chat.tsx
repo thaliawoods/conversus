@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import Navbar, { type Channel } from "../components/Navbar";
 import LaunchModal from "../components/LaunchModal";
+import SendArrow from "../components/SendArrow";
 import { SERVER_DOWN, formatTime, request } from "../api";
 
 export type ReactionValue = "leaf" | "thorn" | "wilt";
@@ -21,7 +22,15 @@ export type Message = {
       font?: string;
       effect?: ReactionValue;
       reactTo?: number;
-      value?: ReactionValue;
+      // Subject message of a debate: the channel it was opened from.
+      origin?: number;
+      // Synthesis shared in a channel: which debate, last message it covers, messages retained then.
+      synthesisOf?: string;
+      upTo?: number;
+      retained?: number[];
+      // Retenir: aims at a message, value true to retain it, false to take it back.
+      retain?: number;
+      value?: ReactionValue | boolean;
     };
   };
 };
@@ -29,6 +38,7 @@ export type Message = {
 type ChatProps = { token: string; onTokenExpired: () => void; onSwitch: (newToken: string) => void };
 
 const MESSAGES = "/channel/message?namespace=conversus";
+const OPENED = "a ouvert un ConVersus : ";
 
 function Chat({ token, onTokenExpired, onSwitch }: ChatProps) {
   const { channelId } = useParams();
@@ -120,7 +130,7 @@ function Chat({ token, onTokenExpired, onSwitch }: ChatProps) {
       return;
     }
     const debate: Channel = await response!.json();
-    await request(token, MESSAGES, { content: subject, channel: debate.id, metadata: {} });
+    await request(token, MESSAGES, { content: subject, channel: debate.id, metadata: { origin: Number(channelId) } });
     for (const message of selectedMessages) {
       await request(token, MESSAGES, {
         content: message.content,
@@ -201,21 +211,28 @@ function Chat({ token, onTokenExpired, onSwitch }: ChatProps) {
                 onChange={() => handleToggleMessage(message.id)}
               />
             )}
-            <span className="avatar">{message.user[0]}</span>
+            {/* Left column: name and time, aligned on the right */}
+            <strong className="message-author">
+              {message.user}
+              {message.posted_at && <time dateTime={message.posted_at}>{formatTime(message.posted_at)}</time>}
+            </strong>
             <div className="message-body">
-              <strong>
-                {message.user}
-                {message.posted_at && <time dateTime={message.posted_at}>{formatTime(message.posted_at)}</time>}
-              </strong>
-              <p>{message.content}</p>
-              {message.metadata?.conversus?.channelName && (
-                <button
-                  className="join-button"
-                  type="button"
-                  onClick={() => handleJoin(message)}
-                >
-                  Rejoindre
-                </button>
+              {message.metadata?.conversus?.channelName ? (
+                <>
+                  <p>a ouvert un ConVersus</p>
+                  <p className="message-subject">{message.content.replace(OPENED, "")}</p>
+                  <button className="join-button" type="button" onClick={() => handleJoin(message)}>
+                    Rejoindre
+                  </button>
+                </>
+              ) : message.metadata?.conversus?.synthesisOf ? (
+                <>
+                  <p>a partagé la synthèse de</p>
+                  <p className="message-subject">{message.metadata.conversus.synthesisOf.split("#")[0]}</p>
+                  <p>{message.content}</p>
+                </>
+              ) : (
+                <p>{message.content}</p>
               )}
             </div>
           </li>
@@ -238,12 +255,16 @@ function Chat({ token, onTokenExpired, onSwitch }: ChatProps) {
       )}
       {shownError && <p className="login-error send-error" role="alert">{shownError}</p>}
       <form className="message-form" onSubmit={handleSendMessage}>
-        <input
-          value={content}
-          onChange={(event) => setContent(event.target.value)}
-          placeholder="Écris ton message..."
-        />
-        <button type="submit" disabled={sending}>Envoyer</button>
+        <div className="send-line">
+          <input
+            value={content}
+            onChange={(event) => setContent(event.target.value)}
+            placeholder="Écris ton message..."
+          />
+          <button className="send-button" type="submit" disabled={sending} aria-label="Envoyer" data-tip="Envoyer">
+            <SendArrow />
+          </button>
+        </div>
       </form>
       {isLaunching && (
         <LaunchModal
