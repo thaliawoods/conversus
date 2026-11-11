@@ -77,6 +77,15 @@ export function useCamera() {
     setCamera(START);
   }
 
+  // One step of zoom around the centre of the screen (zoom buttons).
+  function zoomBy(factor: number) {
+    setCamera((current) => {
+      const zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, current.zoom * factor));
+      const ratio = zoom / current.zoom;
+      return { x: current.x * ratio, y: current.y * ratio, zoom };
+    });
+  }
+
   return {
     camera,
     viewportRef,
@@ -85,5 +94,6 @@ export function useCamera() {
     handlePointerUp,
     handleClickCapture,
     recenter,
+    zoomBy,
   };
 }

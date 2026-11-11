@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { pointOnStem, type Placement } from "../layout";
+import { createCentralFlower } from "./centralFlower";
 
 const TRUNK_WIDTH = { base: 3, tip: 0.6 };
 const TWIG_WIDTH = { base: 1.4, tip: 0.3 };
@@ -12,6 +13,10 @@ const WIGGLE_LENGTH = 9;
 const GLOW_RADIUS = 3;
 const GLOW = 0.3;
 const SWAY = 1.5;
+// M1: slow breath away from the flower, in px at the tips.
+const BREATH = 3;
+// F1: pale band of light crossing the screen diagonally (0 = off).
+const SWEEP = 0.6;
 const POINT_GAP = 1.5;
 const LEAF = { length: 16, width: 8, turn: 0.35, petiole: 14 };
 const PETIOLE_WIDTH = { base: 1.2, tip: 0.8 };
@@ -291,8 +296,20 @@ function buildGeometry(stems: Stem[]) {
 const SWAY_GLSL = `
 uniform float uTime;
 uniform float uSway;
+uniform float uBreath;
+uniform float uSweep;
 vec2 sway(vec2 p) {
-  return vec2(sin(p.y * 0.02 + uTime * 0.5), cos(p.x * 0.02 + uTime * 0.4)) * uSway;
+  vec2 wave = vec2(sin(p.y * 0.02 + uTime * 0.5), cos(p.x * 0.02 + uTime * 0.4)) * uSway;
+  float r = length(p);
+  vec2 outward = r > 0.001 ? p / r : vec2(0.0);
+  float breath = (0.5 + 0.5 * sin(uTime * 0.6 - r * 0.012)) * smoothstep(40.0, 260.0, r) * uBreath;
+  return wave + outward * breath;
+}
+// clip = gl_Position. Band crosses the screen in 4 s, then rests 5 s.
+float sweep(vec4 clip) {
+  float diagonal = (clip.x + clip.y) * 0.5;
+  float head = mix(-1.4, 1.4, clamp(mod(uTime, 9.0) / 4.0, 0.0, 1.0));
+  return exp(-pow((diagonal - head) / 0.15, 2.0)) * uSweep;
 }
 `;
 
@@ -332,6 +349,7 @@ varying float vCore;
 varying float vFade;
 varying float vBlade;
 varying float vShown;
+varying float vSweep;
 
 void main() {
   float t = aT;
@@ -357,6 +375,7 @@ void main() {
   vFade = max(smoothstep(0.0, 0.05, t), spike + blade);
   vBlade = blade;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+  vSweep = sweep(gl_Position);
 }
 `;
 
@@ -369,6 +388,7 @@ varying float vCore;
 varying float vFade;
 varying float vBlade;
 varying float vShown;
+varying float vSweep;
 
 void main() {
   float d = abs(vAcross);
@@ -389,6 +409,8 @@ void main() {
   a = mix(a, bladeAlpha, vBlade);
   color = mix(color, bladeColor, vBlade);
   a *= vShown;
+  a = min(1.0, a * (1.0 + vSweep));
+  color = mix(color, WHITE, vSweep * 0.5);
   if (a < 0.01) discard;
   gl_FragColor = vec4(color, a);
 }
@@ -407,6 +429,7 @@ void main() {
   vPulse = (0.75 + 0.25 * sin(uTime * 1.2 + aNode.y)) * shown(position.xy);
   gl_PointSize = aNode.x * 4.0 * uPixelRatio;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+  vPulse *= 1.0 + sweep(gl_Position);
 }
 `;
 
@@ -482,16 +505,19 @@ function Branches({ stems, camera }: BranchesProps) {
     const orthographic = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 20);
     orthographic.position.z = 10;
     const time = { value: 0 };
+    const zoom = { value: 1 };
     const sway = { value: SWAY };
+    const motion = { uBreath: { value: BREATH }, uSweep: { value: SWEEP } };
     const boxes = Array.from({ length: MAX_BOXES }, () => new THREE.Vector4());
     const boxCount = { value: 0 };
     const underText = { uBoxes: { value: boxes }, uBoxCount: boxCount, uUnderText: { value: UNDER_TEXT } };
     const lineMaterial = new THREE.ShaderMaterial({
       uniforms: {
         ...underText,
+        ...motion,
         uTime: time,
         uSway: sway,
-        uZoom: { value: 1 },
+        uZoom: zoom,
         uGlow: { value: GLOW },
         uGlowRadius: { value: GLOW_RADIUS },
       },
@@ -503,7 +529,7 @@ function Branches({ stems, camera }: BranchesProps) {
       blending: THREE.AdditiveBlending,
     });
     const nodeMaterial = new THREE.ShaderMaterial({
-      uniforms: { ...underText, uTime: time, uSway: sway, uPixelRatio: { value: pixelRatio } },
+      uniforms: { ...underText, ...motion, uTime: time, uSway: sway, uPixelRatio: { value: pixelRatio } },
       vertexShader: NODE_VERTEX,
       fragmentShader: NODE_FRAGMENT,
       transparent: true,
@@ -514,7 +540,8 @@ function Branches({ stems, camera }: BranchesProps) {
     const nodes = new THREE.Points(new THREE.BufferGeometry(), nodeMaterial);
     lines.frustumCulled = false;
     nodes.frustumCulled = false;
-    scene.add(lines, nodes);
+    const flower = createCentralFlower({ time, zoom, pixelRatio });
+    scene.add(lines, nodes, ...flower.layers);
     const animated = !matchMedia("(prefers-reduced-motion: reduce)").matches;
     const view: View = { renderer, scene, camera: orthographic, lines, nodes, width: 1, height: 1, animated, boxes, boxCount };
     viewRef.current = view;
@@ -541,6 +568,7 @@ function Branches({ stems, camera }: BranchesProps) {
       nodes.geometry.dispose();
       lineMaterial.dispose();
       nodeMaterial.dispose();
+      flower.dispose();
       renderer.dispose();
       viewRef.current = null;
     };

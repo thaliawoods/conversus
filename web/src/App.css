@@ -38,7 +38,7 @@
   font-style: italic;
   font-size: 2.6rem;
   line-height: 1;
-  letter-spacing: 0.02em;
+  letter-spacing: -0.03em;
   text-transform: uppercase;
   color: var(--white);
 }
@@ -201,7 +201,7 @@
   font-style: italic;
   font-size: 1.1rem;
   line-height: 1;
-  letter-spacing: 0.02em;
+  letter-spacing: -0.03em;
   text-transform: uppercase;
   color: var(--white);
 }
@@ -356,7 +356,7 @@
 .modal-actions button,
 .message-actions button,
 .reply-banner button,
-.recenter,
+.camera-controls button,
 .composer-panel button {
   padding: 0.5rem 1rem;
   border: none;
@@ -377,7 +377,7 @@
 .modal-actions button:hover,
 .message-actions button:hover,
 .reply-banner button:hover,
-.recenter:hover,
+.camera-controls button:hover,
 .composer-panel button:hover {
   background: rgba(196, 230, 255, 0.14);
   color: var(--white);
@@ -600,17 +600,35 @@
   top: 50%;
 }
 
-.recenter {
+.camera-controls {
   position: absolute;
   right: 1rem;
   bottom: 1rem;
-  padding: 0.4rem;
+  display: flex;
+  flex-direction: row;
+  gap: 0.4rem;
 }
 
-.recenter-icon {
+.camera-controls button {
+  padding: 0.4rem;
+  color: #9ba0ad;
+}
+
+.camera-icon {
   display: block;
   width: 1.5rem;
   height: 1.5rem;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 0.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.camera-dot {
+  fill: currentColor;
+  stroke: none;
 }
 
 .stems {

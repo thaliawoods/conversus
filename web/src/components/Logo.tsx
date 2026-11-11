@@ -1,12 +1,15 @@
 import { useEffect, useRef } from "react";
 
-const STOPS = [
-  [0x0a, 0x16, 0x70],
-  [0x2f, 0x62, 0xff],
-  [0xc4, 0xe6, 0xff],
-];
 const GRAIN_COUNT = 2200;
-const PETALS = 5;
+const PETALS = 6;
+const RADIUS = 58;
+const WORLD = 72;
+const MAP_SIZE = 432;
+const PETAL = { width: 19, round: 0.6, vary: 0.12, wobble: 0.08 };
+const SHADOW = 0.6;
+const NIGHT = [[0x0a, 0x16, 0x70], [0x1a, 0x2a, 0x9e]];
+const BLUE = [[0x2a, 0x4d, 0xe0], [0x2f, 0x62, 0xff], [0x4a, 0x6c, 0xff]];
+const LIGHT = [[0x8f, 0xa8, 0xff], [0xc4, 0xe6, 0xff]];
 
 type Grain = {
   angle: number;
@@ -20,26 +23,118 @@ type Grain = {
   spread: number;
 };
 
-function grainColor(t: number) {
-  const [from, to, k] = t < 0.3 ? [STOPS[0], STOPS[1], t / 0.3] : [STOPS[1], STOPS[2], (t - 0.3) / 0.7];
-  const [red, green, blue] = from.map((value, i) => Math.round(value + (to[i] - value) * k));
-  return `rgb(${red},${green},${blue})`;
+function random(seed: number) {
+  const s = Math.sin(seed * 127.1) * 43758.5453;
+  return s - Math.floor(s);
+}
+
+function mix(from: number[], to: number[], t: number) {
+  return from.map((value, i) => value + (to[i] - value) * t);
+}
+
+function smooth(from: number, to: number, value: number) {
+  const t = Math.min(1, Math.max(0, (value - from) / (to - from)));
+  return t * t * (3 - 2 * t);
+}
+
+function petalPath(index: number) {
+  const left: number[][] = [];
+  const right: number[][] = [];
+  const seed = index * 7.3 + 24;
+  const length = RADIUS * (1 + (random(seed) - 0.5) * PETAL.vary);
+  const width = PETAL.width * (1 + (random(seed + 1) - 0.5) * PETAL.vary * 1.4);
+  for (let i = 0; i <= 80; i++) {
+    const t = i / 80;
+    const y = -length * (0.06 + 0.94 * t);
+    const half = width * Math.pow(Math.sin(Math.PI * t), PETAL.round);
+    const wl = 1 + PETAL.wobble * (Math.sin(t * 9 + seed) * 0.6 + Math.sin(t * 17 + seed * 2) * 0.4);
+    const wr = 1 + PETAL.wobble * (Math.sin(t * 11 + seed * 3) * 0.6 + Math.sin(t * 19 + seed) * 0.4);
+    left.push([-half * wl, y]);
+    right.push([half * 0.85 * wr, y]);
+  }
+  const path = new Path2D();
+  left.forEach(([x, y], i) => (i ? path.lineTo(x, y) : path.moveTo(x, y)));
+  right.reverse().forEach(([x, y]) => path.lineTo(x, y));
+  path.closePath();
+  return path;
+}
+
+function createMaps() {
+  const petals = Array.from({ length: PETALS }, (_, i) => petalPath(i));
+  const make = () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = MAP_SIZE;
+    const context = canvas.getContext("2d", { willReadFrequently: true })!;
+    context.translate(MAP_SIZE / 2, MAP_SIZE / 2);
+    context.scale(MAP_SIZE / (2 * WORLD), MAP_SIZE / (2 * WORLD));
+    return context;
+  };
+  const turn = (context: CanvasRenderingContext2D, i: number) =>
+    context.rotate((i * 2 * Math.PI) / PETALS + (random(i * 5.1 + 9) - 0.5) * PETAL.vary * 0.6);
+  const inside = make();
+  const gap = make();
+  const rim = make();
+  const count = make();
+  gap.lineWidth = 2;
+  rim.lineWidth = 7;
+  count.globalCompositeOperation = "lighter";
+  count.fillStyle = "rgb(60,0,0)";
+  for (let i = 0; i < PETALS; i++) {
+    for (const context of [inside, count]) {
+      context.save();
+      turn(context, i);
+      context.fill(petals[i]);
+      context.restore();
+    }
+    for (const context of [gap, rim]) {
+      context.save();
+      turn(context, i);
+      context.globalCompositeOperation = "destination-out";
+      context.fill(petals[i]);
+      context.globalCompositeOperation = "source-over";
+      context.stroke(petals[i]);
+      context.restore();
+    }
+  }
+  const read = (context: CanvasRenderingContext2D) => context.getImageData(0, 0, MAP_SIZE, MAP_SIZE).data;
+  return { inside: read(inside), gap: read(gap), rim: read(rim), count: read(count) };
+}
+
+function grainColor(k: number, edge: number, overlap: boolean) {
+  const tip = smooth(0.6, 0.95, k) * (overlap ? 0.2 : 1);
+  let color;
+  if (Math.random() < 0.03 + 0.75 * tip) {
+    color = mix(LIGHT[0], LIGHT[1], Math.random() * (0.3 + 0.7 * tip));
+  } else {
+    const side = edge * 0.8 * (1 - smooth(0.7, 0.95, k));
+    const dark = Math.min(1, 1 - smooth(0.15, 0.75, k) + side + (overlap ? 0.6 : 0)) * SHADOW;
+    const night = mix(NIGHT[0], NIGHT[1], Math.random());
+    const blue = BLUE[Math.floor(Math.random() * BLUE.length)];
+    color = mix(blue, night, Math.min(1, dark * (0.75 + 0.25 * Math.random())));
+  }
+  return `rgb(${color.map(Math.round).join(",")})`;
 }
 
 function createGrains(dot: number) {
+  const { inside, gap, rim, count } = createMaps();
   const grains: Grain[] = [];
-  for (let n = 0; n < GRAIN_COUNT; n++) {
-    const angle = Math.random() * Math.PI * 2;
-    const petal = Math.pow(Math.abs(Math.cos((PETALS / 2) * angle)), 1.1);
-    const k = (0.12 + 0.88 * petal) * Math.sqrt(Math.random());
+  const toMap = MAP_SIZE / (2 * WORLD);
+  for (let tries = 0; grains.length < GRAIN_COUNT && tries < GRAIN_COUNT * 30; tries++) {
+    const x = (Math.random() * 2 - 1) * WORLD;
+    const y = (Math.random() * 2 - 1) * WORLD;
+    const p = (Math.floor(y * toMap + MAP_SIZE / 2) * MAP_SIZE + Math.floor(x * toMap + MAP_SIZE / 2)) * 4;
+    if (inside[p + 3] < 128 || (gap[p + 3] > 90 && Math.random() < 0.95)) continue;
+    const edge = rim[p + 3] / 255;
+    if (!edge && Math.random() < 0.3) continue;
+    const k = Math.min(1, Math.hypot(x, y) / RADIUS + edge * 0.3);
     grains.push({
-      angle,
-      k,
+      angle: Math.atan2(y, x),
+      k: (Math.hypot(x, y) / RADIUS) * 0.93,
       ox: 0,
       oy: 0,
       size: dot * (0.7 + Math.random() * 0.6),
       alpha: 0.6 + 0.35 * Math.random(),
-      fill: grainColor(Math.max(0, Math.min(1, Math.sqrt(k) + (Math.random() - 0.5) * 0.2))),
+      fill: grainColor(k, edge, count[p] > 90),
       phase: Math.random() * 100,
       spread: 0.5 + Math.random(),
     });

@@ -1,8 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router";
 import Navbar, { type Channel } from "../components/Navbar";
-import Flower from "../components/Flower";
-import CentralFlower from "../components/CentralFlower";
+import CameraIcon from "../components/CameraIcon";
 import Branches, { type Mark, type Stem } from "../components/Branches";
 import ReactionIcon, { REACTIONS } from "../components/ReactionIcon";
 import AnonymousIcon from "../components/AnonymousIcon";
@@ -11,6 +10,8 @@ import { placeMessages, wiltSag, type Placement } from "../layout";
 import { useCamera } from "../hooks/useCamera";
 import MessageForm from "../components/MessageForm";
 import { fontFamily } from "../fonts";
+
+const ZOOM_STEP = 1.25;
 
 type DebateProps = { token: string; onTokenExpired: () => void; onSwitch: (newToken: string) => void };
 
@@ -74,6 +75,7 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
     handlePointerUp,
     handleClickCapture,
     recenter,
+    zoomBy,
   } = useCamera();
   const debate = channels.find((channel) => channel.id === Number(channelId));
   const reactedBy = replies.map((message) => whoReacted(reactions, message));
@@ -203,7 +205,7 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
       >
         <Branches stems={stems} camera={camera} />
         <div className="board" style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})` }}>
-          <CentralFlower />
+          <div className="central-flower" role="img" aria-label="Sujet du débat" />
           {replies.map((message, index) => (
             <div
               className={openId === message.id ? "board-message open" : "board-message"}
@@ -253,19 +255,21 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
             </div>
           ))}
         </div>
-        <button
-          type="button"
-          className="recenter"
-          aria-label="Recentrer"
-          title="Recentrer"
+        <div
+          className="camera-controls"
           onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => {
-            event.stopPropagation();
-            recenter();
-          }}
+          onClick={(event) => event.stopPropagation()}
         >
-          <Flower className="recenter-icon" />
-        </button>
+          <button type="button" aria-label="Zoomer" title="Zoomer" onClick={() => zoomBy(ZOOM_STEP)}>
+            <CameraIcon action="zoomIn" />
+          </button>
+          <button type="button" aria-label="Dézoomer" title="Dézoomer" onClick={() => zoomBy(1 / ZOOM_STEP)}>
+            <CameraIcon action="zoomOut" />
+          </button>
+          <button type="button" aria-label="Recentrer" title="Recentrer" onClick={recenter}>
+            <CameraIcon action="recenter" />
+          </button>
+        </div>
       </div>
       {replyingTo && (
         <div className="reply-banner">
