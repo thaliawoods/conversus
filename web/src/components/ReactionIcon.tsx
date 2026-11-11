@@ -2,9 +2,9 @@ import { useId } from "react";
 import type { ReactionValue } from "../pages/Chat";
 
 export const REACTIONS: { value: ReactionValue; label: string }[] = [
-  { value: "leaf", label: "Feuille" },
-  { value: "thorn", label: "Épine" },
-  { value: "wilt", label: "Faner" },
+  { value: "leaf", label: "Feuillu" },
+  { value: "thorn", label: "Épineux" },
+  { value: "wilt", label: "Fané" },
 ];
 
 // Same sequence of numbers for the same seed: shapes are irregular but identical on every render.
@@ -95,13 +95,19 @@ const DRAWINGS: Record<ReactionValue, Drawing> = {
   },
 };
 
-function ReactionIcon({ value }: { value: ReactionValue }) {
+function ReactionIcon({ value, label }: { value: ReactionValue; label?: string }) {
   // One id per icon: the hidden "who reacted" bubble (display: none) must not hold the only copy of the gradients.
   const id = useId().replace(/[^a-zA-Z0-9]/g, "");
   const drawing = DRAWINGS[value];
 
   return (
-    <svg className="reaction-icon" viewBox="-12 -12 24 24">
+    <svg
+      className="reaction-icon"
+      viewBox="-12 -12 24 24"
+      role={label ? "img" : undefined}
+      aria-label={label}
+      aria-hidden={label ? undefined : true}
+    >
       <defs>
         <filter id={`${id}-glow`} x="-60%" y="-60%" width="220%" height="220%">
           <feGaussianBlur in="SourceGraphic" stdDeviation="0.9" result="blur" />

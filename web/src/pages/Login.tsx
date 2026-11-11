@@ -1,11 +1,12 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 import Logo from "../components/Logo";
+import { API, SERVER_DOWN } from "../api";
+import { rememberAccount } from "../accounts";
 
 const Gladiolus = lazy(() => import("../login-flower/Gladiolus"));
 
 type LoginProps = { onLogin: (newToken: string) => void };
 
-const API = "http://localhost:4000";
 const SHAPE_FONTS = ["PicNic", "Coxinelle", "Nudles", "FixelPont", "LoveAndRage", "Frames"];
 
 function Login({ onLogin }: LoginProps) {
@@ -53,10 +54,10 @@ function Login({ onLogin }: LoginProps) {
       }
 
       const newToken = await response.text();
-      localStorage.setItem("token", newToken);
+      rememberAccount(name, newToken);
       onLogin(newToken);
     } catch {
-      setError("Le serveur ne répond pas. Réessaie dans un instant.");
+      setError(SERVER_DOWN);
     } finally {
       setLoading(false);
     }

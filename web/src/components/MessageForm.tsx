@@ -12,16 +12,19 @@ type MessageFormProps = {
     effect: ReactionValue | undefined,
     anonymous: boolean,
   ) => Promise<boolean>;
+  placeholder: string;
+  error: string;
 };
 
 type Panel = "emoji" | "font" | "effect" | null;
 
-function MessageForm({ onSend }: MessageFormProps) {
+function MessageForm({ onSend, placeholder, error }: MessageFormProps) {
   const [content, setContent] = useState("");
   const [font, setFont] = useState<string | undefined>(undefined);
   const [effect, setEffect] = useState<ReactionValue | undefined>(undefined);
   const [anonymous, setAnonymous] = useState(false);
   const [panel, setPanel] = useState<Panel>(null);
+  const [sending, setSending] = useState(false);
 
   function togglePanel(name: Panel) {
     setPanel(panel === name ? null : name);
@@ -29,8 +32,10 @@ function MessageForm({ onSend }: MessageFormProps) {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!content.trim()) return;
+    if (!content.trim() || sending) return;
+    setSending(true);
     const sent = await onSend(content, font, effect, anonymous);
+    setSending(false);
     if (!sent) return;
     setContent("");
     setEffect(undefined);
@@ -88,13 +93,14 @@ function MessageForm({ onSend }: MessageFormProps) {
                 type="button"
                 key={option.value}
                 className={effect === option.value ? "active" : undefined}
+                data-tip={option.label}
+                aria-label={option.label}
                 onClick={() => {
                   setEffect(option.value);
                   setPanel(null);
                 }}
               >
                 <ReactionIcon value={option.value} />
-                {option.label}
               </button>
             ))}
           </div>
@@ -104,12 +110,13 @@ function MessageForm({ onSend }: MessageFormProps) {
             {content}
           </p>
         )}
+        {error && <p className="login-error" role="alert">{error}</p>}
       </div>
       <form className="message-form" onSubmit={handleSubmit}>
         <button
           type="button"
           className={panel === "emoji" ? "composer-tool on" : "composer-tool"}
-          title="Emojis"
+          data-tip="Emojis"
           aria-label="Emojis"
           aria-expanded={panel === "emoji"}
           onClick={() => togglePanel("emoji")}
@@ -119,8 +126,8 @@ function MessageForm({ onSend }: MessageFormProps) {
         <button
           type="button"
           className={panel === "font" ? "composer-tool on" : "composer-tool"}
-          title="Choisir la police"
-          aria-label="Choisir la police"
+          data-tip="Change ta police"
+          aria-label="Change ta police"
           aria-expanded={panel === "font"}
           onClick={() => togglePanel("font")}
         >
@@ -129,8 +136,8 @@ function MessageForm({ onSend }: MessageFormProps) {
         <button
           type="button"
           className={panel === "effect" ? "composer-tool on" : "composer-tool"}
-          title="Choisir l'effet"
-          aria-label="Choisir l'effet"
+          data-tip="Choisis ton effet"
+          aria-label="Choisis ton effet"
           aria-expanded={panel === "effect"}
           onClick={() => togglePanel("effect")}
         >
@@ -139,8 +146,8 @@ function MessageForm({ onSend }: MessageFormProps) {
         <button
           type="button"
           className={anonymous ? "composer-tool on" : "composer-tool"}
-          title={anonymous ? "Mode anonyme activé" : "Envoyer sans révéler mon identité"}
-          aria-label="Mode anonyme"
+          data-tip="Anonyme"
+          aria-label="Anonyme"
           aria-pressed={anonymous}
           onClick={() => setAnonymous(!anonymous)}
         >
@@ -149,10 +156,10 @@ function MessageForm({ onSend }: MessageFormProps) {
         <input
           value={content}
           onChange={(event) => setContent(event.target.value)}
-          placeholder="Écris ton message..."
+          placeholder={placeholder}
           style={{ fontFamily: fontFamily(font) }}
         />
-        <button type="submit">Envoyer</button>
+        <button type="submit" disabled={sending}>Envoyer</button>
       </form>
     </div>
   );

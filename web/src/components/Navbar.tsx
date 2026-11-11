@@ -7,6 +7,7 @@ export type Channel = { id: number; name: string };
 
 type NavbarProps = {
   channels: Channel[];
+  username: string;
   onSwitch: (newToken: string) => void;
   onLogout: () => void;
 };
@@ -15,7 +16,11 @@ function isDebate(channel: Channel) {
   return /#\d+$/.test(channel.name);
 }
 
-function Navbar({ channels, onSwitch, onLogout }: NavbarProps) {
+// "general" can't be read: the back's clock posts metadata "[]" in it, and the back fails on them.
+// Hidden until the back is fixed (we don't touch it).
+const HIDDEN_CHANNELS = ["general"];
+
+function Navbar({ channels, username, onSwitch, onLogout }: NavbarProps) {
   const [open, setOpen] = useState(false);
   const { channelId } = useParams();
   const debates = channels.filter(isDebate);
@@ -41,7 +46,7 @@ function Navbar({ channels, onSwitch, onLogout }: NavbarProps) {
   return (
     <nav className="nav">
       <Logo still className="nav-brand" />
-      {channels.filter((channel) => !isDebate(channel)).map((channel) => (
+      {channels.filter((channel) => !isDebate(channel) && !HIDDEN_CHANNELS.includes(channel.name)).map((channel) => (
         <NavLink className="tab" key={channel.id} to={`/channel/${channel.id}`}>
           {channel.name}
         </NavLink>
@@ -63,7 +68,7 @@ function Navbar({ channels, onSwitch, onLogout }: NavbarProps) {
           </ul>
         )}
       </div>
-      <AccountMenu onSwitch={onSwitch} onLogout={onLogout} />
+      <AccountMenu username={username} onSwitch={onSwitch} onLogout={onLogout} />
     </nav>
   );
 }

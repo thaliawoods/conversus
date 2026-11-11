@@ -59,8 +59,10 @@ const CONE = Math.PI / 3;
 const WIDE_CONE = Math.PI / 2;
 const AXIS = Math.PI / 9;
 const SEARCH_LIMIT = 4000;
-const STEM_SAMPLES = 16;
-const BOX_MARGIN = 2;
+// Enough points that a long stem can't slip past the corner of a message between two of them.
+const STEM_SAMPLES = 32;
+// Room around another message's text for the stem's leaves, thorns and twigs (added to GAP / 2): about 20 px.
+const STEM_CLEARANCE = 12;
 
 type Rule = { cone: number | null; stems: boolean; sideways: boolean };
 
@@ -71,7 +73,6 @@ const RULES: Rule[] = [
   { cone: null, stems: true, sideways: false },
   { cone: null, stems: false, sideways: false },
 ];
-const WILT_RULES = RULES.slice(3);
 
 type Line = { from: number | null; to: number; points: Point[]; bounds: Box };
 
@@ -100,10 +101,10 @@ function boundsOf(points: Point[]): Box {
 
 function inside(point: Point, box: Box) {
   return (
-    point.x > box.left + BOX_MARGIN &&
-    point.x < box.right - BOX_MARGIN &&
-    point.y > box.top + BOX_MARGIN &&
-    point.y < box.bottom - BOX_MARGIN
+    point.x > box.left - STEM_CLEARANCE &&
+    point.x < box.right + STEM_CLEARANCE &&
+    point.y > box.top - STEM_CLEARANCE &&
+    point.y < box.bottom + STEM_CLEARANCE
   );
 }
 
@@ -134,14 +135,19 @@ function tiltDown(point: Point, center: Point, tilt: number) {
   const distance = Math.hypot(dx, dy);
   const angle = Math.atan2(dy, dx);
   const turn = Math.atan2(Math.sin(Math.PI / 2 - angle), Math.cos(Math.PI / 2 - angle));
-  const tilted = angle + turn * tilt;
+  // Never more than WILT_TURN towards the ground, so a wilted message stays near its place.
+  const tilted = angle + Math.max(-WILT_TURN, Math.min(WILT_TURN, turn)) * tilt;
   return { x: center.x + Math.cos(tilted) * distance, y: center.y + Math.sin(tilted) * distance };
 }
 
 let lastKey = "";
 let lastPositions: Placement[] = [];
 // Where each message was put, measured from its parent, and the data it was placed with.
-const remembered = new Map<number, { dx: number; dy: number; inputs: string }>();
+// base: its place before Faner tilted it.
+const remembered = new Map<
+  number,
+  { dx: number; dy: number; inputs: string; baseDx: number; baseDy: number; baseInputs: string }
+>();
 const KEEP_RULE: Rule = { cone: null, stems: true, sideways: false };
 
 export function placeMessages(
@@ -187,7 +193,13 @@ export function placeMessages(
       if (!rule.stems) return true;
       const points = sampleStem(origin, point, sag);
       if (placed.some((other, j) => j !== ownBox && points.some((p) => inside(p, other)))) return false;
-      if (lines.some((line) => overlaps(line.bounds, box) && line.points.some((p) => inside(p, box)))) return false;
+      const roomy = {
+        left: box.left - STEM_CLEARANCE,
+        top: box.top - STEM_CLEARANCE,
+        right: box.right + STEM_CLEARANCE,
+        bottom: box.bottom + STEM_CLEARANCE,
+      };
+      if (lines.some((line) => overlaps(line.bounds, roomy) && line.points.some((p) => inside(p, box)))) return false;
       const bounds = boundsOf(points);
       return lines.every(
         (line) =>
@@ -209,18 +221,31 @@ export function placeMessages(
 
     // Keep the old place if this message's own data didn't change and the place still fits.
     const id = ids[index];
-    const inputs = JSON.stringify([size, parent === null ? null : ids[parent], sag, marks[index] ?? 0]);
+    const baseInputs = JSON.stringify([size, parent === null ? null : ids[parent], marks[index] ?? 0]);
+    const inputs = JSON.stringify([baseInputs, sag]);
     const memory = remembered.get(id);
     const kept = memory && memory.inputs === inputs ? { x: origin.x + memory.dx, y: origin.y + memory.dy } : null;
     let point: Point;
+    let base: Point;
     if (kept && fits(kept, KEEP_RULE)) {
       point = kept;
+      base = { x: origin.x + memory!.baseDx, y: origin.y + memory!.baseDy };
     } else {
-      point = search(origin, RULES);
+      // Faner only tilts the message from its own place, with the usual rules: the plant keeps its shape.
+      const oldBase =
+        memory && memory.baseInputs === baseInputs ? { x: origin.x + memory.baseDx, y: origin.y + memory.baseDy } : null;
+      base = oldBase && fits(oldBase, KEEP_RULE) ? oldBase : search(origin, RULES);
       const tilt = sag / (WILT_MAX * WILT_SAG);
-      if (tilt > 0) point = search(tiltDown(point, origin, tilt), WILT_RULES);
+      point = tilt > 0 ? search(tiltDown(base, origin, tilt), RULES) : base;
     }
-    remembered.set(id, { dx: point.x - origin.x, dy: point.y - origin.y, inputs });
+    remembered.set(id, {
+      dx: point.x - origin.x,
+      dy: point.y - origin.y,
+      inputs,
+      baseDx: base.x - origin.x,
+      baseDy: base.y - origin.y,
+      baseInputs,
+    });
     if (parent === null) flowerChildren++;
 
     const points = sampleStem(origin, point, sag);
@@ -236,8 +261,11 @@ export function placeMessages(
 
 const STEM_BEND = 0.15;
 
-const WILT_SAG = 0.15;
+// Per Faner, how much the stem bows (share of its length), up to WILT_MAX of them.
+const WILT_SAG = 0.06;
 const WILT_MAX = 4;
+// Largest tilt of a wilted message towards the ground, in radians (about 25°).
+const WILT_TURN = 0.45;
 
 export function wiltSag(count: number) {
   return Math.min(count, WILT_MAX) * WILT_SAG;

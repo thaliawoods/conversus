@@ -1,47 +1,53 @@
 import { useState } from "react";
-
-const accounts = ["thalia", "clara"];
-const password = "motdepasse";
+import { API, SERVER_DOWN } from "../api";
+import { TEST_ACCOUNTS, TEST_PASSWORD, recentAccounts, rememberAccount } from "../accounts";
 
 type AccountMenuProps = {
+  username: string;
   onSwitch: (newToken: string) => void;
   onLogout: () => void;
 };
 
-function AccountMenu({ onSwitch, onLogout }: AccountMenuProps) {
-  const [current, setCurrent] = useState(localStorage.getItem("account") ?? "");
+function AccountMenu({ username, onSwitch, onLogout }: AccountMenuProps) {
+  const [error, setError] = useState("");
+  const recent = recentAccounts();
+  const accounts = [...new Set([...Object.keys(recent), ...TEST_ACCOUNTS])];
 
-  async function handleSwitch(username: string) {
-    const response = await fetch("http://localhost:4000/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
-    });
-    if (!response.ok) {
-      console.log("changement refusé", response.status);
+  async function handleSwitch(account: string) {
+    setError("");
+    // Already signed in on this browser: reuse its token, no password needed.
+    if (recent[account]) {
+      rememberAccount(account, recent[account]);
+      onSwitch(recent[account]);
       return;
     }
-    const newToken = await response.text();
-    localStorage.setItem("token", newToken);
-    localStorage.setItem("account", username);
-    setCurrent(username);
-    onSwitch(newToken);
-  }
-
-  function handleLogout() {
-    localStorage.removeItem("account");
-    onLogout();
+    try {
+      const response = await fetch(`${API}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: account, password: TEST_PASSWORD }),
+      });
+      if (!response.ok) {
+        setError("Impossible de passer sur ce compte.");
+        return;
+      }
+      const newToken = await response.text();
+      rememberAccount(account, newToken);
+      onSwitch(newToken);
+    } catch {
+      setError(SERVER_DOWN);
+    }
   }
 
   return (
     <div className="account-menu">
-      <span className="account-name">{current}</span>
-      <span className="avatar">{current[0]}</span>
+      <span className="account-name">{username}</span>
+      <span className="avatar">{username[0]}</span>
       <div className="account-dropdown">
         <span className="account-label">utilisateurices</span>
         {accounts.map((account) => (
           <button
-            className={account === current ? "active" : ""}
+            className={account === username ? "active" : ""}
             key={account}
             type="button"
             onClick={() => handleSwitch(account)}
@@ -50,7 +56,8 @@ function AccountMenu({ onSwitch, onLogout }: AccountMenuProps) {
             {account}
           </button>
         ))}
-        <button type="button" onClick={handleLogout}>
+        {error && <p className="login-error">{error}</p>}
+        <button type="button" onClick={onLogout}>
           Déconnexion
         </button>
       </div>

@@ -94,7 +94,7 @@ function Rain({ showers, stems, camera }: { showers: Shower[]; stems: Stem[]; ca
         return;
       }
 
-      context!.fillStyle = `rgba(30, 40, 80, ${(strength * VEIL).toFixed(3)})`;
+      context!.fillStyle = `rgba(42, 26, 84, ${(strength * VEIL).toFixed(3)})`;
       context!.fillRect(0, 0, width, height);
 
       if (!reduceMotion) {
@@ -105,7 +105,7 @@ function Rain({ showers, stems, camera }: { showers: Shower[]; stems: Stem[]; ca
             drop.x = random(0, width);
           }
           for (let i = 0; i < drop.length; i++) {
-            context!.fillStyle = `rgba(196, 230, 255, ${(drop.alpha * strength * (1 - i / drop.length)).toFixed(3)})`;
+            context!.fillStyle = `rgba(217, 200, 255, ${(drop.alpha * strength * (1 - i / drop.length)).toFixed(3)})`;
             context!.fillRect(drop.x, drop.y - i * 3, 1.3, 1.3);
           }
         }
@@ -128,7 +128,7 @@ function Rain({ showers, stems, camera }: { showers: Shower[]; stems: Stem[]; ca
           y: height / 2 + camera.y + y * camera.zoom,
         });
         tears = tears.filter((tear) => toScreen(tear.x, tear.y).y < height + 20 && tear.life < 4);
-        context!.shadowColor = "#2f62ff";
+        context!.shadowColor = "#9b6bff";
         context!.shadowBlur = 10;
         for (const tear of tears) {
           tear.life += dt;
@@ -142,8 +142,8 @@ function Rain({ showers, stems, camera }: { showers: Shower[]; stems: Stem[]; ca
           const radius = 1.2 + grow * 1.4;
           const { x, y } = toScreen(tear.x, tear.y);
           const gradient = context!.createLinearGradient(x, y - stretch, x, y + radius);
-          gradient.addColorStop(0, "rgba(196, 230, 255, 0)");
-          gradient.addColorStop(1, "rgba(255, 255, 255, 1)");
+          gradient.addColorStop(0, "rgba(217, 200, 255, 0)");
+          gradient.addColorStop(1, "rgba(244, 236, 255, 1)");
           context!.fillStyle = gradient;
           context!.beginPath();
           context!.ellipse(x, y - stretch / 2, radius, radius + stretch / 2, 0, 0, Math.PI * 2);

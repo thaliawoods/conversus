@@ -3,12 +3,14 @@ import { Navigate, Route, Routes } from "react-router";
 import Chat from "./pages/Chat";
 import Login from "./pages/Login";
 import Debate from "./pages/Debate";
+import { forgetToken } from "./accounts";
 import "./App.css";
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem("token") ?? "");
+  // Expired or logged out: this token is forgotten, recent accounts included.
   function handleTokenExpired() {
-    localStorage.removeItem("token");
+    forgetToken(token);
     setToken("");
   }
   const chatOrLogin = token ? (

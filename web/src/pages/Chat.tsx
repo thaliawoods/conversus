@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import Navbar, { type Channel } from "../components/Navbar";
 import LaunchModal from "../components/LaunchModal";
+import { SERVER_DOWN, formatTime, request } from "../api";
 
 export type ReactionValue = "leaf" | "thorn" | "wilt";
 
@@ -9,7 +10,9 @@ export type Message = {
   id: number;
   content: string;
   user: string;
+  user_id?: number;
   anonymous?: boolean;
+  posted_at?: string;
   metadata?: {
     conversus?: {
       channelName?: string;
@@ -25,12 +28,19 @@ export type Message = {
 
 type ChatProps = { token: string; onTokenExpired: () => void; onSwitch: (newToken: string) => void };
 
+const MESSAGES = "/channel/message?namespace=conversus";
+
 function Chat({ token, onTokenExpired, onSwitch }: ChatProps) {
   const { channelId } = useParams();
   const navigate = useNavigate();
   const [channels, setChannels] = useState<Channel[]>([]);
+  const [username, setUsername] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [content, setContent] = useState("");
+  const [sending, setSending] = useState(false);
+  // error: an action failed; connectionError: the 2 s reload failed.
+  const [error, setError] = useState("");
+  const [connectionError, setConnectionError] = useState("");
   const messagesRef = useRef<HTMLUListElement>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isSelecting, setIsSelecting] = useState(false);
@@ -44,15 +54,18 @@ function Chat({ token, onTokenExpired, onSwitch }: ChatProps) {
   );
   useEffect(() => {
     async function loadProfile() {
-      const response = await fetch("http://localhost:4000/me", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (response.status === 401) {
+      const response = await request(token, "/me");
+      if (response?.status === 401) {
         onTokenExpired();
+        return;
+      }
+      if (!response?.ok) {
+        setConnectionError(SERVER_DOWN);
         return;
       }
       const profile = await response.json();
       setChannels(profile.channels);
+      setUsername(profile.username);
     }
 
     loadProfile();
@@ -61,16 +74,16 @@ function Chat({ token, onTokenExpired, onSwitch }: ChatProps) {
     if (!channelId) return;
 
     async function loadMessages() {
-      const response = await fetch(
-        `http://localhost:4000/channel/message?channel=${channelId}&namespace=conversus`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
-      if (!response.ok) {
-        console.log("messages refusés", response.status);
+      const response = await request(token, `/channel/message?channel=${channelId}&namespace=conversus`);
+      if (response?.status === 401) {
+        onTokenExpired();
         return;
       }
+      if (!response?.ok) {
+        setConnectionError(response ? "Les messages n'ont pas pu être chargés." : SERVER_DOWN);
+        return;
+      }
+      setConnectionError("");
       const data: Message[] | null = await response.json();
       setMessages((data ?? []).toReversed());
     }
@@ -78,68 +91,47 @@ function Chat({ token, onTokenExpired, onSwitch }: ChatProps) {
     loadMessages();
     const intervalId = setInterval(loadMessages, 2000);
     return () => clearInterval(intervalId);
-  }, [token, channelId]);
+  }, [token, channelId, onTokenExpired]);
   useEffect(() => {
     if (!messagesRef.current) return;
     messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
   }, [lastMessageId]);
+  // Shared ending of every action: true when it worked, otherwise the error is shown.
+  function checkResponse(response: Response | null, failure: string) {
+    if (response?.status === 401) {
+      onTokenExpired();
+      return false;
+    }
+    if (!response?.ok) {
+      setError(response ? failure : SERVER_DOWN);
+      return false;
+    }
+    setError("");
+    return true;
+  }
   async function handleLaunch(subject: string) {
-    const response = await fetch(
-      "http://localhost:4000/channel?namespace=conversus",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          name: `${subject}#${Date.now()}`,
-          metadata: {},
-        }),
-      },
-    );
-    if (!response.ok) {
-      console.log("débat refusé", response.status);
+    const failure = "Le ConVersus n'a pas pu être lancé. Réessaie.";
+    const response = await request(token, "/channel?namespace=conversus", {
+      name: `${subject}#${Date.now()}`,
+      metadata: {},
+    });
+    if (!checkResponse(response, failure)) {
+      setIsLaunching(false);
       return;
     }
-    const debate: Channel = await response.json();
-    await fetch("http://localhost:4000/channel/message?namespace=conversus", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        content: subject,
-        channel: debate.id,
-        metadata: {},
-      }),
-    });
+    const debate: Channel = await response!.json();
+    await request(token, MESSAGES, { content: subject, channel: debate.id, metadata: {} });
     for (const message of selectedMessages) {
-      await fetch("http://localhost:4000/channel/message?namespace=conversus", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          content: message.content,
-          channel: debate.id,
-          metadata: { author: message.user },
-        }),
+      await request(token, MESSAGES, {
+        content: message.content,
+        channel: debate.id,
+        metadata: { author: message.user },
       });
     }
-    await fetch("http://localhost:4000/channel/message?namespace=conversus", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        content: `a ouvert un ConVersus : ${subject}`,
-        channel: Number(channelId),
-        metadata: { channelName: debate.name },
-      }),
+    await request(token, MESSAGES, {
+      content: `a ouvert un ConVersus : ${subject}`,
+      channel: Number(channelId),
+      metadata: { channelName: debate.name },
     });
     navigate(`/debate/${debate.id}`);
   }
@@ -153,19 +145,9 @@ function Chat({ token, onTokenExpired, onSwitch }: ChatProps) {
       return;
     }
 
-    const response = await fetch("http://localhost:4000/channel/enter", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ channel: channelName }),
-    });
-    if (!response.ok) {
-      console.log("entrée refusée", response.status);
-      return;
-    }
-    const debate: Channel = await response.json();
+    const response = await request(token, "/channel/enter", { channel: channelName });
+    if (!checkResponse(response, "Impossible de rejoindre ce ConVersus. Réessaie.")) return;
+    const debate: Channel = await response!.json();
     navigate(`/debate/${debate.id}`);
   }
   function handleToggleSelecting() {
@@ -181,38 +163,28 @@ function Chat({ token, onTokenExpired, onSwitch }: ChatProps) {
   }
   async function handleSendMessage(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!channelId) return;
+    if (!channelId || sending) return;
     if (!content.trim()) return;
 
-    const response = await fetch(
-      "http://localhost:4000/channel/message?namespace=conversus",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          content,
-          channel: Number(channelId),
-          metadata: {},
-        }),
-      },
-    );
+    setSending(true);
+    const response = await request(token, MESSAGES, {
+      content,
+      channel: Number(channelId),
+      metadata: {},
+    });
+    setSending(false);
+    if (!checkResponse(response, "Message non envoyé. Réessaie.")) return;
 
-    if (!response.ok) {
-      console.log("message refusé", response.status);
-      return;
-    }
-
-    const message: Message = await response.json();
-    setMessages([...messages, message]);
+    const message: Message = await response!.json();
+    setMessages((current) => [...current, message]);
     setContent("");
   }
 
+  const shownError = error || connectionError;
+
   return (
     <main className="chat">
-      <Navbar channels={channels} onSwitch={onSwitch} onLogout={onTokenExpired} />
+      <Navbar channels={channels} username={username} onSwitch={onSwitch} onLogout={onTokenExpired} />
       <div className="chat-actions">
         <h2 className="channel-title">{currentChannel?.name}</h2>
         <button type="button" onClick={handleToggleSelecting}>
@@ -231,7 +203,10 @@ function Chat({ token, onTokenExpired, onSwitch }: ChatProps) {
             )}
             <span className="avatar">{message.user[0]}</span>
             <div className="message-body">
-              <strong>{message.user}</strong>
+              <strong>
+                {message.user}
+                {message.posted_at && <time dateTime={message.posted_at}>{formatTime(message.posted_at)}</time>}
+              </strong>
               <p>{message.content}</p>
               {message.metadata?.conversus?.channelName && (
                 <button
@@ -261,13 +236,14 @@ function Chat({ token, onTokenExpired, onSwitch }: ChatProps) {
           </button>
         </div>
       )}
+      {shownError && <p className="login-error send-error" role="alert">{shownError}</p>}
       <form className="message-form" onSubmit={handleSendMessage}>
         <input
           value={content}
           onChange={(event) => setContent(event.target.value)}
           placeholder="Écris ton message..."
         />
-        <button type="submit">Envoyer</button>
+        <button type="submit" disabled={sending}>Envoyer</button>
       </form>
       {isLaunching && (
         <LaunchModal

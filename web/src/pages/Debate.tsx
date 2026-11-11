@@ -13,8 +13,29 @@ import { useCamera } from "../hooks/useCamera";
 import { useGlide, type Spot } from "../hooks/useGlide";
 import MessageForm from "../components/MessageForm";
 import { fontFamily } from "../fonts";
+import { SERVER_DOWN, formatTime, request } from "../api";
 
 const ZOOM_STEP = 1.25;
+const MESSAGES = "/channel/message?namespace=conversus";
+
+// Bubble on a greyed reaction button.
+const ALREADY_GIVEN: Record<ReactionValue, string> = {
+  leaf: "Tu as déjà donné une Feuille",
+  thorn: "Tu as déjà donné une Épine",
+  wilt: "Tu as déjà fané ce message",
+};
+
+// One reaction of each kind per person and per message: an effect on my own message counts too.
+function hasReacted(reactions: Message[], message: Message, value: ReactionValue, myId: number | null) {
+  if (myId === null) return false;
+  if (message.user_id === myId && message.metadata?.conversus?.effect === value) return true;
+  return reactions.some(
+    (reaction) =>
+      reaction.user_id === myId &&
+      reaction.metadata?.conversus?.reactTo === message.id &&
+      reaction.metadata?.conversus?.value === value,
+  );
+}
 
 type DebateProps = { token: string; onTokenExpired: () => void; onSwitch: (newToken: string) => void };
 
@@ -75,6 +96,13 @@ function whoReacted(reactions: Message[], message: Message) {
 function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
   const { channelId } = useParams();
   const [channels, setChannels] = useState<Channel[]>([]);
+  const [username, setUsername] = useState("");
+  const [myId, setMyId] = useState<number | null>(null);
+  // error: an action failed; connectionError: the 2 s reload failed.
+  const [error, setError] = useState("");
+  const [connectionError, setConnectionError] = useState("");
+  // Reactions on their way to the server, as "messageId-value".
+  const [pendingReactions, setPendingReactions] = useState<string[]>([]);
   const [replies, setReplies] = useState<Message[]>([]);
   const [reactions, setReactions] = useState<Message[]>([]);
   const [positions, setPositions] = useState<Placement[]>([]);
@@ -133,24 +161,36 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
 
   useEffect(() => {
     async function loadChannels() {
-      const response = await fetch("http://localhost:4000/me", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!response.ok) return;
+      const response = await request(token, "/me");
+      if (response?.status === 401) {
+        onTokenExpired();
+        return;
+      }
+      if (!response?.ok) {
+        setConnectionError(SERVER_DOWN);
+        return;
+      }
       const profile = await response.json();
       setChannels(profile.channels);
+      setUsername(profile.username);
+      setMyId(profile.id);
     }
 
     loadChannels();
-  }, [token]);
+  }, [token, onTokenExpired]);
 
   useEffect(() => {
     async function loadMessages() {
-      const response = await fetch(
-        `http://localhost:4000/channel/message?channel=${channelId}&namespace=conversus`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      if (!response.ok) return;
+      const response = await request(token, `/channel/message?channel=${channelId}&namespace=conversus`);
+      if (response?.status === 401) {
+        onTokenExpired();
+        return;
+      }
+      if (!response?.ok) {
+        setConnectionError(response ? "Le débat n'a pas pu être chargé." : SERVER_DOWN);
+        return;
+      }
+      setConnectionError("");
       const data = await response.json();
       const messages: Message[] = (data ?? []).toReversed().slice(1);
       setReplies(messages.filter((message) => message.metadata?.conversus?.reactTo === undefined));
@@ -192,7 +232,7 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
     loadMessages();
     const intervalId = setInterval(loadMessages, 2000);
     return () => clearInterval(intervalId);
-  }, [token, channelId]);
+  }, [token, channelId, onTokenExpired]);
 
   useLayoutEffect(() => {
     const sizes = messageRefs.current.slice(0, replies.length).map((element) => ({
@@ -217,31 +257,42 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
     if (font) metadata.font = font;
     if (effect) metadata.effect = effect;
 
-    const response = await fetch(
-      "http://localhost:4000/channel/message?namespace=conversus",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          content,
-          channel: Number(channelId),
-          metadata,
-          anonymous,
-        }),
-      },
-    );
-    if (!response.ok) {
-      console.log("message refusé", response.status);
-      return false;
-    }
+    const response = await request(token, MESSAGES, {
+      content,
+      channel: Number(channelId),
+      metadata,
+      anonymous,
+    });
+    if (!checkResponse(response, "Message non envoyé. Réessaie.")) return false;
     setReplyingTo(null);
     return true;
   }
 
+  // Shared ending of every action: true when it worked, otherwise the error is shown.
+  function checkResponse(response: Response | null, failure: string) {
+    if (response?.status === 401) {
+      onTokenExpired();
+      return false;
+    }
+    if (!response?.ok) {
+      setError(response ? failure : SERVER_DOWN);
+      return false;
+    }
+    setError("");
+    return true;
+  }
+
+  function handleReply(message: Message) {
+    setReplyingTo(message);
+    document.querySelector<HTMLInputElement>(".message-form input")?.focus();
+  }
+
   async function handleReact(message: Message, value: ReactionValue) {
+    const key = `${message.id}-${value}`;
+    if (pendingReactions.includes(key) || hasReacted(reactions, message, value, myId)) return;
+    setPendingReactions((current) => [...current, key]);
+    // Close the buttons so they don't hide the effect on the branch.
+    setOpenId(null);
     if (value === "wilt") {
       ownWilts.current.push(message.id);
       setShowers([{ key: -Date.now(), target: message.id }]);
@@ -250,33 +301,27 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
       ownLeaves.current.push(message.id);
       setLeafArrival({ key: -Date.now(), target: message.id });
     }
-    const response = await fetch(
-      "http://localhost:4000/channel/message?namespace=conversus",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          content: "",
-          channel: Number(channelId),
-          metadata: { reactTo: message.id, value },
-          anonymous: reactAnonymously,
-        }),
-      },
-    );
-    if (!response.ok) {
-      console.log("réaction refusée", response.status);
+    const response = await request(token, MESSAGES, {
+      content: "",
+      channel: Number(channelId),
+      metadata: { reactTo: message.id, value },
+      anonymous: reactAnonymously,
+    });
+    if (checkResponse(response, "Réaction non envoyée. Réessaie.")) {
+      // Shown right away, so the button stays greyed until the next reload confirms it.
+      const created: Message = await response!.json();
+      setReactions((current) => [...current, created]);
+    } else {
       const own = value === "leaf" ? ownLeaves.current : ownWilts.current;
       const index = own.indexOf(message.id);
       if ((value === "wilt" || value === "leaf") && index !== -1) own.splice(index, 1);
     }
+    setPendingReactions((current) => current.filter((item) => item !== key));
   }
 
   return (
     <main className="chat debate">
-      <Navbar channels={channels} onSwitch={onSwitch} onLogout={onTokenExpired} />
+      <Navbar channels={channels} username={username} onSwitch={onSwitch} onLogout={onTokenExpired} />
       <h2 className="channel-title">{debate?.name.replace(/#\d+$/, "")}</h2>
       <div
         className="viewport"
@@ -303,42 +348,71 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
               ref={(element) => {
                 if (element) messageRefs.current[index] = element;
               }}
+              tabIndex={0}
               onClick={(event) => {
                 event.stopPropagation();
                 setOpenId(openId === message.id ? null : message.id);
               }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setOpenId(null);
+                // Only the message itself, not the buttons inside it.
+                if (event.target !== event.currentTarget) return;
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setOpenId(openId === message.id ? null : message.id);
+                }
+              }}
             >
-              <strong>{displayName(message)}</strong>
-              <p style={{ fontFamily: fontFamily(message.metadata?.conversus?.font) }}>{message.content}</p>
+              <strong>
+                {displayName(message)}
+                {openId === message.id && message.posted_at && (
+                  <time className="message-time" dateTime={message.posted_at}>{formatTime(message.posted_at)}</time>
+                )}
+              </strong>
+              <p
+                data-font={message.metadata?.conversus?.font}
+                style={{ fontFamily: fontFamily(message.metadata?.conversus?.font) }}
+              >
+                {message.content}
+              </p>
               {reactedBy[index].length > 0 && (
                 <div className="who-reacted">
                   {reactedBy[index].map((reaction) => (
                     <div key={reaction.value}>
-                      <ReactionIcon value={reaction.value} />
-                      {reaction.label} : <span>{reaction.names.join(", ")}</span>
+                      <ReactionIcon value={reaction.value} label={reaction.label} />
+                      <span>{reaction.names.join(", ")}</span>
                     </div>
                   ))}
                 </div>
               )}
               {openId === message.id && (
                 <div className="message-actions" onClick={(event) => event.stopPropagation()}>
+                  <button type="button" onClick={() => handleReply(message)}>Répondre</button>
                   {REACTIONS.map((reaction) => (
-                    <button type="button" key={reaction.value} onClick={() => handleReact(message, reaction.value)}>
+                    <button
+                      type="button"
+                      key={reaction.value}
+                      disabled={
+                        pendingReactions.includes(`${message.id}-${reaction.value}`) ||
+                        hasReacted(reactions, message, reaction.value, myId)
+                      }
+                      data-tip={hasReacted(reactions, message, reaction.value, myId) ? ALREADY_GIVEN[reaction.value] : reaction.label}
+                      aria-label={reaction.label}
+                      onClick={() => handleReact(message, reaction.value)}
+                    >
                       <ReactionIcon value={reaction.value} />
-                      {reaction.label}
                     </button>
                   ))}
                   <button
                     type="button"
                     className={reactAnonymously ? "on" : undefined}
-                    title={reactAnonymously ? "Réaction anonyme" : "Réagir sans révéler mon identité"}
-                    aria-label="Réaction anonyme"
+                    data-tip="Anonyme"
+                    aria-label="Anonyme"
                     aria-pressed={reactAnonymously}
                     onClick={() => setReactAnonymously(!reactAnonymously)}
                   >
                     <AnonymousIcon lit={reactAnonymously} />
                   </button>
-                  <button type="button" onClick={() => setReplyingTo(message)}>Répondre</button>
                 </div>
               )}
             </div>
@@ -349,13 +423,13 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => event.stopPropagation()}
         >
-          <button type="button" aria-label="Zoomer" title="Zoomer" onClick={() => zoomBy(ZOOM_STEP)}>
+          <button type="button" aria-label="Zoomer" data-tip="Zoomer" onClick={() => zoomBy(ZOOM_STEP)}>
             <CameraIcon action="zoomIn" />
           </button>
-          <button type="button" aria-label="Dézoomer" title="Dézoomer" onClick={() => zoomBy(1 / ZOOM_STEP)}>
+          <button type="button" aria-label="Dézoomer" data-tip="Dézoomer" onClick={() => zoomBy(1 / ZOOM_STEP)}>
             <CameraIcon action="zoomOut" />
           </button>
-          <button type="button" aria-label="Recentrer" title="Recentrer" onClick={recenter}>
+          <button type="button" aria-label="Recentrer" data-tip="Recentrer" onClick={recenter}>
             <CameraIcon action="recenter" />
           </button>
         </div>
@@ -368,7 +442,11 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
           <button type="button" onClick={() => setReplyingTo(null)}>Annuler</button>
         </div>
       )}
-      <MessageForm onSend={handleSendMessage} />
+      <MessageForm
+        onSend={handleSendMessage}
+        placeholder={replyingTo ? `Réponds à ${displayName(replyingTo)}…` : "Réponds au sujet…"}
+        error={error || connectionError}
+      />
     </main>
   );
 }

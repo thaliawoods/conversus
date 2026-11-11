@@ -9,10 +9,12 @@ type LaunchModalProps = {
 
 function LaunchModal({ messages, onCancel, onLaunch }: LaunchModalProps) {
   const [subject, setSubject] = useState(messages[0].content);
+  const [launching, setLaunching] = useState(false);
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!subject.trim()) return;
+    if (!subject.trim() || launching) return;
+    setLaunching(true);
     onLaunch(subject.trim());
   }
 
@@ -39,7 +41,7 @@ function LaunchModal({ messages, onCancel, onLaunch }: LaunchModalProps) {
           <button type="button" onClick={onCancel}>
             Annuler
           </button>
-          <button type="submit" disabled={!subject.trim()}>
+          <button type="submit" disabled={!subject.trim() || launching}>
             Lancer le ConVersus
           </button>
         </div>
