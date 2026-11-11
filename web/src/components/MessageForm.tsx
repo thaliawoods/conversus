@@ -1,27 +1,47 @@
 import { useState } from "react";
 import EmojiPicker, { EmojiStyle, Theme } from "emoji-picker-react";
 import { FONTS, fontFamily } from "../fonts";
-import ReactionIcon, { REACTIONS } from "./ReactionIcon";
 import AnonymousIcon from "./AnonymousIcon";
-import type { ReactionValue } from "../pages/Chat";
 
 type MessageFormProps = {
   onSend: (
     content: string,
     font: string | undefined,
-    effect: ReactionValue | undefined,
     anonymous: boolean,
+    useAI: boolean,
   ) => Promise<boolean>;
 };
 
-type Panel = "emoji" | "font" | "effect" | null;
+type Panel = "emoji" | "font" | null;
+
+const AI_KEY = "conversus-ia";
+
+// Choix mémorisé dans ce navigateur ; activé par défaut.
+function readUseAI() {
+  try {
+    return localStorage.getItem(AI_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
 
 function MessageForm({ onSend }: MessageFormProps) {
   const [content, setContent] = useState("");
   const [font, setFont] = useState<string | undefined>(undefined);
-  const [effect, setEffect] = useState<ReactionValue | undefined>(undefined);
+  const [sending, setSending] = useState(false);
   const [anonymous, setAnonymous] = useState(false);
   const [panel, setPanel] = useState<Panel>(null);
+  const [useAI, setUseAI] = useState(readUseAI);
+
+  function toggleAI() {
+    const next = !useAI;
+    setUseAI(next);
+    try {
+      localStorage.setItem(AI_KEY, next ? "on" : "off");
+    } catch {
+      // stockage indisponible : le choix vaut pour cette page seulement
+    }
+  }
 
   function togglePanel(name: Panel) {
     setPanel(panel === name ? null : name);
@@ -29,11 +49,12 @@ function MessageForm({ onSend }: MessageFormProps) {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!content.trim()) return;
-    const sent = await onSend(content, font, effect, anonymous);
+    if (!content.trim() || sending) return;
+    setSending(true);
+    const sent = await onSend(content, font, anonymous, useAI);
+    setSending(false);
     if (!sent) return;
     setContent("");
-    setEffect(undefined);
     setPanel(null);
   }
 
@@ -71,39 +92,6 @@ function MessageForm({ onSend }: MessageFormProps) {
             ))}
           </div>
         )}
-        {panel === "effect" && (
-          <div className="composer-panel">
-            <button
-              type="button"
-              className={effect === undefined ? "active" : undefined}
-              onClick={() => {
-                setEffect(undefined);
-                setPanel(null);
-              }}
-            >
-              Aucun
-            </button>
-            {REACTIONS.map((option) => (
-              <button
-                type="button"
-                key={option.value}
-                className={effect === option.value ? "active" : undefined}
-                onClick={() => {
-                  setEffect(option.value);
-                  setPanel(null);
-                }}
-              >
-                <ReactionIcon value={option.value} />
-                {option.label}
-              </button>
-            ))}
-          </div>
-        )}
-        {content && (
-          <p className="composer-preview" style={{ fontFamily: fontFamily(font) }}>
-            {content}
-          </p>
-        )}
       </div>
       <form className="message-form" onSubmit={handleSubmit}>
         <button
@@ -128,16 +116,6 @@ function MessageForm({ onSend }: MessageFormProps) {
         </button>
         <button
           type="button"
-          className={panel === "effect" ? "composer-tool on" : "composer-tool"}
-          title="Choisir l'effet"
-          aria-label="Choisir l'effet"
-          aria-expanded={panel === "effect"}
-          onClick={() => togglePanel("effect")}
-        >
-          ✦
-        </button>
-        <button
-          type="button"
           className={anonymous ? "composer-tool on" : "composer-tool"}
           title={anonymous ? "Mode anonyme activé" : "Envoyer sans révéler mon identité"}
           aria-label="Mode anonyme"
@@ -146,13 +124,23 @@ function MessageForm({ onSend }: MessageFormProps) {
         >
           <AnonymousIcon lit={anonymous} />
         </button>
+        <button
+          type="button"
+          className={useAI ? "composer-tool on" : "composer-tool"}
+          title={useAI ? "L'IA choisit l'allure de la branche (cliquer pour désactiver)" : "IA désactivée : branche sans style (cliquer pour activer)"}
+          aria-label="Style de branche par l'IA"
+          aria-pressed={useAI}
+          onClick={toggleAI}
+        >
+          IA
+        </button>
         <input
           value={content}
           onChange={(event) => setContent(event.target.value)}
           placeholder="Écris ton message..."
           style={{ fontFamily: fontFamily(font) }}
         />
-        <button type="submit">Envoyer</button>
+        <button type="submit" disabled={sending}>{sending ? "…" : "Envoyer"}</button>
       </form>
     </div>
   );

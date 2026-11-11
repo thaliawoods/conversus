@@ -67,7 +67,7 @@ func main() {
 
 	generalChannel, _ := channelRepo.GetByName(ctx, "general")
 	if generalChannel == nil {
-		generalChannel, err = channelRepo.Create(ctx, "general", nil)
+		generalChannel, err = channelRepo.Create(ctx, "general", json.RawMessage([]byte("{}")))
 		if err != nil {
 			log.Fatal(err)
 		}

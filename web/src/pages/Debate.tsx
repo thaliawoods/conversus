@@ -1,19 +1,18 @@
+import { API } from "../api";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router";
-import Navbar, { type Channel } from "../components/Navbar";
 import CameraIcon from "../components/CameraIcon";
 import Branches, { type Mark, type Stem } from "../components/Branches";
 import ReactionIcon, { REACTIONS } from "../components/ReactionIcon";
-import AnonymousIcon from "../components/AnonymousIcon";
-import type { Message, ReactionValue } from "./Chat";
+import { debateLabel, type Channel, type Message, type ReactionValue } from "../types";
 import { placeMessages, wiltSag, type Placement } from "../layout";
 import { useCamera } from "../hooks/useCamera";
 import MessageForm from "../components/MessageForm";
 import { fontFamily } from "../fonts";
+import { devinerStyle } from "../ia";
 
 const ZOOM_STEP = 1.25;
 
-type DebateProps = { token: string; onTokenExpired: () => void; onSwitch: (newToken: string) => void };
+type DebateProps = { token: string; debate: Channel; me: string | null };
 
 function findParents(replies: Message[]) {
   return replies.map((message) => {
@@ -46,6 +45,34 @@ function displayName(message: Message) {
   return message.anonymous || name === "anonymous" ? "Anonyme" : name;
 }
 
+// Mon message (pas les anonymes, ni les messages recopiés d'un autre auteur au lancement).
+function isMine(message: Message, me: string | null) {
+  if (!me || message.anonymous) return false;
+  return (message.metadata?.conversus?.author ?? message.user) === me;
+}
+
+// Fil d'un message : ceux auxquels il répond (jusqu'à la racine) et toutes ses réponses, de proche en proche.
+function threadOf(replies: Message[], id: number) {
+  const parentOf = new Map(replies.map((message) => [message.id, message.metadata?.conversus?.replyTo]));
+  const thread = new Set([id]);
+  let parent = parentOf.get(id);
+  while (parent !== undefined && parentOf.has(parent) && !thread.has(parent)) {
+    thread.add(parent);
+    parent = parentOf.get(parent);
+  }
+  const queue = [id];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    for (const message of replies) {
+      if (message.metadata?.conversus?.replyTo === current && !thread.has(message.id)) {
+        thread.add(message.id);
+        queue.push(message.id);
+      }
+    }
+  }
+  return thread;
+}
+
 function whoReacted(reactions: Message[], message: Message) {
   const own = reactions.filter((reaction) => reaction.metadata?.conversus?.reactTo === message.id);
   return REACTIONS.map((reaction) => {
@@ -57,16 +84,15 @@ function whoReacted(reactions: Message[], message: Message) {
   }).filter((reaction) => reaction.names.length > 0);
 }
 
-function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
-  const { channelId } = useParams();
-  const [channels, setChannels] = useState<Channel[]>([]);
+function Debate({ token, debate, me }: DebateProps) {
+  const channelId = debate.id;
   const [replies, setReplies] = useState<Message[]>([]);
   const [reactions, setReactions] = useState<Message[]>([]);
   const [positions, setPositions] = useState<Placement[]>([]);
   const messageRefs = useRef<HTMLDivElement[]>([]);
   const [openId, setOpenId] = useState<number | null>(null);
+  const [hoveredId, setHoveredId] = useState<number | null>(null);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
-  const [reactAnonymously, setReactAnonymously] = useState(false);
   const {
     camera,
     viewportRef,
@@ -77,7 +103,7 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
     recenter,
     zoomBy,
   } = useCamera();
-  const debate = channels.find((channel) => channel.id === Number(channelId));
+  const thread = useMemo(() => (hoveredId === null ? null : threadOf(replies, hoveredId)), [replies, hoveredId]);
   const reactedBy = replies.map((message) => whoReacted(reactions, message));
   const stems = useMemo(() => {
     const parents = findParents(replies);
@@ -92,22 +118,9 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
   }, [replies, reactions, positions]);
 
   useEffect(() => {
-    async function loadChannels() {
-      const response = await fetch("http://localhost:4000/me", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!response.ok) return;
-      const profile = await response.json();
-      setChannels(profile.channels);
-    }
-
-    loadChannels();
-  }, [token]);
-
-  useEffect(() => {
     async function loadMessages() {
       const response = await fetch(
-        `http://localhost:4000/channel/message?channel=${channelId}&namespace=conversus`,
+        `${API}/channel/message?channel=${channelId}&namespace=conversus`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
       if (!response.ok) return;
@@ -134,19 +147,16 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
     setPositions(placeMessages(sizes, parents, ids, sags, marks));
   }, [replies, reactions]);
 
-  async function handleSendMessage(
-    content: string,
-    font: string | undefined,
-    effect: ReactionValue | undefined,
-    anonymous: boolean,
-  ) {
+  async function handleSendMessage(content: string, font: string | undefined, anonymous: boolean, useAI: boolean) {
+    const subject = debateLabel(debate.name);
+    const effect = useAI ? await devinerStyle(subject, content, replyingTo?.content ?? null) : undefined;
     const metadata: { replyTo?: number; font?: string; effect?: ReactionValue } = {};
     if (replyingTo) metadata.replyTo = replyingTo.id;
     if (font) metadata.font = font;
     if (effect) metadata.effect = effect;
 
     const response = await fetch(
-      "http://localhost:4000/channel/message?namespace=conversus",
+      `${API}/channel/message?namespace=conversus`,
       {
         method: "POST",
         headers: {
@@ -155,7 +165,7 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
         },
         body: JSON.stringify({
           content,
-          channel: Number(channelId),
+          channel: channelId,
           metadata,
           anonymous,
         }),
@@ -169,30 +179,8 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
     return true;
   }
 
-  async function handleReact(message: Message, value: ReactionValue) {
-    const response = await fetch(
-      "http://localhost:4000/channel/message?namespace=conversus",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          content: "",
-          channel: Number(channelId),
-          metadata: { reactTo: message.id, value },
-          anonymous: reactAnonymously,
-        }),
-      },
-    );
-    if (!response.ok) console.log("réaction refusée", response.status);
-  }
-
   return (
-    <main className="chat debate">
-      <Navbar channels={channels} onSwitch={onSwitch} onLogout={onTokenExpired} />
-      <h2 className="channel-title">{debate?.name.replace(/#\d+$/, "")}</h2>
+    <div className="debate">
       <div
         className="viewport"
         ref={viewportRef}
@@ -203,14 +191,23 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
         onClickCapture={handleClickCapture}
         onClick={() => setOpenId(null)}
       >
-        <Branches stems={stems} camera={camera} />
+        <Branches stems={stems} camera={camera} highlight={thread} />
         <div className="board" style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})` }}>
           <div className="central-flower" role="img" aria-label="Sujet du débat" />
           {replies.map((message, index) => (
             <div
-              className={openId === message.id ? "board-message open" : "board-message"}
+              className={[
+                "board-message",
+                openId === message.id && "open",
+                thread?.has(message.id) && "lit",
+                thread && !thread.has(message.id) && "dimmed",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              onPointerEnter={() => setHoveredId(message.id)}
+              onPointerLeave={() => setHoveredId((current) => (current === message.id ? null : current))}
               key={message.id}
-              style={{ left: positions[index]?.x, top: positions[index]?.y }}
+              style={{ left: positions[index]?.x, top: positions[index]?.y, animationDelay: `${Math.min(index * 60, 900)}ms` }}
               ref={(element) => {
                 if (element) messageRefs.current[index] = element;
               }}
@@ -219,7 +216,7 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
                 setOpenId(openId === message.id ? null : message.id);
               }}
             >
-              <strong>{displayName(message)}</strong>
+              <strong className={isMine(message, me) ? "mine" : undefined}>{displayName(message)}</strong>
               <p style={{ fontFamily: fontFamily(message.metadata?.conversus?.font) }}>{message.content}</p>
               {reactedBy[index].length > 0 && (
                 <div className="who-reacted">
@@ -233,22 +230,6 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
               )}
               {openId === message.id && (
                 <div className="message-actions" onClick={(event) => event.stopPropagation()}>
-                  {REACTIONS.map((reaction) => (
-                    <button type="button" key={reaction.value} onClick={() => handleReact(message, reaction.value)}>
-                      <ReactionIcon value={reaction.value} />
-                      {reaction.label}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    className={reactAnonymously ? "on" : undefined}
-                    title={reactAnonymously ? "Réaction anonyme" : "Réagir sans révéler mon identité"}
-                    aria-label="Réaction anonyme"
-                    aria-pressed={reactAnonymously}
-                    onClick={() => setReactAnonymously(!reactAnonymously)}
-                  >
-                    <AnonymousIcon lit={reactAnonymously} />
-                  </button>
                   <button type="button" onClick={() => setReplyingTo(message)}>Répondre</button>
                 </div>
               )}
@@ -280,7 +261,7 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
         </div>
       )}
       <MessageForm onSend={handleSendMessage} />
-    </main>
+    </div>
   );
 }
 

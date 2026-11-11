@@ -29,6 +29,18 @@ const BLADE = 3;
 const UNDER_TEXT = 0.2;
 const TEXT_MARGIN = 4;
 const MAX_BOXES = 128;
+// Pousse des branches : durée en secondes, et part du temps consacrée au tronc
+// (le reste sert aux rameaux, feuilles et épines qui sortent une fois le tronc passé).
+const GROW_SECONDS = 2.4;
+const TRUNK_SHARE = 0.7;
+const TWIG_SHARE = 0.22;
+const FORK_SHARE = 0.12;
+const CREASE_SHARE = 0.08;
+const LEAF_SHARE = 0.28;
+// Survol : vitesse du fondu (s) et opacité laissée aux branches hors du fil survolé.
+const FOCUS_FADE = 0.12;
+const DIMMED = 0.22;
+const THORN_SHARE = 0.14;
 
 export type Mark = "leaf" | "thorn";
 export type Stem = { from: Placement | null; to: Placement; sag: number; id: number; marks: Mark[] };
@@ -97,8 +109,16 @@ function visibleRange(axis: Point[], from: Placement | null, to: Placement) {
   return { start: first / last, end: end / last };
 }
 
-function buildGeometry(stems: Stem[]) {
+function buildGeometry(stems: Stem[], births: Map<number, number>) {
   const positions: number[] = [];
+  const grows: number[] = [];
+  const nodeGrows: number[] = [];
+  // Message dont vient chaque sommet, pour allumer un fil au survol.
+  const lineStems: number[] = [];
+  const nodeStems: number[] = [];
+  let currentStem = 0;
+  // Moment où chaque morceau apparaît : début et durée (en fraction de la pousse) + naissance de la branche.
+  let growth = { start: 0, span: 1, birth: 0 };
   const normals: number[] = [];
   const sides: number[] = [];
   const along: number[] = [];
@@ -118,6 +138,8 @@ function buildGeometry(stems: Stem[]) {
         sides.push(side);
         along.push(k / last);
         widths.push(width.base, width.tip, shape || noise(seed, 5));
+        grows.push(growth.start + growth.span * (k / last), growth.birth);
+        lineStems.push(currentStem);
       }
       if (k < last) {
         const a = first + k * 2;
@@ -129,6 +151,8 @@ function buildGeometry(stems: Stem[]) {
   function addNode(point: Point, size: number, seed: number) {
     nodes.push(point.x, -point.y, 0);
     nodeSizes.push(size, noise(seed, 6) * 6.28);
+    nodeGrows.push(growth.start, growth.birth);
+    nodeStems.push(currentStem);
   }
 
   function curve(origin: { x: number; y: number }, start: number, turn: number, length: number, wobble = 0, seed = 0) {
@@ -221,7 +245,11 @@ function buildGeometry(stems: Stem[]) {
     const length = Math.hypot(end.x - start.x, end.y - start.y);
     const samples = Math.max(24, Math.round(length / POINT_GAP));
     const axis = Array.from({ length: samples + 1 }, (_, k) => pointOnStem(stem.from, stem.to, k / samples, stem.sag));
+    currentStem = stem.id;
     const trunk = organic(axis, length, stem.id);
+    const birth = births.get(stem.id) ?? 0;
+    const trunkAt = (index: number) => TRUNK_SHARE * (index / samples);
+    growth = { start: 0, span: TRUNK_SHARE, birth };
     addLine(trunk, TRUNK_WIDTH, stem.id);
 
     const range = visibleRange(axis, stem.from, stem.to);
@@ -240,7 +268,9 @@ function buildGeometry(stems: Stem[]) {
     const twigCount = 2 + Math.floor(noise(stem.id, 3) * 3);
     for (let j = 0; j < twigCount; j++) {
       const at = free(0.3 + ((j + noise(stem.id, 10 + j)) / twigCount) * 0.5, j % 2 === 0);
-      const base = trunk[indexAt(at)];
+      const baseIndex = indexAt(at);
+      const base = trunk[baseIndex];
+      growth = { start: trunkAt(baseIndex), span: TWIG_SHARE, birth };
       const side = (j + Math.floor(noise(stem.id, 4) * 2)) % 2 ? 1 : -1;
       const angle = (base.angle * Math.PI) / 180 + side * (0.45 + noise(stem.id, 20 + j) * 0.4);
       const reach = visible * (0.15 + noise(stem.id, 30 + j) * 0.15);
@@ -249,7 +279,9 @@ function buildGeometry(stems: Stem[]) {
       addNode(base, 4 + noise(stem.id, 35 + j) * 3, stem.id * 10 + j);
 
       if (noise(stem.id, 40 + j) > 0.35) {
-        const fork = twig[Math.round(twig.length * 0.55)];
+        const forkIndex = Math.min(twig.length - 1, Math.round(twig.length * 0.55));
+        const fork = twig[forkIndex];
+        growth = { start: trunkAt(baseIndex) + TWIG_SHARE * (forkIndex / (twig.length - 1)), span: FORK_SHARE, birth };
         const forkAngle = (fork.angle * Math.PI) / 180 - side * (0.5 + noise(stem.id, 45 + j) * 0.3);
         addLine(sprout(fork, forkAngle, reach * 0.5, -side, stem.id * 10 + j + 5), FORK_WIDTH, stem.id * 10 + j + 5);
         addNode(fork, 3, stem.id * 10 + j + 5);
@@ -259,7 +291,9 @@ function buildGeometry(stems: Stem[]) {
     const creases = 3 + Math.floor(noise(stem.id, 50) * 3);
     for (let c = 0; c < creases; c++) {
       const at = free(0.15 + noise(stem.id, 51 + c) * 0.75, c % 2 === 0);
-      const base = trunk[indexAt(at)];
+      const baseIndex = indexAt(at);
+      const base = trunk[baseIndex];
+      growth = { start: trunkAt(baseIndex), span: CREASE_SHARE, birth };
       const side = noise(stem.id, 60 + c) > 0.5 ? 1 : -1;
       const angle = (base.angle * Math.PI) / 180 + side * (0.25 + noise(stem.id, 70 + c) * 0.35);
       const reach = 4 + noise(stem.id, 80 + c) * 6;
@@ -268,12 +302,15 @@ function buildGeometry(stems: Stem[]) {
 
     const beads = Math.round(visible / 40);
     for (let b = 0; b < beads; b++) {
-      addNode(trunk[indexAt(0.1 + noise(stem.id, 90 + b) * 0.85)],2 + noise(stem.id, 95 + b) * 1.5, stem.id * 7 + b);
+      const index = indexAt(0.1 + noise(stem.id, 90 + b) * 0.85);
+      growth = { start: trunkAt(index), span: 0, birth };
+      addNode(trunk[index], 2 + noise(stem.id, 95 + b) * 1.5, stem.id * 7 + b);
     }
 
     stem.marks.forEach((mark, k) => {
       const index = indexAt(markPlaces[k]);
       const side = k % 2 === 0 ? 1 : -1;
+      growth = { start: trunkAt(index), span: mark === "leaf" ? LEAF_SHARE : THORN_SHARE, birth };
       if (mark === "leaf") addLeaf(trunk[index], side, stem.id * 1000 + k);
       else addThorn(trunk, index, side, stem.id * 1000 + k);
     });
@@ -285,12 +322,16 @@ function buildGeometry(stems: Stem[]) {
   lines.setAttribute("aSide", new THREE.Float32BufferAttribute(sides, 1));
   lines.setAttribute("aT", new THREE.Float32BufferAttribute(along, 1));
   lines.setAttribute("aWidth", new THREE.Float32BufferAttribute(widths, 3));
+  lines.setAttribute("aGrow", new THREE.Float32BufferAttribute(grows, 2));
+  lines.setAttribute("aLit", new THREE.Float32BufferAttribute(new Float32Array(lineStems.length), 1));
   lines.setIndex(indices);
 
   const points = new THREE.BufferGeometry();
   points.setAttribute("position", new THREE.Float32BufferAttribute(nodes, 3));
   points.setAttribute("aNode", new THREE.Float32BufferAttribute(nodeSizes, 2));
-  return { lines, points };
+  points.setAttribute("aGrow", new THREE.Float32BufferAttribute(nodeGrows, 2));
+  points.setAttribute("aLit", new THREE.Float32BufferAttribute(new Float32Array(nodeStems.length), 1));
+  return { lines, points, lineStems, nodeStems };
 }
 
 const SWAY_GLSL = `
@@ -313,6 +354,16 @@ float sweep(vec4 clip) {
 }
 `;
 
+// aGrow.x = moment d'apparition (0 = base du tronc, 1 = bout des feuilles), aGrow.y = naissance (s).
+const GROW_GLSL = `
+attribute vec2 aGrow;
+float grown() {
+  float progress = clamp((uTime - aGrow.y) / ${GROW_SECONDS.toFixed(2)}, 0.0, 1.0);
+  float eased = 1.0 - pow(1.0 - progress, 2.0);
+  return clamp((eased * 1.05 - aGrow.x) / 0.05, 0.0, 1.0);
+}
+`;
+
 const UNDER_TEXT_GLSL = `
 uniform vec4 uBoxes[${MAX_BOXES}];
 uniform int uBoxCount;
@@ -331,12 +382,26 @@ float shown(vec2 p) {
 
 const COLORS_GLSL = `
 const vec3 WHITE = vec3(1.0);
+const vec3 GOLD = vec3(1.0, 0.875, 0.306);
 const vec3 ICE = vec3(0.769, 0.902, 1.0);
 const vec3 BRIGHT = vec3(0.184, 0.384, 1.0);
 `;
 
+const FOCUS_GLSL = `
+attribute float aLit;
+uniform float uFocus;
+varying float vOn;
+varying float vDim;
+void focus() {
+  vOn = aLit * uFocus;
+  vDim = mix(1.0, ${DIMMED.toFixed(2)}, (1.0 - aLit) * uFocus);
+}
+`;
+
 const LINE_VERTEX = `
+${FOCUS_GLSL}
 ${SWAY_GLSL}
+${GROW_GLSL}
 ${UNDER_TEXT_GLSL}
 uniform float uZoom;
 uniform float uGlowRadius;
@@ -350,10 +415,13 @@ varying float vFade;
 varying float vBlade;
 varying float vShown;
 varying float vSweep;
+varying float vGrown;
 
 void main() {
   float t = aT;
-  vShown = shown(position.xy);
+  focus();
+  vGrown = grown();
+  vShown = shown(position.xy) * vGrown;
   float blade = step(2.5, aWidth.z);
   float spike = step(1.5, aWidth.z) - blade;
   float palm = 0.45 + 0.55 * abs(0.7 * sin(t * 6.0 + aWidth.z * 6.28) + 0.3 * sin(t * 15.0 + aWidth.z * 3.0));
@@ -366,8 +434,8 @@ void main() {
   teeth *= mix(1.0, lobes, blade);
   float lopsided = 1.0 + aSide * (aWidth.z - 3.225) * 2.0 * blade;
   float leaf = (aWidth.y + aWidth.x * pow(sin(3.14159 * pow(t, 0.75)), 0.8) * teeth * lopsided) * uZoom;
-  float core = line * (1.0 - spike - blade) + needle * spike + leaf * blade;
-  float halfWidth = core / 2.0 + uGlowRadius;
+  float core = (line * (1.0 - spike - blade) + needle * spike + leaf * blade) * mix(0.2, 1.0, vGrown);
+  float halfWidth = (core / 2.0 + uGlowRadius) * step(0.001, vGrown);
   vec3 p = position;
   p.xy += sway(p.xy) + aNormal * aSide * halfWidth / uZoom;
   vAcross = aSide * halfWidth;
@@ -381,6 +449,8 @@ void main() {
 
 const LINE_FRAGMENT = `
 ${COLORS_GLSL}
+varying float vOn;
+varying float vDim;
 uniform float uGlow;
 uniform float uGlowRadius;
 varying float vAcross;
@@ -411,13 +481,17 @@ void main() {
   a *= vShown;
   a = min(1.0, a * (1.0 + vSweep));
   color = mix(color, WHITE, vSweep * 0.5);
+  color = mix(color, mix(GOLD, WHITE, pow(center, 1.5) * 0.7), vOn);
+  a = min(1.0, a * (1.0 + 0.6 * vOn)) * vDim;
   if (a < 0.01) discard;
   gl_FragColor = vec4(color, a);
 }
 `;
 
 const NODE_VERTEX = `
+${FOCUS_GLSL}
 ${SWAY_GLSL}
+${GROW_GLSL}
 ${UNDER_TEXT_GLSL}
 uniform float uPixelRatio;
 attribute vec2 aNode;
@@ -426,8 +500,10 @@ varying float vPulse;
 void main() {
   vec3 p = position;
   p.xy += sway(p.xy);
-  vPulse = (0.75 + 0.25 * sin(uTime * 1.2 + aNode.y)) * shown(position.xy);
-  gl_PointSize = aNode.x * 4.0 * uPixelRatio;
+  focus();
+  float g = grown();
+  vPulse = (0.75 + 0.25 * sin(uTime * 1.2 + aNode.y)) * shown(position.xy) * g;
+  gl_PointSize = aNode.x * 4.0 * uPixelRatio * g;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
   vPulse *= 1.0 + sweep(gl_Position);
 }
@@ -436,14 +512,17 @@ void main() {
 const NODE_FRAGMENT = `
 ${COLORS_GLSL}
 varying float vPulse;
+varying float vOn;
+varying float vDim;
 
 void main() {
   float d = length(gl_PointCoord - 0.5) * 2.0;
   float core = 1.0 - smoothstep(0.12, 0.25, d);
   float glow = exp(-d * d * 5.0) * 0.45;
-  float a = max(core, glow) * vPulse;
+  float a = max(core, glow) * vPulse * vDim;
   if (a < 0.01) discard;
-  gl_FragColor = vec4(mix(BRIGHT, mix(ICE, WHITE, core), max(core, 0.4)), a);
+  vec3 color = mix(BRIGHT, mix(ICE, WHITE, core), max(core, 0.4));
+  gl_FragColor = vec4(mix(color, mix(GOLD, WHITE, core * 0.6), vOn), a);
 }
 `;
 
@@ -458,7 +537,23 @@ type View = {
   animated: boolean;
   boxes: THREE.Vector4[];
   boxCount: { value: number };
+  focus: { value: number };
+  focusTarget: number;
+  lineStems: number[];
+  nodeStems: number[];
 };
+
+function applyLit(view: View, lit: Set<number> | null) {
+  const paint = (geometry: THREE.BufferGeometry, stems: number[]) => {
+    const attribute = geometry.getAttribute("aLit") as THREE.BufferAttribute | undefined;
+    if (!attribute) return;
+    const values = attribute.array as Float32Array;
+    for (let i = 0; i < stems.length; i++) values[i] = lit?.has(stems[i]) ? 1 : 0;
+    attribute.needsUpdate = true;
+  };
+  paint(view.lines.geometry, view.lineStems);
+  paint(view.nodes.geometry, view.nodeStems);
+}
 
 function textBoxes(stems: Stem[], boxes: THREE.Vector4[]) {
   const messages = stems.map((stem) => stem.to).slice(0, MAX_BOXES);
@@ -479,12 +574,16 @@ function draw(view: View, camera: Camera) {
   view.renderer.render(view.scene, view.camera);
 }
 
-type BranchesProps = { stems: Stem[]; camera: Camera };
+// highlight : messages du fil survolé (null = rien de survolé).
+type BranchesProps = { stems: Stem[]; camera: Camera; highlight: Set<number> | null };
 
-function Branches({ stems, camera }: BranchesProps) {
+function Branches({ stems, camera, highlight }: BranchesProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewRef = useRef<View | null>(null);
   const cameraRef = useRef(camera);
+  const birthsRef = useRef(new Map<number, number>());
+  // Dernier fil allumé : gardé pendant le fondu de sortie.
+  const litRef = useRef<Set<number> | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -506,6 +605,7 @@ function Branches({ stems, camera }: BranchesProps) {
     orthographic.position.z = 10;
     const time = { value: 0 };
     const zoom = { value: 1 };
+    const focus = { value: 0 };
     const sway = { value: SWAY };
     const motion = { uBreath: { value: BREATH }, uSweep: { value: SWEEP } };
     const boxes = Array.from({ length: MAX_BOXES }, () => new THREE.Vector4());
@@ -515,6 +615,7 @@ function Branches({ stems, camera }: BranchesProps) {
       uniforms: {
         ...underText,
         ...motion,
+        uFocus: focus,
         uTime: time,
         uSway: sway,
         uZoom: zoom,
@@ -529,7 +630,7 @@ function Branches({ stems, camera }: BranchesProps) {
       blending: THREE.AdditiveBlending,
     });
     const nodeMaterial = new THREE.ShaderMaterial({
-      uniforms: { ...underText, ...motion, uTime: time, uSway: sway, uPixelRatio: { value: pixelRatio } },
+      uniforms: { ...underText, ...motion, uFocus: focus, uTime: time, uSway: sway, uPixelRatio: { value: pixelRatio } },
       vertexShader: NODE_VERTEX,
       fragmentShader: NODE_FRAGMENT,
       transparent: true,
@@ -543,7 +644,22 @@ function Branches({ stems, camera }: BranchesProps) {
     const flower = createCentralFlower({ time, zoom, pixelRatio });
     scene.add(lines, nodes, ...flower.layers);
     const animated = !matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const view: View = { renderer, scene, camera: orthographic, lines, nodes, width: 1, height: 1, animated, boxes, boxCount };
+    const view: View = {
+      renderer,
+      scene,
+      camera: orthographic,
+      lines,
+      nodes,
+      width: 1,
+      height: 1,
+      animated,
+      boxes,
+      boxCount,
+      focus,
+      focusTarget: 0,
+      lineStems: [],
+      nodeStems: [],
+    };
     viewRef.current = view;
 
     const observer = new ResizeObserver(() => {
@@ -556,7 +672,9 @@ function Branches({ stems, camera }: BranchesProps) {
 
     if (animated) {
       renderer.setAnimationLoop((now: number) => {
+        const dt = Math.min(0.1, Math.max(0, now / 1000 - time.value));
         time.value = now / 1000;
+        focus.value += (view.focusTarget - focus.value) * (1 - Math.exp(-dt / FOCUS_FADE));
         draw(view, cameraRef.current);
       });
     }
@@ -579,12 +697,34 @@ function Branches({ stems, camera }: BranchesProps) {
     if (!view) return;
     view.lines.geometry.dispose();
     view.nodes.geometry.dispose();
-    const geometry = buildGeometry(stems);
+    // Une branche pousse une seule fois, la première fois qu'on la voit.
+    const now = view.animated ? performance.now() / 1000 : -1e6;
+    for (const stem of stems) {
+      if (!birthsRef.current.has(stem.id)) birthsRef.current.set(stem.id, now);
+    }
+    const geometry = buildGeometry(stems, birthsRef.current);
     view.lines.geometry = geometry.lines;
     view.nodes.geometry = geometry.points;
+    view.lineStems = geometry.lineStems;
+    view.nodeStems = geometry.nodeStems;
+    applyLit(view, litRef.current);
     view.boxCount.value = textBoxes(stems, view.boxes);
     if (!view.animated) draw(view, cameraRef.current);
   }, [stems]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (highlight) {
+      litRef.current = highlight;
+      if (view) applyLit(view, highlight);
+    }
+    if (!view) return;
+    view.focusTarget = highlight ? 1 : 0;
+    if (!view.animated) {
+      view.focus.value = view.focusTarget;
+      draw(view, cameraRef.current);
+    }
+  }, [highlight]);
 
   useEffect(() => {
     cameraRef.current = camera;

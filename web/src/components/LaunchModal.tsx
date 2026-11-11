@@ -1,5 +1,6 @@
 import { useState } from "react";
-import type { Message } from "../pages/Chat";
+import { createPortal } from "react-dom";
+import type { Message } from "../types";
 
 type LaunchModalProps = {
   messages: Message[];
@@ -16,7 +17,8 @@ function LaunchModal({ messages, onCancel, onLaunch }: LaunchModalProps) {
     onLaunch(subject.trim());
   }
 
-  return (
+  // Rendue directement dans <body> : rien du board ne peut passer par-dessus.
+  return createPortal(
     <div className="modal-backdrop">
       <form className="modal" onSubmit={handleSubmit}>
         <h2>Ouvrir un ConVersus</h2>
@@ -44,7 +46,8 @@ function LaunchModal({ messages, onCancel, onLaunch }: LaunchModalProps) {
           </button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

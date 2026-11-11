@@ -1,3 +1,4 @@
+import { API } from "../api";
 import { Suspense, lazy, useEffect, useState } from "react";
 import Logo from "../components/Logo";
 
@@ -5,7 +6,6 @@ const Gladiolus = lazy(() => import("../login-flower/Gladiolus"));
 
 type LoginProps = { onLogin: (newToken: string) => void };
 
-const API = "http://localhost:4000";
 const SHAPE_FONTS = ["PicNic", "Coxinelle", "Nudles", "FixelPont", "LoveAndRage", "Frames"];
 
 function Login({ onLogin }: LoginProps) {

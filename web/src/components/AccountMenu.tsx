@@ -1,3 +1,4 @@
+import { API } from "../api";
 import { useState } from "react";
 
 const accounts = ["thalia", "clara"];
@@ -12,7 +13,7 @@ function AccountMenu({ onSwitch, onLogout }: AccountMenuProps) {
   const [current, setCurrent] = useState(localStorage.getItem("account") ?? "");
 
   async function handleSwitch(username: string) {
-    const response = await fetch("http://localhost:4000/login", {
+    const response = await fetch(`${API}/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password }),

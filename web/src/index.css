@@ -69,6 +69,8 @@
 
 :root {
   --white: #fff;
+  --violet: #b98cff;
+  --gold: #ffdf4e;
   --font-text: "PoppinsTN", system-ui, sans-serif;
   --night: #090b17;
   --background: radial-gradient(ellipse at 70% 40%, #141832 0%, #090b17 70%);

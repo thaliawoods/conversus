@@ -1,9 +1,14 @@
 import { useState } from "react";
-import { Navigate, Route, Routes } from "react-router";
-import Chat from "./pages/Chat";
+import { Navigate, Route, Routes, useParams } from "react-router";
 import Login from "./pages/Login";
-import Debate from "./pages/Debate";
+import Workspace from "./pages/Workspace";
 import "./App.css";
+
+// Anciennes adresses (/channel/12, /debate/34) : on les ramène sur l'espace unique.
+function LegacyRedirect({ kind }: { kind: "channel" | "debate" }) {
+  const { channelId } = useParams();
+  return <Navigate to={`/?${kind}=${channelId}`} replace />;
+}
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem("token") ?? "");
@@ -11,33 +16,25 @@ function App() {
     localStorage.removeItem("token");
     setToken("");
   }
-  const chatOrLogin = token ? (
-    <Chat token={token} onTokenExpired={handleTokenExpired} onSwitch={setToken} />
-  ) : (
-    <Navigate to="/login" replace />
-  );
 
   return (
-    <>
     <Routes>
+      <Route path="/login" element={token ? <Navigate to="/" replace /> : <Login onLogin={setToken} />} />
       <Route
-        path="/login"
-        element={token ? <Navigate to="/" replace /> : <Login onLogin={setToken} />}
-      />
-      <Route path="/" element={chatOrLogin} />
-      <Route path="/channel/:channelId" element={chatOrLogin} />
-      <Route
-        path="/debate/:channelId"
+        path="/"
         element={
           token ? (
-            <Debate token={token} onTokenExpired={handleTokenExpired} onSwitch={setToken} />
+            <Workspace token={token} onTokenExpired={handleTokenExpired} onSwitch={setToken} />
           ) : (
             <Navigate to="/login" replace />
           )
         }
       />
+      <Route path="/channel/:channelId" element={<LegacyRedirect kind="channel" />} />
+      <Route path="/debate/:channelId" element={<LegacyRedirect kind="debate" />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
-    </>
-  );}
+  );
+}
 
 export default App;

@@ -1,5 +1,5 @@
 import { useId } from "react";
-import type { ReactionValue } from "../pages/Chat";
+import type { ReactionValue } from "../types";
 
 export const REACTIONS: { value: ReactionValue; label: string }[] = [
   { value: "leaf", label: "Feuille" },
