@@ -43,6 +43,10 @@ const FORK_SHARE = 0.12;
 const CREASE_SHARE = 0.08;
 const LEAF_SHARE = 0.28;
 const THORN_SHARE = 0.14;
+// Hovered thread (from Kilian): fade speed (s), light left to the other branches, share of cyan.
+const FOCUS_FADE = 0.12;
+const DIMMED = 0.6;
+const THREAD_MIX = 0.85;
 // Seconds until the trunk reaches its message (same easing as sprouted() in the shader).
 export const ARRIVE_SECONDS = GROW_SECONDS * (1 - Math.sqrt(1 - TRUNK_SHARE / 1.05));
 
@@ -337,6 +341,8 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
   lines.setAttribute("aStem", new THREE.Float32BufferAttribute(stemIds, 1));
   lines.setAttribute("aFresh", new THREE.Float32BufferAttribute(freshOrders, 1));
   lines.setAttribute("aGrow", new THREE.Float32BufferAttribute(grows, 2));
+  // aLit = 1 on the hovered thread, filled by applyLit.
+  lines.setAttribute("aLit", new THREE.Float32BufferAttribute(new Float32Array(stemIds.length), 1));
   lines.setIndex(indices);
 
   const points = new THREE.BufferGeometry();
@@ -344,7 +350,8 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
   points.setAttribute("aNode", new THREE.Float32BufferAttribute(nodeSizes, 2));
   points.setAttribute("aStem", new THREE.Float32BufferAttribute(nodeStems, 1));
   points.setAttribute("aGrow", new THREE.Float32BufferAttribute(nodeGrows, 2));
-  return { lines, points };
+  points.setAttribute("aLit", new THREE.Float32BufferAttribute(new Float32Array(nodeStems.length), 1));
+  return { lines, points, stemIds, nodeStems };
 }
 
 const SWAY_GLSL = `
@@ -400,6 +407,18 @@ float sprouted() {
 }
 `;
 
+// uFocus = 0 to 1 while a message is hovered. vOn = on the thread, vDim = light kept.
+const FOCUS_GLSL = `
+attribute float aLit;
+uniform float uFocus;
+varying float vOn;
+varying float vDim;
+void focus() {
+  vOn = aLit * uFocus;
+  vDim = mix(1.0, ${DIMMED.toFixed(2)}, (1.0 - aLit) * uFocus);
+}
+`;
+
 const UNDER_TEXT_GLSL = `
 uniform vec4 uBoxes[${MAX_BOXES}];
 uniform int uBoxCount;
@@ -418,6 +437,7 @@ float shown(vec2 p) {
 
 const COLORS_GLSL = `
 const vec3 WHITE = vec3(1.0);
+const vec3 THREAD = vec3(0.561, 0.659, 1.0);
 const vec3 ICE = vec3(0.769, 0.902, 1.0);
 const vec3 BRIGHT = vec3(0.184, 0.384, 1.0);
 uniform vec3 uTint;
@@ -429,6 +449,7 @@ ${SWAY_GLSL}
 ${GROW_GLSL}
 ${ANGER_GLSL}
 ${UNDER_TEXT_GLSL}
+${FOCUS_GLSL}
 uniform float uZoom;
 uniform float uGlowRadius;
 attribute vec2 aNormal;
@@ -476,6 +497,7 @@ void main() {
   vCore = core / 2.0;
   vFade = max(smoothstep(0.0, 0.05, t), spike + blade);
   vBlade = blade;
+  focus();
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
   vSweep = sweep(gl_Position);
 }
@@ -494,6 +516,8 @@ varying float vFade;
 varying float vBlade;
 varying float vShown;
 varying float vSweep;
+varying float vOn;
+varying float vDim;
 
 void main() {
   vec3 bright = mix(BRIGHT, uTint, vAnger);
@@ -520,6 +544,9 @@ void main() {
   a *= step(vT, vReveal - 0.001);
   a = min(1.0, a * (1.0 + vSweep));
   color = mix(color, WHITE, vSweep * 0.5);
+  float threadLit = vOn * ${THREAD_MIX.toFixed(2)};
+  color = mix(color, mix(THREAD, WHITE, pow(center, 2.0) * 0.3), threadLit);
+  a = min(1.0, a * (1.0 + 0.6 * threadLit)) * vDim;
   if (a < 0.01) discard;
   gl_FragColor = vec4(color, a);
 }
@@ -530,6 +557,7 @@ ${SWAY_GLSL}
 ${GROW_GLSL}
 ${ANGER_GLSL}
 ${UNDER_TEXT_GLSL}
+${FOCUS_GLSL}
 uniform float uPixelRatio;
 attribute vec2 aNode;
 attribute float aStem;
@@ -541,6 +569,7 @@ void main() {
   float hit = targeted(aStem);
   p.xy += sway(p.xy) + shake(hit);
   vAnger = hit * uAngry;
+  focus();
   float growing = sprouted();
   vPulse = (0.75 + 0.25 * sin(uTime * 1.2 + aNode.y)) * shown(position.xy) * growing;
   gl_PointSize = aNode.x * 4.0 * uPixelRatio * growing;
@@ -553,6 +582,8 @@ const NODE_FRAGMENT = `
 ${COLORS_GLSL}
 varying float vPulse;
 varying float vAnger;
+varying float vOn;
+varying float vDim;
 
 void main() {
   vec3 bright = mix(BRIGHT, uTint, vAnger);
@@ -560,9 +591,10 @@ void main() {
   float d = length(gl_PointCoord - 0.5) * 2.0;
   float core = 1.0 - smoothstep(0.12, 0.25, d);
   float glow = exp(-d * d * 5.0) * 0.45;
-  float a = max(core, glow) * vPulse;
+  float a = max(core, glow) * vPulse * vDim;
   if (a < 0.01) discard;
-  gl_FragColor = vec4(mix(bright, mix(ice, WHITE, core), max(core, 0.4)), a);
+  vec3 color = mix(bright, mix(ice, WHITE, core), max(core, 0.4));
+  gl_FragColor = vec4(mix(color, mix(THREAD, WHITE, core * 0.6), vOn * ${THREAD_MIX.toFixed(2)}), a);
 }
 `;
 
@@ -585,7 +617,25 @@ type View = {
     uTint: { value: THREE.Vector3 };
   };
   angerStart: number | null;
+  // Hovered thread: current fade (uFocus), where it goes, and the message of each vertex.
+  focus: { value: number };
+  focusTarget: number;
+  lineStems: number[];
+  nodeStems: number[];
 };
+
+// Puts aLit = 1 on the vertices of the lit messages, 0 elsewhere.
+function applyLit(view: View, lit: Set<number> | null) {
+  const paint = (geometry: THREE.BufferGeometry, stems: number[]) => {
+    const attribute = geometry.getAttribute("aLit") as THREE.BufferAttribute | undefined;
+    if (!attribute) return;
+    const values = attribute.array as Float32Array;
+    for (let i = 0; i < stems.length; i++) values[i] = lit?.has(stems[i]) ? 1 : 0;
+    attribute.needsUpdate = true;
+  };
+  paint(view.lines.geometry, view.lineStems);
+  paint(view.nodes.geometry, view.nodeStems);
+}
 
 function angerEnvelope(age: number) {
   if (age < 0 || age > ANGER.duration) return 0;
@@ -612,18 +662,22 @@ function draw(view: View, camera: Camera) {
 }
 
 // sprouts: when each branch starts to grow, by message id (see useSprouts).
+// highlight: messages of the hovered thread (null = nothing hovered).
 type BranchesProps = {
   stems: Stem[];
   camera: Camera;
   thornArrival: Arrival | null;
   leafArrival: Arrival | null;
   sprouts: Map<number, Sprout>;
+  highlight: Set<number> | null;
 };
 
-function Branches({ stems, camera, thornArrival, leafArrival, sprouts }: BranchesProps) {
+function Branches({ stems, camera, thornArrival, leafArrival, sprouts, highlight }: BranchesProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewRef = useRef<View | null>(null);
   const cameraRef = useRef(camera);
+  // Last lit thread: kept while it fades out.
+  const litRef = useRef<Set<number> | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -649,6 +703,7 @@ function Branches({ stems, camera, thornArrival, leafArrival, sprouts }: Branche
     const motion = { uBreath: { value: BREATH }, uSweep: { value: SWEEP } };
     const boxes = Array.from({ length: MAX_BOXES }, () => new THREE.Vector4());
     const boxCount = { value: 0 };
+    const focus = { value: 0 };
     const underText = { uBoxes: { value: boxes }, uBoxCount: boxCount, uUnderText: { value: UNDER_TEXT } };
     // uAge 1000 = no animation running: every thorn fully shown.
     const anger = {
@@ -663,6 +718,7 @@ function Branches({ stems, camera, thornArrival, leafArrival, sprouts }: Branche
         ...underText,
         ...motion,
         ...anger,
+        uFocus: focus,
         uTime: time,
         uSway: sway,
         uZoom: zoom,
@@ -677,7 +733,7 @@ function Branches({ stems, camera, thornArrival, leafArrival, sprouts }: Branche
       blending: THREE.AdditiveBlending,
     });
     const nodeMaterial = new THREE.ShaderMaterial({
-      uniforms: { ...underText, ...motion, ...anger, uTime: time, uSway: sway, uPixelRatio: { value: pixelRatio } },
+      uniforms: { ...underText, ...motion, ...anger, uFocus: focus, uTime: time, uSway: sway, uPixelRatio: { value: pixelRatio } },
       vertexShader: NODE_VERTEX,
       fragmentShader: NODE_FRAGMENT,
       transparent: true,
@@ -693,6 +749,7 @@ function Branches({ stems, camera, thornArrival, leafArrival, sprouts }: Branche
     const animated = !matchMedia("(prefers-reduced-motion: reduce)").matches;
     const view: View = {
       renderer, scene, camera: orthographic, lines, nodes, width: 1, height: 1, animated, boxes, boxCount, anger, angerStart: null,
+      focus, focusTarget: 0, lineStems: [], nodeStems: [],
     };
     viewRef.current = view;
 
@@ -706,7 +763,10 @@ function Branches({ stems, camera, thornArrival, leafArrival, sprouts }: Branche
 
     if (animated) {
       renderer.setAnimationLoop((now: number) => {
+        const dt = Math.min(0.1, Math.max(0, now / 1000 - time.value));
         time.value = now / 1000;
+        // The lit thread fades in and out instead of switching at once.
+        focus.value += (view.focusTarget - focus.value) * (1 - Math.exp(-dt / FOCUS_FADE));
         if (view.angerStart !== null) {
           const age = time.value - view.angerStart;
           const over = age > ANGER.duration;
@@ -742,9 +802,27 @@ function Branches({ stems, camera, thornArrival, leafArrival, sprouts }: Branche
     const geometry = buildGeometry(stems, births);
     view.lines.geometry = geometry.lines;
     view.nodes.geometry = geometry.points;
+    view.lineStems = geometry.stemIds;
+    view.nodeStems = geometry.nodeStems;
+    applyLit(view, litRef.current);
     view.boxCount.value = textBoxes(stems, view.boxes);
     if (!view.animated) draw(view, cameraRef.current);
   }, [stems, sprouts]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    // On leaving, keep the old thread lit so it can fade out.
+    if (highlight) {
+      litRef.current = highlight;
+      if (view) applyLit(view, highlight);
+    }
+    if (!view) return;
+    view.focusTarget = highlight ? 1 : 0;
+    if (!view.animated) {
+      view.focus.value = view.focusTarget;
+      draw(view, cameraRef.current);
+    }
+  }, [highlight]);
 
   // Épine and Feuille share the same 2 s tint: the latest one to arrive wins.
   function tint(arrival: Arrival | null, kind: keyof typeof TINT) {

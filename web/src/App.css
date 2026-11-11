@@ -770,43 +770,43 @@
   z-index: 2;
 }
 
+/* Line under the message. It keeps its place even when hidden, so the layout
+   counts it: other messages stay away and stems fade under it like under the text. */
 .who-reacted {
-  position: absolute;
-  left: 0;
-  bottom: 100%;
-  margin-bottom: 0.4rem;
-  display: none;
-  flex-direction: column;
-  gap: 0.3rem;
-  width: max-content;
-  max-width: 20rem;
-  padding: 0.5rem 0.8rem;
-  border: 1px solid var(--line);
-  background: var(--night);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 1rem;
+  margin-top: 0.45rem;
+  font-family: "Josafronde", var(--font-text);
+  font-size: 0.78rem;
+  font-weight: 400;
   color: var(--ice-soft);
-  font-size: 0.8rem;
+  text-shadow: 0 0 6px var(--night), 0 0 12px var(--night);
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.3s ease, visibility 0.3s;
   pointer-events: none;
 }
 
 /* Only on hover (or keyboard focus), never just because the message was clicked */
 .board-message:hover .who-reacted,
 .board-message:focus-visible .who-reacted {
-  display: flex;
+  visibility: visible;
+  opacity: 1;
 }
 
 .who-reacted div {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.3rem;
 }
 
 .who-reacted .reaction-icon {
-  width: 1.1rem;
-  height: 1.1rem;
+  width: 0.95rem;
+  height: 0.95rem;
 }
 
 .who-reacted span {
-  color: var(--white);
   text-transform: capitalize;
 }
 

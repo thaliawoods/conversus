@@ -47,6 +47,28 @@ function findParents(replies: Message[]) {
   });
 }
 
+// Thread of a message (from Kilian): the ones it answers, up to the flower, and all its answers.
+function threadOf(replies: Message[], id: number) {
+  const parentOf = new Map(replies.map((message) => [message.id, message.metadata?.conversus?.replyTo]));
+  const thread = new Set([id]);
+  let parent = parentOf.get(id);
+  while (parent !== undefined && parentOf.has(parent) && !thread.has(parent)) {
+    thread.add(parent);
+    parent = parentOf.get(parent);
+  }
+  const queue = [id];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    for (const message of replies) {
+      if (message.metadata?.conversus?.replyTo === current && !thread.has(message.id)) {
+        thread.add(message.id);
+        queue.push(message.id);
+      }
+    }
+  }
+  return thread;
+}
+
 function countWilts(reactions: Message[], message: Message) {
   const fromReactions = reactions.filter(
     (reaction) =>
@@ -109,6 +131,7 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
   const [positions, setPositions] = useState<Placement[]>([]);
   const messageRefs = useRef<HTMLDivElement[]>([]);
   const [openId, setOpenId] = useState<number | null>(null);
+  const [hoveredId, setHoveredId] = useState<number | null>(null);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [reactAnonymously, setReactAnonymously] = useState(false);
   const [showers, setShowers] = useState<Shower[]>([]);
@@ -152,6 +175,7 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
       return [{ from, to, sag: to.sag, id: message.id, marks }];
     });
   }, [replies, reactions, shown]);
+  const thread = useMemo(() => (hoveredId === null ? null : threadOf(replies, hoveredId)), [replies, hoveredId]);
   // Screen position of the message an Épine or a Feuille aims at, where its veil is strongest.
   function veilAt(arrival: Arrival) {
     const target = shown.get(arrival.target);
@@ -338,7 +362,7 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
         {thornArrival && <div className="thorn-veil" key={thornArrival.key} style={veilAt(thornArrival)} aria-hidden />}
         {leafArrival && <div className="leaf-veil" key={leafArrival.key} style={veilAt(leafArrival)} aria-hidden />}
         <Rain showers={showers} stems={stems} camera={camera} />
-        <Branches stems={stems} camera={camera} thornArrival={thornArrival} leafArrival={leafArrival} sprouts={sprouts} />
+        <Branches stems={stems} camera={camera} thornArrival={thornArrival} leafArrival={leafArrival} sprouts={sprouts} highlight={thread} />
         <Leaves arrival={leafArrival} stems={stems} camera={camera} />
         <div className="board" style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})` }}>
           <div className="central-flower" role="img" aria-label="Sujet du débat" />
@@ -351,6 +375,10 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
                 if (element) messageRefs.current[index] = element;
               }}
               tabIndex={0}
+              onPointerEnter={() => setHoveredId(message.id)}
+              onPointerLeave={() => setHoveredId((current) => (current === message.id ? null : current))}
+              onFocus={() => setHoveredId(message.id)}
+              onBlur={() => setHoveredId((current) => (current === message.id ? null : current))}
               onClick={(event) => {
                 event.stopPropagation();
                 setOpenId(openId === message.id ? null : message.id);
