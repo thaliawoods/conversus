@@ -640,12 +640,47 @@
   overflow: visible;
 }
 
+.rain,
+.leaves,
 .branches {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   pointer-events: none;
+}
+
+/* Épine: ember veil, strongest around the message, 2 s (0.3 s in, 0.8 s out). */
+.thorn-veil {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), rgba(90, 26, 10, 0.42), rgba(90, 26, 10, 0.2) 70%);
+  opacity: 0;
+  animation: thorn-veil 2s linear forwards;
+}
+
+@keyframes thorn-veil {
+  15% { opacity: 1; }
+  60% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Feuille: raspberry veil, same timing as Épine. */
+.leaf-veil {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), rgba(64, 16, 46, 0.42), rgba(64, 16, 46, 0.2) 70%);
+  opacity: 0;
+  animation: thorn-veil 2s linear forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thorn-veil,
+  .leaf-veil {
+    display: none;
+  }
 }
 
 .flower {

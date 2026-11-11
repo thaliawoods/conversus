@@ -1,13 +1,16 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useParams } from "react-router";
 import Navbar, { type Channel } from "../components/Navbar";
 import CameraIcon from "../components/CameraIcon";
-import Branches, { type Mark, type Stem } from "../components/Branches";
+import Branches, { type Arrival, type Mark, type Stem } from "../components/Branches";
+import Rain, { type Shower } from "../components/Rain";
+import Leaves from "../components/Leaves";
 import ReactionIcon, { REACTIONS } from "../components/ReactionIcon";
 import AnonymousIcon from "../components/AnonymousIcon";
 import type { Message, ReactionValue } from "./Chat";
 import { placeMessages, wiltSag, type Placement } from "../layout";
 import { useCamera } from "../hooks/useCamera";
+import { useGlide, type Spot } from "../hooks/useGlide";
 import MessageForm from "../components/MessageForm";
 import { fontFamily } from "../fonts";
 
@@ -41,6 +44,18 @@ function marksOf(reactions: Message[], message: Message) {
   ].filter((value): value is Mark => value === "leaf" || value === "thorn");
 }
 
+// Every reaction of one kind in the debate: a reaction aims at reactTo, an effect at its own message.
+function arrivalsOf(messages: Message[], value: ReactionValue): Arrival[] {
+  return messages.flatMap((message) => {
+    const conversus = message.metadata?.conversus;
+    if (conversus?.value === value && conversus.reactTo !== undefined) {
+      return [{ key: message.id, target: conversus.reactTo }];
+    }
+    if (conversus?.effect === value) return [{ key: message.id, target: message.id }];
+    return [];
+  });
+}
+
 function displayName(message: Message) {
   const name = message.metadata?.conversus?.author ?? message.user;
   return message.anonymous || name === "anonymous" ? "Anonyme" : name;
@@ -67,6 +82,12 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
   const [openId, setOpenId] = useState<number | null>(null);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [reactAnonymously, setReactAnonymously] = useState(false);
+  const [showers, setShowers] = useState<Shower[]>([]);
+  const [thornArrival, setThornArrival] = useState<Arrival | null>(null);
+  const [leafArrival, setLeafArrival] = useState<Arrival | null>(null);
+  const seenReactions = useRef<Set<number> | null>(null);
+  const ownWilts = useRef<number[]>([]);
+  const ownLeaves = useRef<number[]>([]);
   const {
     camera,
     viewportRef,
@@ -79,17 +100,36 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
   } = useCamera();
   const debate = channels.find((channel) => channel.id === Number(channelId));
   const reactedBy = replies.map((message) => whoReacted(reactions, message));
+  // Where each message should be, then where it is shown while it slides there.
+  const targets = useMemo(
+    () =>
+      new Map(
+        replies.flatMap((message, index): [number, Spot][] =>
+          positions[index] ? [[message.id, { ...positions[index], sag: wiltSag(countWilts(reactions, message)) }]] : [],
+        ),
+      ),
+    [replies, reactions, positions],
+  );
+  const shown = useGlide(targets);
   const stems = useMemo(() => {
     const parents = findParents(replies);
     return replies.flatMap((message, index): Stem[] => {
-      const to = positions[index];
+      const to = shown.get(message.id);
       if (!to) return [];
       const parent = parents[index];
-      const from = parent === null ? null : positions[parent];
+      const from = parent === null ? null : (shown.get(replies[parent].id) ?? null);
       const marks = marksOf(reactions, message);
-      return [{ from, to, sag: wiltSag(countWilts(reactions, message)), id: message.id, marks }];
+      return [{ from, to, sag: to.sag, id: message.id, marks }];
     });
-  }, [replies, reactions, positions]);
+  }, [replies, reactions, shown]);
+  // Screen position of the message an Épine or a Feuille aims at, where its veil is strongest.
+  function veilAt(arrival: Arrival) {
+    const target = shown.get(arrival.target);
+    return target && ({
+      "--x": `calc(50% + ${camera.x + target.x * camera.zoom}px)`,
+      "--y": `calc(50% + ${camera.y + target.y * camera.zoom}px)`,
+    } as CSSProperties);
+  }
 
   useEffect(() => {
     async function loadChannels() {
@@ -115,8 +155,40 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
       const messages: Message[] = (data ?? []).toReversed().slice(1);
       setReplies(messages.filter((message) => message.metadata?.conversus?.reactTo === undefined));
       setReactions(messages.filter((message) => message.metadata?.conversus?.reactTo !== undefined));
+
+      const wilts = arrivalsOf(messages, "wilt");
+      const thorns = arrivalsOf(messages, "thorn");
+      const leaves = arrivalsOf(messages, "leaf");
+      if (seenReactions.current === null) {
+        seenReactions.current = new Set([...wilts, ...thorns, ...leaves].map((arrival) => arrival.key));
+        return;
+      }
+      const seen = seenReactions.current;
+      const freshWilts = wilts.filter((wilt) => !seen.has(wilt.key));
+      const freshThorns = thorns.filter((thorn) => !seen.has(thorn.key));
+      const freshLeaves = leaves.filter((leaf) => !seen.has(leaf.key));
+      [...freshWilts, ...freshThorns, ...freshLeaves].forEach((arrival) => seen.add(arrival.key));
+      // One Épine and one Feuille at a time: the latest one wins.
+      if (freshThorns.length > 0) setThornArrival(freshThorns[freshThorns.length - 1]);
+      // My own leaves already flew at the click: don't play them twice.
+      const leavesToPlay = freshLeaves.filter((leaf) => {
+        const index = ownLeaves.current.indexOf(leaf.target);
+        if (index === -1) return true;
+        ownLeaves.current.splice(index, 1);
+        return false;
+      });
+      if (leavesToPlay.length > 0) setLeafArrival(leavesToPlay[leavesToPlay.length - 1]);
+      // My own wilts already rained at the click: don't play them twice.
+      const toPlay = freshWilts.filter((wilt) => {
+        const index = ownWilts.current.indexOf(wilt.target);
+        if (index === -1) return true;
+        ownWilts.current.splice(index, 1);
+        return false;
+      });
+      if (toPlay.length > 0) setShowers(toPlay);
     }
 
+    seenReactions.current = null;
     loadMessages();
     const intervalId = setInterval(loadMessages, 2000);
     return () => clearInterval(intervalId);
@@ -170,6 +242,14 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
   }
 
   async function handleReact(message: Message, value: ReactionValue) {
+    if (value === "wilt") {
+      ownWilts.current.push(message.id);
+      setShowers([{ key: -Date.now(), target: message.id }]);
+    }
+    if (value === "leaf") {
+      ownLeaves.current.push(message.id);
+      setLeafArrival({ key: -Date.now(), target: message.id });
+    }
     const response = await fetch(
       "http://localhost:4000/channel/message?namespace=conversus",
       {
@@ -186,7 +266,12 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
         }),
       },
     );
-    if (!response.ok) console.log("réaction refusée", response.status);
+    if (!response.ok) {
+      console.log("réaction refusée", response.status);
+      const own = value === "leaf" ? ownLeaves.current : ownWilts.current;
+      const index = own.indexOf(message.id);
+      if ((value === "wilt" || value === "leaf") && index !== -1) own.splice(index, 1);
+    }
   }
 
   return (
@@ -203,14 +288,18 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
         onClickCapture={handleClickCapture}
         onClick={() => setOpenId(null)}
       >
-        <Branches stems={stems} camera={camera} />
+        {thornArrival && <div className="thorn-veil" key={thornArrival.key} style={veilAt(thornArrival)} aria-hidden />}
+        {leafArrival && <div className="leaf-veil" key={leafArrival.key} style={veilAt(leafArrival)} aria-hidden />}
+        <Rain showers={showers} stems={stems} camera={camera} />
+        <Branches stems={stems} camera={camera} thornArrival={thornArrival} leafArrival={leafArrival} />
+        <Leaves arrival={leafArrival} stems={stems} camera={camera} />
         <div className="board" style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})` }}>
           <div className="central-flower" role="img" aria-label="Sujet du débat" />
           {replies.map((message, index) => (
             <div
               className={openId === message.id ? "board-message open" : "board-message"}
               key={message.id}
-              style={{ left: positions[index]?.x, top: positions[index]?.y }}
+              style={{ left: shown.get(message.id)?.x, top: shown.get(message.id)?.y }}
               ref={(element) => {
                 if (element) messageRefs.current[index] = element;
               }}

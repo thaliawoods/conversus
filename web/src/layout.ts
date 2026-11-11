@@ -12,7 +12,7 @@ export function overlaps(a: Box, b: Box) {
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 const SPACING = 10;
 const GAP = 16;
-const FLOWER_RADIUS = 48;
+const FLOWER_RADIUS = 64;
 
 function spiralPoint(k: number, offset: number) {
   const angle = k * GOLDEN_ANGLE + offset;
@@ -140,6 +140,9 @@ function tiltDown(point: Point, center: Point, tilt: number) {
 
 let lastKey = "";
 let lastPositions: Placement[] = [];
+// Where each message was put, measured from its parent, and the data it was placed with.
+const remembered = new Map<number, { dx: number; dy: number; inputs: string }>();
+const KEEP_RULE: Rule = { cone: null, stems: true, sideways: false };
 
 export function placeMessages(
   sizes: Size[],
@@ -204,9 +207,20 @@ export function placeMessages(
       return center;
     };
 
-    let point = search(origin, RULES);
-    const tilt = sag / (WILT_MAX * WILT_SAG);
-    if (tilt > 0) point = search(tiltDown(point, origin, tilt), WILT_RULES);
+    // Keep the old place if this message's own data didn't change and the place still fits.
+    const id = ids[index];
+    const inputs = JSON.stringify([size, parent === null ? null : ids[parent], sag, marks[index] ?? 0]);
+    const memory = remembered.get(id);
+    const kept = memory && memory.inputs === inputs ? { x: origin.x + memory.dx, y: origin.y + memory.dy } : null;
+    let point: Point;
+    if (kept && fits(kept, KEEP_RULE)) {
+      point = kept;
+    } else {
+      point = search(origin, RULES);
+      const tilt = sag / (WILT_MAX * WILT_SAG);
+      if (tilt > 0) point = search(tiltDown(point, origin, tilt), WILT_RULES);
+    }
+    remembered.set(id, { dx: point.x - origin.x, dy: point.y - origin.y, inputs });
     if (parent === null) flowerChildren++;
 
     const points = sampleStem(origin, point, sag);
