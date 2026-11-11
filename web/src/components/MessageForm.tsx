@@ -2,6 +2,7 @@ import { useState } from "react";
 import EmojiPicker, { EmojiStyle, Theme } from "emoji-picker-react";
 import { FONTS, fontFamily } from "../fonts";
 import ReactionIcon, { REACTIONS } from "./ReactionIcon";
+import AnonymousIcon from "./AnonymousIcon";
 import type { ReactionValue } from "../pages/Chat";
 
 type MessageFormProps = {
@@ -143,7 +144,7 @@ function MessageForm({ onSend }: MessageFormProps) {
           aria-pressed={anonymous}
           onClick={() => setAnonymous(!anonymous)}
         >
-          <img src="/anonyme.png" alt="" />
+          <AnonymousIcon lit={anonymous} />
         </button>
         <input
           value={content}

@@ -14,18 +14,29 @@ const SPACING = 10;
 const GAP = 16;
 const FLOWER_RADIUS = 48;
 
-function spiralPoint(k: number) {
-  const angle = k * GOLDEN_ANGLE;
+function spiralPoint(k: number, offset: number) {
+  const angle = k * GOLDEN_ANGLE + offset;
   const radius = SPACING * Math.sqrt(k);
   return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
 }
 
+function pseudoRandom(id: number, seed: number) {
+  const noise = Math.sin(id * seed) * 43758.5453;
+  return noise - Math.floor(noise);
+}
+
 const STEM_MIN = 30;
 const STEM_MAX = 120;
+const MARKED_STEM_MIN = 60;
+const MARKED_STEM_MAX = 180;
+const STEM_PER_MARK = 15;
+const STEM_MARK_LIMIT = 4;
 
-function stemLength(id: number) {
-  const noise = Math.sin(id * 12.9898) * 43758.5453;
-  return STEM_MIN + (noise - Math.floor(noise)) * (STEM_MAX - STEM_MIN);
+function stemLength(id: number, marks: number) {
+  const random = pseudoRandom(id, 12.9898);
+  if (marks === 0) return STEM_MIN + random * (STEM_MAX - STEM_MIN);
+  const extra = (Math.min(marks, STEM_MARK_LIMIT) - 1) * STEM_PER_MARK;
+  return MARKED_STEM_MIN + random * (MARKED_STEM_MAX - MARKED_STEM_MIN) + extra;
 }
 
 export type Size = { width: number; height: number };
@@ -42,15 +53,79 @@ function boxAround(point: Point, size: Size): Box {
   };
 }
 
-function findSpot(origin: Point, size: Size, reserved: Box, placed: Box[]) {
-  for (let k = 0; ; k++) {
-    const spiral = spiralPoint(k);
-    const point = { x: origin.x + spiral.x, y: origin.y + spiral.y };
-    const box = boxAround(point, size);
-    if (!overlaps(box, reserved) && placed.every((other) => !overlaps(box, other))) {
-      return point;
+const FLOWER_RING = FLOWER_RADIUS + 30;
+const PARENT_RING = 70;
+const CONE = Math.PI / 3;
+const WIDE_CONE = Math.PI / 2;
+const AXIS = Math.PI / 9;
+const SEARCH_LIMIT = 4000;
+const STEM_SAMPLES = 16;
+const BOX_MARGIN = 2;
+
+type Rule = { cone: number | null; stems: boolean; sideways: boolean };
+
+const RULES: Rule[] = [
+  { cone: CONE, stems: true, sideways: true },
+  { cone: CONE, stems: true, sideways: false },
+  { cone: WIDE_CONE, stems: true, sideways: false },
+  { cone: null, stems: true, sideways: false },
+  { cone: null, stems: false, sideways: false },
+];
+const WILT_RULES = RULES.slice(3);
+
+type Line = { from: number | null; to: number; points: Point[]; bounds: Box };
+
+function findSpot(center: Point, offset: number, accept: (point: Point) => boolean, limit: number) {
+  for (let k = 0; k < limit; k++) {
+    const spiral = spiralPoint(k, offset);
+    const point = { x: center.x + spiral.x, y: center.y + spiral.y };
+    if (accept(point)) return point;
+  }
+  return null;
+}
+
+function sampleStem(from: Point, to: Point, sag: number) {
+  const { start, c1, c2, end } = stemCurve(from, to, sag);
+  return Array.from({ length: STEM_SAMPLES + 1 }, (_, i) => ({
+    x: cubic(start.x, c1.x, c2.x, end.x, i / STEM_SAMPLES),
+    y: cubic(start.y, c1.y, c2.y, end.y, i / STEM_SAMPLES),
+  }));
+}
+
+function boundsOf(points: Point[]): Box {
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  return { left: Math.min(...xs) - 1, top: Math.min(...ys) - 1, right: Math.max(...xs) + 1, bottom: Math.max(...ys) + 1 };
+}
+
+function inside(point: Point, box: Box) {
+  return (
+    point.x > box.left + BOX_MARGIN &&
+    point.x < box.right - BOX_MARGIN &&
+    point.y > box.top + BOX_MARGIN &&
+    point.y < box.bottom - BOX_MARGIN
+  );
+}
+
+function segmentsCross(p: Point, q: Point, r: Point, s: Point) {
+  const d = (q.x - p.x) * (s.y - r.y) - (q.y - p.y) * (s.x - r.x);
+  if (d === 0) return false;
+  const t = ((r.x - p.x) * (s.y - r.y) - (r.y - p.y) * (s.x - r.x)) / d;
+  const u = ((r.x - p.x) * (q.y - p.y) - (r.y - p.y) * (q.x - p.x)) / d;
+  return t > 0 && t < 1 && u > 0 && u < 1;
+}
+
+function linesCross(a: Point[], b: Point[]) {
+  for (let i = 0; i < a.length - 1; i++) {
+    for (let j = 0; j < b.length - 1; j++) {
+      if (segmentsCross(a[i], a[i + 1], b[j], b[j + 1])) return true;
     }
   }
+  return false;
+}
+
+function angleGap(a: number, b: number) {
+  return Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
 }
 
 function tiltDown(point: Point, center: Point, tilt: number) {
@@ -63,47 +138,89 @@ function tiltDown(point: Point, center: Point, tilt: number) {
   return { x: center.x + Math.cos(tilted) * distance, y: center.y + Math.sin(tilted) * distance };
 }
 
-export function placeMessages(sizes: Size[], parents: (number | null)[], ids: number[], sags: number[]) {
+let lastKey = "";
+let lastPositions: Placement[] = [];
+
+export function placeMessages(
+  sizes: Size[],
+  parents: (number | null)[],
+  ids: number[],
+  sags: number[],
+  marks: number[],
+) {
+  const key = JSON.stringify([sizes, parents, ids, sags, marks]);
+  if (key === lastKey) return lastPositions;
+
   const placed: Box[] = [
     { left: -FLOWER_RADIUS, top: -FLOWER_RADIUS, right: FLOWER_RADIUS, bottom: FLOWER_RADIUS },
   ];
   const positions: Placement[] = [];
+  const lines: Line[] = [];
+  let flowerChildren = 0;
 
   for (const [index, size] of sizes.entries()) {
     const parent = parents[index];
     const origin = parent === null ? { x: 0, y: 0 } : positions[parent];
-    const parentBox = placed[parent === null ? 0 : parent + 1];
-    const length = stemLength(ids[index]);
-    const reserved = {
-      left: parentBox.left - length,
-      top: parentBox.top - length,
-      right: parentBox.right + length,
-      bottom: parentBox.bottom + length,
+    const sag = sags[index] ?? 0;
+    const ring = stemLength(ids[index], marks[index] ?? 0) + (parent === null ? FLOWER_RING : PARENT_RING);
+    const offset = pseudoRandom(ids[index], 78.233) * Math.PI * 2;
+    const grandParent = parent === null ? null : parents[parent];
+    const from = grandParent === null || grandParent === undefined ? { x: 0, y: 0 } : positions[grandParent];
+    const direction =
+      parent === null
+        ? -Math.PI / 2 + flowerChildren * GOLDEN_ANGLE
+        : Math.atan2(origin.y - from.y, origin.x - from.x);
+    const ownBox = parent === null ? 0 : parent + 1;
+
+    const fits = (point: Point, rule: Rule) => {
+      if (Math.hypot(point.x - origin.x, point.y - origin.y) < ring) return false;
+      if (rule.cone !== null) {
+        const gap = angleGap(Math.atan2(point.y - origin.y, point.x - origin.x), direction);
+        if (gap > rule.cone) return false;
+        if (rule.sideways && parent !== null && gap < AXIS) return false;
+      }
+      const box = boxAround(point, size);
+      if (placed.some((other) => overlaps(box, other))) return false;
+      if (!rule.stems) return true;
+      const points = sampleStem(origin, point, sag);
+      if (placed.some((other, j) => j !== ownBox && points.some((p) => inside(p, other)))) return false;
+      if (lines.some((line) => overlaps(line.bounds, box) && line.points.some((p) => inside(p, box)))) return false;
+      const bounds = boundsOf(points);
+      return lines.every(
+        (line) =>
+          line.from === parent ||
+          line.to === parent ||
+          !overlaps(line.bounds, bounds) ||
+          !linesCross(points, line.points),
+      );
     };
-    let point = findSpot(origin, size, reserved, placed);
-    const tilt = (sags[index] ?? 0) / (WILT_MAX * WILT_SAG);
-    if (tilt > 0) {
-      point = findSpot(tiltDown(point, origin, tilt), size, reserved, placed);
-    }
+
+    const search = (center: Point, rules: Rule[]) => {
+      for (const [k, rule] of rules.entries()) {
+        const limit = k === rules.length - 1 ? Infinity : SEARCH_LIMIT;
+        const found = findSpot(center, offset, (point) => fits(point, rule), limit);
+        if (found) return found;
+      }
+      return center;
+    };
+
+    let point = search(origin, RULES);
+    const tilt = sag / (WILT_MAX * WILT_SAG);
+    if (tilt > 0) point = search(tiltDown(point, origin, tilt), WILT_RULES);
+    if (parent === null) flowerChildren++;
+
+    const points = sampleStem(origin, point, sag);
     placed.push(boxAround(point, size));
     positions.push({ ...point, ...size });
+    lines.push({ from: parent, to: index, points, bounds: boundsOf(points) });
   }
 
+  lastKey = key;
+  lastPositions = positions;
   return positions;
 }
 
-const STEM_MARGIN = 6;
 const STEM_BEND = 0.15;
-
-function edgePoint(box: Placement, toward: { x: number; y: number }) {
-  const dx = toward.x - box.x;
-  const dy = toward.y - box.y;
-  const t = Math.min(
-    (box.width / 2 + STEM_MARGIN) / Math.abs(dx),
-    (box.height / 2 + STEM_MARGIN) / Math.abs(dy),
-  );
-  return { x: box.x + dx * t, y: box.y + dy * t };
-}
 
 const WILT_SAG = 0.15;
 const WILT_MAX = 4;
@@ -112,10 +229,9 @@ export function wiltSag(count: number) {
   return Math.min(count, WILT_MAX) * WILT_SAG;
 }
 
-function stemCurve(from: Placement | null, to: Placement, sag: number) {
-  const center = from ?? { x: 0, y: 0 };
-  const start = from ? edgePoint(from, to) : center;
-  const end = edgePoint(to, center);
+function stemCurve(from: Point | null, to: Point, sag: number) {
+  const start = from ? { x: from.x, y: from.y } : { x: 0, y: 0 };
+  const end = { x: to.x, y: to.y };
 
   const vx = end.x - start.x;
   const vy = end.y - start.y;

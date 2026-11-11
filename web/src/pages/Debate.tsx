@@ -1,10 +1,13 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router";
 import Navbar, { type Channel } from "../components/Navbar";
 import Flower from "../components/Flower";
-import ReactionIcon, { REACTIONS, ReactionShape } from "../components/ReactionIcon";
+import CentralFlower from "../components/CentralFlower";
+import Branches, { type Mark, type Stem } from "../components/Branches";
+import ReactionIcon, { REACTIONS } from "../components/ReactionIcon";
+import AnonymousIcon from "../components/AnonymousIcon";
 import type { Message, ReactionValue } from "./Chat";
-import { placeMessages, pointOnStem, stemPath, wiltSag, type Placement } from "../layout";
+import { placeMessages, wiltSag, type Placement } from "../layout";
 import { useCamera } from "../hooks/useCamera";
 import MessageForm from "../components/MessageForm";
 import { fontFamily } from "../fonts";
@@ -26,6 +29,15 @@ function countWilts(reactions: Message[], message: Message) {
   ).length;
   const fromEffect = message.metadata?.conversus?.effect === "wilt" ? 1 : 0;
   return fromReactions + fromEffect;
+}
+
+function marksOf(reactions: Message[], message: Message) {
+  return [
+    message.metadata?.conversus?.effect,
+    ...reactions
+      .filter((reaction) => reaction.metadata?.conversus?.reactTo === message.id)
+      .map((reaction) => reaction.metadata?.conversus?.value),
+  ].filter((value): value is Mark => value === "leaf" || value === "thorn");
 }
 
 function displayName(message: Message) {
@@ -64,8 +76,18 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
     recenter,
   } = useCamera();
   const debate = channels.find((channel) => channel.id === Number(channelId));
-  const parents = findParents(replies);
   const reactedBy = replies.map((message) => whoReacted(reactions, message));
+  const stems = useMemo(() => {
+    const parents = findParents(replies);
+    return replies.flatMap((message, index): Stem[] => {
+      const to = positions[index];
+      if (!to) return [];
+      const parent = parents[index];
+      const from = parent === null ? null : positions[parent];
+      const marks = marksOf(reactions, message);
+      return [{ from, to, sag: wiltSag(countWilts(reactions, message)), id: message.id, marks }];
+    });
+  }, [replies, reactions, positions]);
 
   useEffect(() => {
     async function loadChannels() {
@@ -106,7 +128,8 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
     const parents = findParents(replies);
     const ids = replies.map((message) => message.id);
     const sags = replies.map((message) => wiltSag(countWilts(reactions, message)));
-    setPositions(placeMessages(sizes, parents, ids, sags));
+    const marks = replies.map((message) => marksOf(reactions, message).length);
+    setPositions(placeMessages(sizes, parents, ids, sags, marks));
   }, [replies, reactions]);
 
   async function handleSendMessage(
@@ -178,40 +201,9 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
         onClickCapture={handleClickCapture}
         onClick={() => setOpenId(null)}
       >
+        <Branches stems={stems} camera={camera} />
         <div className="board" style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})` }}>
-          <svg className="stems">
-            {replies.map((message, index) => {
-              const parent = parents[index];
-              const to = positions[index];
-              if (!to) return null;
-              const from = parent === null ? null : positions[parent];
-              const own = reactions.filter((reaction) => reaction.metadata?.conversus?.reactTo === message.id);
-              const sag = wiltSag(countWilts(reactions, message));
-              const drawn = [
-                { key: `effect-${message.id}`, value: message.metadata?.conversus?.effect },
-                ...own.map((reaction) => ({ key: String(reaction.id), value: reaction.metadata?.conversus?.value })),
-              ].filter((item) => item.value === "leaf" || item.value === "thorn");
-              return (
-                <g key={message.id}>
-                  <path className="stem" d={stemPath(from, to, sag)} />
-                  {drawn.map((item, k) => {
-                    if (!item.value) return null;
-                    const point = pointOnStem(from, to, (k + 1) / (drawn.length + 1), sag);
-                    const side = k % 2 === 0 ? 1.5 : -1.5;
-                    return (
-                      <g
-                        key={item.key}
-                        transform={`translate(${point.x} ${point.y}) rotate(${point.angle}) scale(1.5 ${side})`}
-                      >
-                        <ReactionShape value={item.value} onStem />
-                      </g>
-                    );
-                  })}
-                </g>
-              );
-            })}
-          </svg>
-          <Flower />
+          <CentralFlower />
           {replies.map((message, index) => (
             <div
               className={openId === message.id ? "board-message open" : "board-message"}
@@ -253,7 +245,7 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
                     aria-pressed={reactAnonymously}
                     onClick={() => setReactAnonymously(!reactAnonymously)}
                   >
-                    <img src="/anonyme.png" alt="" />
+                    <AnonymousIcon lit={reactAnonymously} />
                   </button>
                   <button type="button" onClick={() => setReplyingTo(message)}>Répondre</button>
                 </div>

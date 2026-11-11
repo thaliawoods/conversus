@@ -622,11 +622,12 @@
   overflow: visible;
 }
 
-.stem {
-  fill: none;
-  stroke: var(--line);
-  stroke-width: 6;
-  stroke-linecap: round;
+.branches {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
 .flower {
@@ -635,6 +636,15 @@
   top: -3rem;
   width: 6rem;
   height: 6rem;
+}
+
+.central-flower {
+  position: absolute;
+  left: -5rem;
+  top: -5rem;
+  width: 10rem;
+  height: 10rem;
+  pointer-events: none;
 }
 
 .flower-petal {
@@ -658,20 +668,29 @@
 
 .board-message strong {
   display: block;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--ice-soft);
+  margin-bottom: 2px;
+  font-family: "Josafronde", var(--font-text);
+  font-size: 0.62rem;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  color: var(--ice);
+  opacity: 0.6;
   text-transform: capitalize;
 }
 
 .board-message p {
   margin: 0;
-  font-size: 1.1rem;
-  line-height: 1.4;
+  font-family: "Josafronde", var(--font-text);
+  font-size: 1rem;
+  line-height: 1.35;
+  color: #e6f1ff;
+  text-shadow:
+    0 0 8px rgba(47, 98, 255, 0.75),
+    0 0 18px rgba(47, 98, 255, 0.35);
 }
 
 .board-message.open {
-  z-index: 1;
+  z-index: 3;
 }
 
 .board-message:hover {
@@ -731,46 +750,101 @@
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
+  background: linear-gradient(rgba(196, 230, 255, 0.06), rgba(196, 230, 255, 0.06)), var(--night);
 }
 
+.message-actions button:hover,
 .message-actions button.on {
-  background: rgba(196, 230, 255, 0.14);
+  background: linear-gradient(rgba(196, 230, 255, 0.14), rgba(196, 230, 255, 0.14)), var(--night);
   color: var(--white);
 }
 
-.message-actions img {
+.anonymous-icon {
+  display: block;
   width: 1.4rem;
   height: 1.4rem;
-  filter: invert(1);
+  overflow: visible;
+}
+
+.anonymous-icon.plain path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.anonymous-icon.plain circle {
+  fill: currentColor;
 }
 
 .reaction-icon {
   display: block;
   width: 1.5rem;
   height: 1.5rem;
+  overflow: visible;
 }
 
-.reaction-fill {
-  fill: var(--line);
-  stroke: var(--ice);
-  stroke-width: 1.5;
+.reaction-tube,
+.reaction-core {
+  fill: none;
+  stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-.reaction-vein,
-.reaction-line {
+.reaction-tube {
+  stroke: var(--bright-blue);
+}
+
+.reaction-core {
+  stroke: #f2f8ff;
+}
+
+.reaction-leaf {
+  stroke: var(--bright-blue);
+  stroke-width: 0.5;
+  stroke-linejoin: round;
+}
+
+.reaction-veins {
   fill: none;
-  stroke: var(--ice);
-  stroke-width: 2;
+  stroke: #dcecff;
+  stroke-width: 0.35;
+  stroke-linecap: round;
+  opacity: 0.7;
+}
+
+.reaction-rib {
+  fill: none;
+  stroke: var(--white);
+  stroke-width: 0.55;
   stroke-linecap: round;
 }
 
-.reaction-vein {
-  stroke-width: 1.2;
+.reaction-dim {
+  opacity: 0.85;
 }
 
-.reaction-solid {
-  fill: var(--ice);
+.reaction-horn {
+  stroke: var(--bright-blue);
+  stroke-width: 0.45;
+  stroke-linejoin: round;
+}
+
+.reaction-horn-core {
+  fill: none;
+  stroke: var(--white);
+  stroke-width: 0.4;
+  opacity: 0.8;
+}
+
+.reaction-halo {
+  fill: var(--bright-blue);
+  opacity: 0.45;
+}
+
+.reaction-node {
+  fill: var(--white);
 }
 
 .reply-banner {
@@ -869,10 +943,4 @@
 .message-form .composer-tool.on {
   background: rgba(196, 230, 255, 0.14);
   color: var(--white);
-}
-
-.composer-tool img {
-  width: 1.4rem;
-  height: 1.4rem;
-  filter: invert(1);
 }

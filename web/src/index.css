@@ -53,6 +53,11 @@
 }
 
 @font-face {
+  font-family: "Josafronde";
+  src: url("/fonts/josafronde.otf");
+}
+
+@font-face {
   font-family: "FixelPont";
   src: url("/fonts/fixelpont.otf");
 }
