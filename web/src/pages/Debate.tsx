@@ -11,6 +11,7 @@ import type { Message, ReactionValue } from "./Chat";
 import { placeMessages, wiltSag, type Placement } from "../layout";
 import { useCamera } from "../hooks/useCamera";
 import { useGlide, type Spot } from "../hooks/useGlide";
+import useSprouts from "../hooks/useSprouts";
 import MessageForm from "../components/MessageForm";
 import { fontFamily } from "../fonts";
 import { SERVER_DOWN, formatTime, request } from "../api";
@@ -139,6 +140,7 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
     [replies, reactions, positions],
   );
   const shown = useGlide(targets);
+  const { sprouts, appear } = useSprouts(replies);
   const stems = useMemo(() => {
     const parents = findParents(replies);
     return replies.flatMap((message, index): Stem[] => {
@@ -336,7 +338,7 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
         {thornArrival && <div className="thorn-veil" key={thornArrival.key} style={veilAt(thornArrival)} aria-hidden />}
         {leafArrival && <div className="leaf-veil" key={leafArrival.key} style={veilAt(leafArrival)} aria-hidden />}
         <Rain showers={showers} stems={stems} camera={camera} />
-        <Branches stems={stems} camera={camera} thornArrival={thornArrival} leafArrival={leafArrival} />
+        <Branches stems={stems} camera={camera} thornArrival={thornArrival} leafArrival={leafArrival} sprouts={sprouts} />
         <Leaves arrival={leafArrival} stems={stems} camera={camera} />
         <div className="board" style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})` }}>
           <div className="central-flower" role="img" aria-label="Sujet du débat" />
@@ -344,7 +346,7 @@ function Debate({ token, onTokenExpired, onSwitch }: DebateProps) {
             <div
               className={openId === message.id ? "board-message open" : "board-message"}
               key={message.id}
-              style={{ left: shown.get(message.id)?.x, top: shown.get(message.id)?.y }}
+              style={{ left: shown.get(message.id)?.x, top: shown.get(message.id)?.y, ...appear(message.id) }}
               ref={(element) => {
                 if (element) messageRefs.current[index] = element;
               }}

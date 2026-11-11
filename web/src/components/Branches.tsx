@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { pointOnStem, type Placement } from "../layout";
 import { createCentralFlower } from "./centralFlower";
+import type { Sprout } from "../hooks/useSprouts";
 
 const TRUNK_WIDTH = { base: 3, tip: 0.6 };
 const TWIG_WIDTH = { base: 1.4, tip: 0.3 };
@@ -33,6 +34,17 @@ const MAX_BOXES = 128;
 const ANGER = { duration: 2, fadeIn: 0.3, fadeOut: 0.8 };
 // Tint of the stem aimed at: ember red for Épine, raspberry pink for Feuille.
 const TINT = { thorn: [1.0, 0.353, 0.212], leaf: [0.878, 0.31, 0.604] } as const;
+// Growth (from Kilian): a branch grows once from the flower. Share of the time for each part,
+// a twig, leaf or thorn starts when the trunk reaches it.
+const GROW_SECONDS = 2.4;
+const TRUNK_SHARE = 0.7;
+const TWIG_SHARE = 0.22;
+const FORK_SHARE = 0.12;
+const CREASE_SHARE = 0.08;
+const LEAF_SHARE = 0.28;
+const THORN_SHARE = 0.14;
+// Seconds until the trunk reaches its message (same easing as sprouted() in the shader).
+export const ARRIVE_SECONDS = GROW_SECONDS * (1 - Math.sqrt(1 - TRUNK_SHARE / 1.05));
 
 export type Mark = "leaf" | "thorn";
 export type Stem = { from: Placement | null; to: Placement; sag: number; id: number; marks: Mark[] };
@@ -102,8 +114,12 @@ function visibleRange(axis: Point[], from: Placement | null, to: Placement) {
   return { start: first / last, end: end / last };
 }
 
-function buildGeometry(stems: Stem[]) {
+function buildGeometry(stems: Stem[], births: Map<number, number>) {
   const positions: number[] = [];
+  const grows: number[] = [];
+  const nodeGrows: number[] = [];
+  // When the part being built appears: start and length (share of the growth), and birth of its branch (s).
+  let growth = { start: 0, span: 1, birth: 0 };
   const normals: number[] = [];
   const sides: number[] = [];
   const along: number[] = [];
@@ -131,6 +147,7 @@ function buildGeometry(stems: Stem[]) {
         widths.push(width.base, width.tip, shape || noise(seed, 5));
         stemIds.push(stemId);
         freshOrders.push(freshOrder);
+        grows.push(growth.start + growth.span * (k / last), growth.birth);
       }
       if (k < last) {
         const a = first + k * 2;
@@ -143,6 +160,7 @@ function buildGeometry(stems: Stem[]) {
     nodes.push(point.x, -point.y, 0);
     nodeSizes.push(size, noise(seed, 6) * 6.28);
     nodeStems.push(stemId);
+    nodeGrows.push(growth.start, growth.birth);
   }
 
   function curve(origin: { x: number; y: number }, start: number, turn: number, length: number, wobble = 0, seed = 0) {
@@ -239,6 +257,9 @@ function buildGeometry(stems: Stem[]) {
     const samples = Math.max(24, Math.round(length / POINT_GAP));
     const axis = Array.from({ length: samples + 1 }, (_, k) => pointOnStem(stem.from, stem.to, k / samples, stem.sag));
     const trunk = organic(axis, length, stem.id);
+    const birth = births.get(stem.id) ?? -1e6;
+    const trunkAt = (index: number) => TRUNK_SHARE * (index / samples);
+    growth = { start: 0, span: TRUNK_SHARE, birth };
     addLine(trunk, TRUNK_WIDTH, stem.id);
 
     const range = visibleRange(axis, stem.from, stem.to);
@@ -257,7 +278,9 @@ function buildGeometry(stems: Stem[]) {
     const twigCount = 2 + Math.floor(noise(stem.id, 3) * 3);
     for (let j = 0; j < twigCount; j++) {
       const at = free(0.3 + ((j + noise(stem.id, 10 + j)) / twigCount) * 0.5, j % 2 === 0);
-      const base = trunk[indexAt(at)];
+      const baseIndex = indexAt(at);
+      const base = trunk[baseIndex];
+      growth = { start: trunkAt(baseIndex), span: TWIG_SHARE, birth };
       const side = (j + Math.floor(noise(stem.id, 4) * 2)) % 2 ? 1 : -1;
       const angle = (base.angle * Math.PI) / 180 + side * (0.45 + noise(stem.id, 20 + j) * 0.4);
       const reach = visible * (0.15 + noise(stem.id, 30 + j) * 0.15);
@@ -266,7 +289,9 @@ function buildGeometry(stems: Stem[]) {
       addNode(base, 2 + noise(stem.id, 35 + j), stem.id * 10 + j);
 
       if (noise(stem.id, 40 + j) > 0.35) {
-        const fork = twig[Math.round(twig.length * 0.55)];
+        const forkIndex = Math.min(twig.length - 1, Math.round(twig.length * 0.55));
+        const fork = twig[forkIndex];
+        growth = { start: trunkAt(baseIndex) + TWIG_SHARE * (forkIndex / (twig.length - 1)), span: FORK_SHARE, birth };
         const forkAngle = (fork.angle * Math.PI) / 180 - side * (0.5 + noise(stem.id, 45 + j) * 0.3);
         addLine(sprout(fork, forkAngle, reach * 0.5, -side, stem.id * 10 + j + 5), FORK_WIDTH, stem.id * 10 + j + 5);
         addNode(fork, 2, stem.id * 10 + j + 5);
@@ -276,7 +301,9 @@ function buildGeometry(stems: Stem[]) {
     const creases = 3 + Math.floor(noise(stem.id, 50) * 3);
     for (let c = 0; c < creases; c++) {
       const at = free(0.15 + noise(stem.id, 51 + c) * 0.75, c % 2 === 0);
-      const base = trunk[indexAt(at)];
+      const baseIndex = indexAt(at);
+      const base = trunk[baseIndex];
+      growth = { start: trunkAt(baseIndex), span: CREASE_SHARE, birth };
       const side = noise(stem.id, 60 + c) > 0.5 ? 1 : -1;
       const angle = (base.angle * Math.PI) / 180 + side * (0.25 + noise(stem.id, 70 + c) * 0.35);
       const reach = 4 + noise(stem.id, 80 + c) * 6;
@@ -285,7 +312,9 @@ function buildGeometry(stems: Stem[]) {
 
     const beads = Math.round(visible / 40);
     for (let b = 0; b < beads; b++) {
-      addNode(trunk[indexAt(0.1 + noise(stem.id, 90 + b) * 0.85)],2 + noise(stem.id, 95 + b) * 1.5, stem.id * 7 + b);
+      const index = indexAt(0.1 + noise(stem.id, 90 + b) * 0.85);
+      growth = { start: trunkAt(index), span: 0, birth };
+      addNode(trunk[index], 2 + noise(stem.id, 95 + b) * 1.5, stem.id * 7 + b);
     }
 
     // The newest thorn reaction is the last one: those are the thorns that grow.
@@ -293,6 +322,7 @@ function buildGeometry(stems: Stem[]) {
     stem.marks.forEach((mark, k) => {
       const index = indexAt(markPlaces[k]);
       const side = k % 2 === 0 ? 1 : -1;
+      growth = { start: trunkAt(index), span: mark === "leaf" ? LEAF_SHARE : THORN_SHARE, birth };
       if (mark === "leaf") addLeaf(trunk[index], side, stem.id * 1000 + k);
       else addThorn(trunk, index, side, stem.id * 1000 + k, k === newestThorn);
     });
@@ -306,12 +336,14 @@ function buildGeometry(stems: Stem[]) {
   lines.setAttribute("aWidth", new THREE.Float32BufferAttribute(widths, 3));
   lines.setAttribute("aStem", new THREE.Float32BufferAttribute(stemIds, 1));
   lines.setAttribute("aFresh", new THREE.Float32BufferAttribute(freshOrders, 1));
+  lines.setAttribute("aGrow", new THREE.Float32BufferAttribute(grows, 2));
   lines.setIndex(indices);
 
   const points = new THREE.BufferGeometry();
   points.setAttribute("position", new THREE.Float32BufferAttribute(nodes, 3));
   points.setAttribute("aNode", new THREE.Float32BufferAttribute(nodeSizes, 2));
   points.setAttribute("aStem", new THREE.Float32BufferAttribute(nodeStems, 1));
+  points.setAttribute("aGrow", new THREE.Float32BufferAttribute(nodeGrows, 2));
   return { lines, points };
 }
 
@@ -357,6 +389,17 @@ float grown(float order) {
 }
 `;
 
+// aGrow.x = when the point appears (0 = foot of the trunk, 1 = tip of the leaves), aGrow.y = birth (s).
+// Returns 0 (not there yet) to 1 (grown).
+const GROW_GLSL = `
+attribute vec2 aGrow;
+float sprouted() {
+  float progress = clamp((uTime - aGrow.y) / ${GROW_SECONDS.toFixed(2)}, 0.0, 1.0);
+  float eased = 1.0 - pow(1.0 - progress, 2.0);
+  return clamp((eased * 1.05 - aGrow.x) / 0.05, 0.0, 1.0);
+}
+`;
+
 const UNDER_TEXT_GLSL = `
 uniform vec4 uBoxes[${MAX_BOXES}];
 uniform int uBoxCount;
@@ -383,6 +426,7 @@ const vec3 PALE = vec3(1.0, 0.89, 0.89);
 
 const LINE_VERTEX = `
 ${SWAY_GLSL}
+${GROW_GLSL}
 ${ANGER_GLSL}
 ${UNDER_TEXT_GLSL}
 uniform float uZoom;
@@ -405,7 +449,8 @@ varying float vSweep;
 
 void main() {
   float t = aT;
-  vShown = shown(position.xy);
+  float growing = sprouted();
+  vShown = shown(position.xy) * growing;
   float blade = step(2.5, aWidth.z);
   float spike = step(1.5, aWidth.z) - blade;
   float palm = 0.45 + 0.55 * abs(0.7 * sin(t * 6.0 + aWidth.z * 6.28) + 0.3 * sin(t * 15.0 + aWidth.z * 3.0));
@@ -418,8 +463,9 @@ void main() {
   teeth *= mix(1.0, lobes, blade);
   float lopsided = 1.0 + aSide * (aWidth.z - 3.225) * 2.0 * blade;
   float leaf = (aWidth.y + aWidth.x * pow(sin(3.14159 * pow(t, 0.75)), 0.8) * teeth * lopsided) * uZoom;
-  float core = line * (1.0 - spike - blade) + needle * spike + leaf * blade;
-  float halfWidth = core / 2.0 + uGlowRadius;
+  // A point being reached starts thin and widens; before that, it has no width at all.
+  float core = (line * (1.0 - spike - blade) + needle * spike + leaf * blade) * mix(0.2, 1.0, growing);
+  float halfWidth = (core / 2.0 + uGlowRadius) * step(0.001, growing);
   vec3 p = position;
   float hit = targeted(aStem);
   p.xy += sway(p.xy) + shake(hit) + aNormal * aSide * halfWidth / uZoom;
@@ -481,6 +527,7 @@ void main() {
 
 const NODE_VERTEX = `
 ${SWAY_GLSL}
+${GROW_GLSL}
 ${ANGER_GLSL}
 ${UNDER_TEXT_GLSL}
 uniform float uPixelRatio;
@@ -494,8 +541,9 @@ void main() {
   float hit = targeted(aStem);
   p.xy += sway(p.xy) + shake(hit);
   vAnger = hit * uAngry;
-  vPulse = (0.75 + 0.25 * sin(uTime * 1.2 + aNode.y)) * shown(position.xy);
-  gl_PointSize = aNode.x * 4.0 * uPixelRatio;
+  float growing = sprouted();
+  vPulse = (0.75 + 0.25 * sin(uTime * 1.2 + aNode.y)) * shown(position.xy) * growing;
+  gl_PointSize = aNode.x * 4.0 * uPixelRatio * growing;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
   vPulse *= 1.0 + sweep(gl_Position);
 }
@@ -563,9 +611,16 @@ function draw(view: View, camera: Camera) {
   view.renderer.render(view.scene, view.camera);
 }
 
-type BranchesProps = { stems: Stem[]; camera: Camera; thornArrival: Arrival | null; leafArrival: Arrival | null };
+// sprouts: when each branch starts to grow, by message id (see useSprouts).
+type BranchesProps = {
+  stems: Stem[];
+  camera: Camera;
+  thornArrival: Arrival | null;
+  leafArrival: Arrival | null;
+  sprouts: Map<number, Sprout>;
+};
 
-function Branches({ stems, camera, thornArrival, leafArrival }: BranchesProps) {
+function Branches({ stems, camera, thornArrival, leafArrival, sprouts }: BranchesProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewRef = useRef<View | null>(null);
   const cameraRef = useRef(camera);
@@ -682,12 +737,14 @@ function Branches({ stems, camera, thornArrival, leafArrival }: BranchesProps) {
     if (!view) return;
     view.lines.geometry.dispose();
     view.nodes.geometry.dispose();
-    const geometry = buildGeometry(stems);
+    // Without motion, every branch is born long ago: shown fully grown.
+    const births = new Map(stems.map((stem) => [stem.id, view.animated ? (sprouts.get(stem.id)?.birth ?? -1e6) : -1e6]));
+    const geometry = buildGeometry(stems, births);
     view.lines.geometry = geometry.lines;
     view.nodes.geometry = geometry.points;
     view.boxCount.value = textBoxes(stems, view.boxes);
     if (!view.animated) draw(view, cameraRef.current);
-  }, [stems]);
+  }, [stems, sprouts]);
 
   // Épine and Feuille share the same 2 s tint: the latest one to arrive wins.
   function tint(arrival: Arrival | null, kind: keyof typeof TINT) {
