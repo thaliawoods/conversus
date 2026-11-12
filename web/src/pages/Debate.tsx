@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
-import { HIDDEN_CHANNELS, isDebate, shownName, workspacePath, type Channel } from "../channels";
+import { enterSynthesisChannel, HIDDEN_CHANNELS, isDebate, shownName, SYNTHESIS_CHANNEL, workspacePath, type Channel } from "../channels";
 import DebatePicker from "../components/DebatePicker";
 import SynthesisModal from "../components/SynthesisModal";
 import SynthesisIcon from "../components/SynthesisIcon";
@@ -15,6 +15,7 @@ import { useGlide, type Spot } from "../hooks/useGlide";
 import useSprouts from "../hooks/useSprouts";
 import MessageForm from "../components/MessageForm";
 import { fontFamily, shownFont } from "../fonts";
+import { userStyle } from "../userColor";
 import { SERVER_DOWN, formatTime, request } from "../api";
 import { FALLBACK_POLL, listenToChannel } from "../live";
 import { pronounsByName } from "../pronouns";
@@ -183,7 +184,6 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
   const location = useLocation();
   const sharedSynthesis: { text: string; sharedAt: string } | undefined = location.state?.synthesis;
   const sectionRef = useRef<HTMLElement>(null);
-  const [subject, setSubject] = useState<Message | null>(null);
   const [synthesis, setSynthesis] = useState<Synthesis | null>(null);
   const [sharing, setSharing] = useState(false);
   const [error, setError] = useState("");
@@ -265,7 +265,6 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
       setConnectionError("");
       const data = await response.json();
       const all: Message[] = (data ?? []).toReversed();
-      setSubject(all[0] ?? null);
       const messages = all.slice(1);
       setReplies(
         messages.filter(
@@ -329,14 +328,12 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
 
   async function handleSendMessage(
     content: string,
-    font: string | undefined,
     effect: ReactionValue | undefined,
     anonymous: boolean,
   ) {
-    const metadata: { replyTo?: number; font?: string; effect?: ReactionValue; pronouns?: string } = {};
+    const metadata: { replyTo?: number; effect?: ReactionValue; pronouns?: string } = {};
     if (!anonymous) metadata.pronouns = pronouns;
     if (replyingTo) metadata.replyTo = replyingTo.id;
-    if (font) metadata.font = font;
     if (effect) metadata.effect = effect;
 
     const response = await request(token, MESSAGES, {
@@ -441,31 +438,22 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
     );
   }
 
-  async function findOrigin() {
-    const origin = subject?.metadata?.conversus?.origin;
-    if (origin !== undefined) return origin;
-    const candidates = channels.filter((channel) => !isDebate(channel) && !HIDDEN_CHANNELS.includes(channel.name));
-    for (const channel of candidates) {
-      const response = await request(token, `/channel/message?channel=${channel.id}&namespace=conversus`);
-      if (!response?.ok) continue;
-      const messages: Message[] = (await response.json()) ?? [];
-      if (messages.some((message) => message.metadata?.conversus?.channelName === debate?.name)) return channel.id;
-    }
-    return null;
-  }
-
   async function handleShare() {
     if (!synthesis?.text || !debate || sharing) return;
     setSharing(true);
-    const origin = await findOrigin();
-    if (origin === null) {
-      setSynthesis({ ...synthesis, error: "Le canal d'origine est introuvable." });
+    let target: Channel | undefined = channels.find((channel) => channel.name === SYNTHESIS_CHANNEL);
+    if (!target) {
+      const entered = await enterSynthesisChannel(token);
+      if (entered?.ok) target = await entered.json();
+    }
+    if (!target) {
+      setSynthesis({ ...synthesis, error: "Le canal des synthèses est introuvable. Réessaie." });
       setSharing(false);
       return;
     }
     const response = await request(token, MESSAGES, {
       content: synthesis.text,
-      channel: origin,
+      channel: target.id,
       metadata: { synthesisOf: debate.name, upTo: synthesis.upTo, retained: synthesis.retained, pronouns },
     });
     setSharing(false);
@@ -478,7 +466,7 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
       return;
     }
     setSynthesis(null);
-    navigate(workspacePath(origin, channelId));
+    navigate(workspacePath(target.id, channelId));
   }
 
   return (
@@ -507,6 +495,7 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
           retainedCount={0}
           text={sharedSynthesis.text}
           sharedAt={sharedSynthesis.sharedAt}
+          question={debate ? shownName(debate) : undefined}
           error=""
           sharing={false}
           readOnly
@@ -574,7 +563,7 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
                 }
               }}
             >
-              <strong>
+              <strong style={userStyle(displayName(message))}>
                 {displayName(message)}
                 {displayName(message) !== "Anonyme" && pronounsOf.get(displayName(message)) && (
                   <span className="pronouns"> · {pronounsOf.get(displayName(message))}</span>

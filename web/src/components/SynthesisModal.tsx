@@ -17,8 +17,10 @@ type SynthesisModalProps = {
   onShare: () => void;
   // A synthesis already shared: no share button.
   readOnly?: boolean;
-  // When it was shared, e.g. "partagée aujourd'hui à 15:40".
+  // When it was shared, e.g. "Aujourd'hui à 15:40".
   sharedAt?: string;
+  // The ConVersus question, shown instead of the scope when reading a shared synthesis.
+  question?: string;
 };
 
 function fitPlant(stems: Stem[], width: number, height: number) {
@@ -36,7 +38,7 @@ function fitPlant(stems: Stem[], width: number, height: number) {
   return { x: (-(left + right) / 2) * zoom, y: (-(top + bottom) / 2) * zoom, zoom };
 }
 
-function SynthesisModal({ stems, moods, retainedCount, text, error, sharing, onCancel, onShare, readOnly = false, sharedAt }: SynthesisModalProps) {
+function SynthesisModal({ stems, moods, retainedCount, text, error, sharing, onCancel, onShare, readOnly = false, sharedAt, question }: SynthesisModalProps) {
   const plantRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 1, height: 1 });
   const scope =
@@ -70,7 +72,7 @@ function SynthesisModal({ stems, moods, retainedCount, text, error, sharing, onC
         <div className="synthesis-side">
           <h2 id="synthesis-title">Synthesis</h2>
           <p className="modal-label">
-            {scope}
+            {question ? <span className="synthesis-question">{question}</span> : scope}
             {sharedAt && ` · ${sharedAt}`}
           </p>
           {text === null && !error && <p className="synthesis-text waiting">La synthèse s'écrit…</p>}

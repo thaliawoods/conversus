@@ -1,14 +1,3 @@
-import type { ReactionValue } from "./pages/Chat";
-
-export const FONTS: { value: string | undefined; label: string; mood?: ReactionValue }[] = [
-  { value: undefined, label: "Josafronde" },
-  { value: "Tremplin", label: "Tremplin" },
-  { value: "LigaSans", label: "Liga Sans", mood: "leaf" },
-  { value: "LoveAndRage", label: "Love and Rage", mood: "thorn" },
-  { value: "Nudles", label: "Nudles", mood: "wilt" },
-  { value: "PicNic", label: "PicNic" },
-];
-
 const DEFAULT_FONT = "Josafronde";
 
 const RETIRED_FONTS = ["FixelPont"];

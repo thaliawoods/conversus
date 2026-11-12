@@ -3,39 +3,50 @@ import { Link, useParams } from "react-router";
 import Logo from "./Logo";
 import { PetalFlower } from "./PetalIcons";
 import AccountMenu from "./AccountMenu";
-import { HIDDEN_CHANNELS, isDebate, shownName, workspacePath, type Channel } from "../channels";
+import { HIDDEN_CHANNELS, isDebate, SHARED_CHANNEL, shownName, workspacePath, type Channel } from "../channels";
 import type { Member } from "../hooks/usePresence";
+import { userStyle } from "../userColor";
+import { unreadLabel } from "../hooks/useUnread";
 
 const MEMBERS_TITLE = "Membres";
 
 type SidebarProps = {
   channels: Channel[];
+  // Unread messages per channel id.
+  unread: Map<number, number>;
   members: Member[];
   username: string;
   pronouns: string | null;
   onSwitch: (newToken: string) => void;
   onLogout: () => void;
+  onTutorial: () => void;
 };
 
-function Sidebar({ channels, members, username, pronouns, onSwitch, onLogout }: SidebarProps) {
+function Sidebar({ channels, unread, members, username, pronouns, onSwitch, onLogout, onTutorial }: SidebarProps) {
   const { channelId, debateId } = useParams();
   const [search, setSearch] = useState("");
   const [folded, setFolded] = useState<string[]>([]);
   const query = search.trim().toLowerCase();
+  // The shared channel stays hidden from ConVersus lookups, but is listed here so it can be opened.
   const found = channels.filter(
-    (channel) => !HIDDEN_CHANNELS.includes(channel.name) && shownName(channel).toLowerCase().includes(query),
+    (channel) =>
+      (channel.name === SHARED_CHANNEL || !HIDDEN_CHANNELS.includes(channel.name)) &&
+      shownName(channel).toLowerCase().includes(query),
   );
-  const foundMembers = members.filter((member) => member.online && member.username.toLowerCase().includes(query));
+  // Everyone is listed, online first (usePresence sorts them).
+  const foundMembers = members.filter((member) => member.username.toLowerCase().includes(query));
   const onlineCount = members.filter((member) => member.online).length;
   const groups = [
     {
       title: "Canaux",
+      tour: "channels",
       items: found.filter((channel) => !isDebate(channel)),
       activeId: channelId,
       path: (channel: Channel) => workspacePath(channel.id, debateId),
     },
     {
       title: "ConVersus",
+      tour: "debates",
       items: found.filter(isDebate),
       activeId: debateId,
       path: (channel: Channel) => workspacePath(channelId, channel.id),
@@ -58,7 +69,7 @@ function Sidebar({ channels, members, username, pronouns, onSwitch, onLogout }: 
       </label>
       <div className="sidebar-groups">
         {groups.map((group) => (
-          <section className="sidebar-group" key={group.title}>
+          <section className="sidebar-group" key={group.title} data-tour={group.tour}>
             <button
               type="button"
               className="sidebar-group-title"
@@ -74,11 +85,18 @@ function Sidebar({ channels, members, username, pronouns, onSwitch, onLogout }: 
               <ul>
                 {group.items.map((channel) => {
                   const active = String(channel.id) === group.activeId;
+                  const count = unread.get(channel.id) ?? 0;
+                  const className = [active && "active", count > 0 && "has-unread"].filter(Boolean).join(" ") || undefined;
                   return (
                     <li key={channel.id}>
-                      <Link className={active ? "active" : undefined} to={group.path(channel)} aria-current={active ? "page" : undefined}>
+                      <Link className={className} to={group.path(channel)} aria-current={active ? "page" : undefined}>
                         <span className="sidebar-mark">{active && <PetalFlower flat />}</span>
                         <span className="sidebar-name">{shownName(channel)}</span>
+                        {count > 0 && (
+                          <span className="sidebar-unread" aria-label={`${unreadLabel(count)} non lus`}>
+                            {unreadLabel(count)}
+                          </span>
+                        )}
                       </Link>
                     </li>
                   );
@@ -109,7 +127,7 @@ function Sidebar({ channels, members, username, pronouns, onSwitch, onLogout }: 
                   <span className="sidebar-mark">
                     <span className="presence-dot" />
                   </span>
-                  <span className="sidebar-name">
+                  <span className="sidebar-name" style={userStyle(member.username)}>
                     {member.username}
                     {member.username === username && <span className="sidebar-me"> (toi)</span>}
                   </span>
@@ -125,6 +143,7 @@ function Sidebar({ channels, members, username, pronouns, onSwitch, onLogout }: 
         pronouns={pronouns}
         onSwitch={onSwitch}
         onLogout={onLogout}
+        onTutorial={onTutorial}
       />
     </aside>
   );

@@ -5,7 +5,8 @@ import LaunchModal from "../components/LaunchModal";
 import ChannelComposer from "../components/ChannelComposer";
 import { PetalFlower } from "../components/PetalIcons";
 import type { Message } from "./Chat";
-import { channelLabel, isClockTick, SHARED_CHANNEL, shownName, type Channel } from "../channels";
+import { userStyle } from "../userColor";
+import { channelLabel, CONVERSUS_METADATA, isClockTick, isSynthesis, SHARED_CHANNEL, shownName, SYNTHESIS_CHANNEL, type Channel } from "../channels";
 import { pronounsByName } from "../pronouns";
 
 type ChannelPanelProps = {
@@ -31,13 +32,6 @@ function formatTime(message: Message) {
   return today ? `Aujourd'hui à ${time}` : `${date.toLocaleDateString("fr-FR")} à ${time}`;
 }
 
-// "partagée aujourd'hui à 15:40" or "partagée le 11/11/2026 à 22:02".
-function sharedLabel(message: Message) {
-  const when = formatTime(message);
-  if (!when) return "";
-  return when.startsWith("Aujourd'hui") ? `partagée a${when.slice(1)}` : `partagée le ${when}`;
-}
-
 function authorOf(message: Message) {
   return message.anonymous || !message.user ? "Anonyme" : message.user;
 }
@@ -51,6 +45,7 @@ async function post(token: string, body: object) {
 
 function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebate, onDebateLaunched, onTokenExpired, selecting, onSelectingChange }: ChannelPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
+  const readOnly = channel.name === SYNTHESIS_CHANNEL;
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const isSelecting = selecting;
   const setIsSelecting = onSelectingChange;
@@ -90,7 +85,11 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
       setConnectionError("");
       const data: Message[] | null = await response.json();
       if (cancelled) return;
-      const ordered = (data ?? []).filter((message) => !isClockTick(message)).toReversed();
+      // The synthesis channel only shows syntheses, even if something else was posted there.
+      const onlySyntheses = channel.name === SYNTHESIS_CHANNEL;
+      const ordered = (data ?? [])
+        .filter((message) => !isClockTick(message) && (!onlySyntheses || isSynthesis(message)))
+        .toReversed();
       setMessages(ordered);
       const names = ordered.flatMap((message) => message.metadata?.conversus?.channelName ?? []);
       if (names.length > 0 && channel.name !== SHARED_CHANNEL) debatesSeen.current?.(names);
@@ -153,7 +152,7 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
   async function handleLaunch(subject: string) {
     const response = await request(token, "/channel?namespace=conversus", {
       name: `${subject}#${Date.now()}`,
-      metadata: {},
+      metadata: CONVERSUS_METADATA,
     });
     if (!checkResponse(response, "Le ConVersus n'a pas pu être lancé. Réessaie.")) {
       setIsLaunching(false);
@@ -185,26 +184,27 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
     <section className="channel-panel">
       <header className="panel-header">
         <h2 className="channel-title">{shownName(channel)}</h2>
-        <button
-          type="button"
-          className="panel-action"
-          onClick={() => {
-            setIsSelecting(!isSelecting);
-            setSelectedIds([]);
-          }}
-        >
-          {isSelecting ? "Annuler" : (
-            <>
-              <PetalFlower className="petal-flower launch-flower" flat />
-              <span className="launch-label">Lancer un ConVersus</span>
-            </>
-          )}
-        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            className="panel-action"
+            onClick={() => {
+              setIsSelecting(!isSelecting);
+              setSelectedIds([]);
+            }}
+          >
+            {isSelecting ? "Annuler" : (
+              <>
+                <PetalFlower className="petal-flower launch-flower" flat />
+                <span className="launch-label">Lancer un ConVersus</span>
+              </>
+            )}
+          </button>
+        )}
       </header>
       <ul className="messages" ref={listRef} onScroll={handleScroll}>
         {messages.map((message) => {
           const author = authorOf(message);
-          const mine = !!me && !message.anonymous && message.user === me;
           const debateName = message.metadata?.conversus?.channelName;
           const synthesisOf = message.metadata?.conversus?.synthesisOf;
           const joinTarget = debateName || synthesisOf;
@@ -219,7 +219,7 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
                     <path className="reply-curl-core" d={CURL} />
                   </svg>
                   <p className="reply-quote">
-                    <span className="reply-quote-name">{authorOf(quoted)}</span> {quoted.content}
+                    <span className="reply-quote-name" style={userStyle(authorOf(quoted))}>{authorOf(quoted)}</span> {quoted.content}
                   </p>
                 </>
               )}
@@ -231,17 +231,17 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
                   aria-label="Cibler ce message"
                 />
               )}
-              <span className="avatar">{author[0]}</span>
+              <span className="avatar" style={userStyle(author)}>{author[0]}</span>
               <div className="message-body">
                 <div className="message-meta">
-                  <strong className={mine ? "mine" : undefined}>{author}</strong>
+                  <strong style={userStyle(author)}>{author}</strong>
                   {!message.anonymous && pronounsOf.get(message.user) && (
                     <span className="pronouns">· {pronounsOf.get(message.user)}</span>
                   )}
                   <time>{formatTime(message)}</time>
                 </div>
                 {synthesisOf ? (
-                  <button type="button" className="synthesis-card" onClick={() => onOpenDebate(synthesisOf, { text: message.content, sharedAt: sharedLabel(message) })}>
+                  <button type="button" className="synthesis-card" onClick={() => onOpenDebate(synthesisOf, { text: message.content, sharedAt: formatTime(message) })}>
                     <span>a partagé la synthèse de</span>
                     <span className="message-subject">
                       {channelLabel(synthesisOf)}
@@ -299,10 +299,12 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
           <button type="button" onClick={() => setReply(null)}>Annuler</button>
         </div>
       )}
-      <ChannelComposer
-        placeholder={replyingTo ? `Réponds à ${authorOf(replyingTo)}…` : `Écrire dans ${shownName(channel)}`}
-        onSend={handleSend}
-      />
+      {!readOnly && (
+        <ChannelComposer
+          placeholder={replyingTo ? `Réponds à ${authorOf(replyingTo)}…` : `Écrire dans ${shownName(channel)}`}
+          onSend={handleSend}
+        />
+      )}
       {isLaunching && (
         <LaunchModal messages={selectedMessages} onCancel={() => setIsLaunching(false)} onLaunch={handleLaunch} />
       )}

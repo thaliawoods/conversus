@@ -1,6 +1,6 @@
 import { useState } from "react";
 import EmojiPicker, { EmojiStyle, Theme } from "emoji-picker-react";
-import { FONTS, fontFamily } from "../fonts";
+import { fontFamily } from "../fonts";
 import AnonymousIcon from "./AnonymousIcon";
 import SendArrow from "./SendArrow";
 import type { ReactionValue } from "../pages/Chat";
@@ -8,7 +8,6 @@ import type { ReactionValue } from "../pages/Chat";
 type MessageFormProps = {
   onSend: (
     content: string,
-    font: string | undefined,
     effect: ReactionValue | undefined,
     anonymous: boolean,
   ) => Promise<boolean>;
@@ -16,11 +15,10 @@ type MessageFormProps = {
   error: string;
 };
 
-type Panel = "emoji" | "font" | null;
+type Panel = "emoji" | null;
 
 function MessageForm({ onSend, placeholder, error }: MessageFormProps) {
   const [content, setContent] = useState("");
-  const [font, setFont] = useState<string | undefined>(undefined);
   const [effect, setEffect] = useState<ReactionValue | undefined>(undefined);
   const [anonymous, setAnonymous] = useState(false);
   const [panel, setPanel] = useState<Panel>(null);
@@ -34,7 +32,7 @@ function MessageForm({ onSend, placeholder, error }: MessageFormProps) {
     event.preventDefault();
     if (!content.trim() || sending) return;
     setSending(true);
-    const sent = await onSend(content, font, effect, anonymous);
+    const sent = await onSend(content, effect, anonymous);
     setSending(false);
     if (!sent) return;
     setContent("");
@@ -58,25 +56,6 @@ function MessageForm({ onSend, placeholder, error }: MessageFormProps) {
             }}
           />
         )}
-        {panel === "font" && (
-          <div className="composer-panel">
-            {FONTS.map((option) => (
-              <button
-                type="button"
-                key={option.label}
-                className={font === option.value ? "active" : undefined}
-                data-reaction={option.mood}
-                style={{ fontFamily: fontFamily(option.value) }}
-                onClick={() => {
-                  setFont(option.value);
-                  setPanel(null);
-                }}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        )}
         {error && <p className="login-error" role="alert">{error}</p>}
       </div>
       <form className="message-form" onSubmit={handleSubmit}>
@@ -89,16 +68,6 @@ function MessageForm({ onSend, placeholder, error }: MessageFormProps) {
           onClick={() => togglePanel("emoji")}
         >
           ☺
-        </button>
-        <button
-          type="button"
-          className={panel === "font" ? "composer-tool on" : "composer-tool"}
-          data-tip="Change ta police"
-          aria-label="Change ta police"
-          aria-expanded={panel === "font"}
-          onClick={() => togglePanel("font")}
-        >
-          Aa
         </button>
         <button
           type="button"
@@ -115,7 +84,7 @@ function MessageForm({ onSend, placeholder, error }: MessageFormProps) {
             value={content}
             onChange={(event) => setContent(event.target.value)}
             placeholder={placeholder}
-            style={{ fontFamily: fontFamily(font) }}
+            style={{ fontFamily: fontFamily() }}
           />
           <button className="send-button" type="submit" disabled={sending} aria-label="Envoyer" data-tip="Envoyer">
             <SendArrow />

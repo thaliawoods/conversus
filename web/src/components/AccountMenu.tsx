@@ -5,9 +5,10 @@ type AccountMenuProps = {
   pronouns: string | null;
   onSwitch: (newToken: string) => void;
   onLogout: () => void;
+  onTutorial: () => void;
 };
 
-function AccountMenu({ username, pronouns, onSwitch, onLogout }: AccountMenuProps) {
+function AccountMenu({ username, pronouns, onSwitch, onLogout, onTutorial }: AccountMenuProps) {
   const recent = recentAccounts();
   const accounts = Object.keys(recent);
   // Agreed with the connected account's pronoun; iel or no pronoun keeps the inclusive form.
@@ -38,6 +39,9 @@ function AccountMenu({ username, pronouns, onSwitch, onLogout }: AccountMenuProp
             {account}
           </button>
         ))}
+        <button type="button" onClick={onTutorial}>
+          Revoir le tuto
+        </button>
         <button type="button" onClick={onLogout}>
           Déconnexion
         </button>

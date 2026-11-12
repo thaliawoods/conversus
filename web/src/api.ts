@@ -4,12 +4,12 @@ export const API = import.meta.env.VITE_API_URL || "https://gobelins-chat-api.le
 
 export const SERVER_DOWN = "Le serveur ne répond pas. Réessaie dans un instant.";
 
-export async function request(token: string, path: string, body?: unknown) {
+export async function request(token: string, path: string, body?: unknown, method?: "PUT") {
   const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   try {
     return await fetch(`${API}${path}`, {
-      method: body === undefined ? "GET" : "POST",
+      method: method ?? (body === undefined ? "GET" : "POST"),
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
     });

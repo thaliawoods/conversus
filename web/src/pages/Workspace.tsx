@@ -7,7 +7,9 @@ import ChannelPanel from "./ChannelPanel";
 import Debate from "./Debate";
 import { SERVER_DOWN, request } from "../api";
 import { usePresence } from "../hooks/usePresence";
-import { isDebate, SHARED_CHANNEL, workspacePath, type Channel } from "../channels";
+import Tutorial, { type TutorialColumn } from "../components/Tutorial";
+import { useUnread } from "../hooks/useUnread";
+import { enterSynthesisChannel, HIDDEN_CHANNELS, isDebate, SHARED_CHANNEL, SYNTHESIS_CHANNEL, workspacePath, type Channel } from "../channels";
 import type { Message } from "./Chat";
 
 type WorkspaceProps = { token: string; onTokenExpired: () => void; onSwitch: (newToken: string) => void };
@@ -25,8 +27,18 @@ const HOME_CHANNEL = "m1-ecni";
 // Every account joins it, so a socket kept open on it tells the server who is on the site.
 const PRESENCE_CHANNEL = "general";
 // Every account joins these, plus each ConVersus announced in them, so a new visitor sees everything.
-const DEMO_CHANNELS = ["general", "m1-ecni", "projet-conversus", "random"];
+const DEMO_CHANNELS = ["general", "m1-ecni", "projet-conversus", "random", SYNTHESIS_CHANNEL];
 const ARRIVAL_SIDE = 0.14;
+// Also kept in the browser, in case the server refuses to save it on the account.
+const TUTORIAL_KEY = "conversus-tutorial-seen:";
+
+function tutorialSeenHere(username: string) {
+  try {
+    return localStorage.getItem(TUTORIAL_KEY + username) === "1";
+  } catch {
+    return false;
+  }
+}
 // Below TABLET_MAX the channel list becomes a drawer; below MOBILE_MAX one view at a time, with tabs.
 const TABLET_MAX = 900;
 const MOBILE_MAX = 600;
@@ -82,6 +94,9 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
   const [tab, setTab] = useState<Tab>("channel");
   // Route seen at the last render: opening a channel or a ConVersus shows it on mobile and closes the drawer.
   const [seenRoute, setSeenRoute] = useState({ channelId, debateId });
+  const [tutorial, setTutorial] = useState(false);
+  // Token whose account was already checked for a first visit (switching account checks again).
+  const tutorialChecked = useRef<string | null>(null);
   if (seenRoute.channelId !== channelId || seenRoute.debateId !== debateId) {
     setSeenRoute({ channelId, debateId });
     setDrawerOpen(false);
@@ -90,6 +105,7 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
   }
   const presenceChannel = channels.find((channel) => channel.name === PRESENCE_CHANNEL)?.id;
   const members = usePresence(token, presenceChannel, username);
+  const unread = useUnread(token, username, channels, channelId === undefined ? undefined : Number(channelId));
 
   const loadProfile = useCallback(async () => {
     const response = await request(token, "/me");
@@ -108,7 +124,27 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
     setChannels(unique);
     setUsername(profile.username);
     setPronouns(profile.metadata?.conversus?.pronouns ?? "");
+    // First visit in ConVersus: nothing in the account's "conversus" metadata says the tour was
+    // seen, whichever app created the account on the shared server.
+    if (tutorialChecked.current !== token) {
+      tutorialChecked.current = token;
+      setTutorial(!profile.metadata?.conversus?.tutorialSeen && !tutorialSeenHere(profile.username));
+    }
   }, [token, onTokenExpired]);
+
+  const closeTutorial = useCallback(async () => {
+    setTutorial(false);
+    try {
+      localStorage.setItem(TUTORIAL_KEY + username, "1");
+    } catch {
+    }
+    // The server replaces the whole "conversus" metadata: start from the current one (pronouns…).
+    const response = await request(token, "/me");
+    if (!response?.ok) return;
+    const conversus = (await response.json()).metadata?.conversus ?? {};
+    if (conversus.tutorialSeen) return;
+    await request(token, "/user?namespace=conversus", { metadata: { ...conversus, tutorialSeen: true } }, "PUT");
+  }, [token, username]);
 
   useEffect(() => {
     loadProfile();
@@ -125,7 +161,10 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
       const missing = names.filter((name) => !joined.current.has(name));
       if (missing.length === 0) return;
       missing.forEach((name) => joined.current.add(name));
-      for (const name of missing) await request(token, "/channel/enter", { channel: name });
+      for (const name of missing) {
+        if (name === SYNTHESIS_CHANNEL) await enterSynthesisChannel(token);
+        else await request(token, "/channel/enter", { channel: name });
+      }
       loadProfile();
     },
     [token, loadProfile],
@@ -284,14 +323,33 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
   const showChannel = mobile ? tab === "channel" : !fullScreen && !closed.channel;
   const showDebate = mobile ? tab === "debate" : !closed.debate;
   const showHandles = !mobile && !fullScreen;
+  const revealForTutorial = useCallback(
+    (column: TutorialColumn) => {
+      if (screen === "mobile") {
+        setTab(column);
+        return;
+      }
+      if (screen === "tablet") {
+        setDrawerOpen(column === "side");
+        if (column === "side") return;
+      }
+      setExpanded(false);
+      setLayout((current) => ({ ...current, closed: { ...current.closed, [column]: false } }));
+    },
+    [screen],
+  );
+  const hasDebates = channels.some((channel) => isDebate(channel) && !HIDDEN_CHANNELS.includes(channel.name));
+
   const sidebar = (
     <Sidebar
       channels={channels}
+      unread={unread}
       members={members}
       username={username}
       pronouns={pronouns}
       onSwitch={onSwitch}
       onLogout={onTokenExpired}
+      onTutorial={() => setTutorial(true)}
     />
   );
   const debateFills = !closed.debate;
@@ -379,6 +437,15 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
             {sidebar}
           </div>
         </div>
+      )}
+      {tutorial && username && (
+        <Tutorial
+          debateId={debateId}
+          hasDebates={hasDebates}
+          selecting={selecting}
+          onReveal={revealForTutorial}
+          onClose={closeTutorial}
+        />
       )}
       {mobile && (
         <nav className="mobile-tabs" aria-label="Vues">
