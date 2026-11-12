@@ -43,6 +43,8 @@ const THORN_SHARE = 0.14;
 const FOCUS_FADE = 0.12;
 const DIMMED = 0.6;
 const THREAD_MIX = 1.0;
+export type Color = readonly [number, number, number];
+const BLUE: Color = [0.184, 0.384, 1.0];
 export const ARRIVE_SECONDS = GROW_SECONDS * (1 - Math.sqrt(1 - TRUNK_SHARE / 1.05));
 
 export type Mark = "leaf" | "thorn";
@@ -342,6 +344,7 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
   lines.setAttribute("aFresh", new THREE.Float32BufferAttribute(freshOrders, 1));
   lines.setAttribute("aGrow", new THREE.Float32BufferAttribute(grows, 2));
   lines.setAttribute("aLit", new THREE.Float32BufferAttribute(new Float32Array(stemIds.length), 1));
+  lines.setAttribute("aMood", new THREE.Float32BufferAttribute(new Float32Array(stemIds.length * 3), 3));
   lines.setIndex(indices);
 
   const points = new THREE.BufferGeometry();
@@ -350,6 +353,7 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
   points.setAttribute("aStem", new THREE.Float32BufferAttribute(nodeStems, 1));
   points.setAttribute("aGrow", new THREE.Float32BufferAttribute(nodeGrows, 2));
   points.setAttribute("aLit", new THREE.Float32BufferAttribute(new Float32Array(nodeStems.length), 1));
+  points.setAttribute("aMood", new THREE.Float32BufferAttribute(new Float32Array(nodeStems.length * 3), 3));
   return { lines, points, stemIds, nodeStems };
 }
 
@@ -402,10 +406,13 @@ float sprouted() {
 
 const FOCUS_GLSL = `
 attribute float aLit;
+attribute vec3 aMood;
 uniform float uFocus;
 varying float vOn;
 varying float vDim;
+varying vec3 vMood;
 void focus() {
+  vMood = aMood;
   vOn = aLit * uFocus;
   vDim = mix(1.0, ${DIMMED.toFixed(2)}, (1.0 - aLit) * uFocus);
 }
@@ -431,7 +438,6 @@ const COLORS_GLSL = `
 const vec3 WHITE = vec3(1.0);
 const vec3 THREAD = vec3(1.0, 0.875, 0.306);
 const vec3 ICE = vec3(0.769, 0.902, 1.0);
-const vec3 BRIGHT = vec3(0.184, 0.384, 1.0);
 uniform vec3 uTint;
 const vec3 PALE = vec3(1.0, 0.89, 0.89);
 `;
@@ -509,9 +515,10 @@ varying float vShown;
 varying float vSweep;
 varying float vOn;
 varying float vDim;
+varying vec3 vMood;
 
 void main() {
-  vec3 bright = mix(BRIGHT, uTint, vAnger);
+  vec3 bright = mix(vMood, uTint, vAnger);
   vec3 white = mix(WHITE, PALE, vAnger);
   float d = abs(vAcross);
   float inside = 1.0 - smoothstep(vCore - 0.5, vCore + 0.5, d);
@@ -576,9 +583,10 @@ varying float vPulse;
 varying float vAnger;
 varying float vOn;
 varying float vDim;
+varying vec3 vMood;
 
 void main() {
-  vec3 bright = mix(BRIGHT, uTint, vAnger);
+  vec3 bright = mix(vMood, uTint, vAnger);
   vec3 ice = mix(ICE, PALE, vAnger);
   float d = length(gl_PointCoord - 0.5) * 2.0;
   float core = 1.0 - smoothstep(0.12, 0.25, d);
@@ -627,6 +635,18 @@ function applyLit(view: View, lit: Set<number> | null) {
   paint(view.nodes.geometry, view.nodeStems);
 }
 
+function applyMoods(view: View, moods: Map<number, Color> | undefined) {
+  const paint = (geometry: THREE.BufferGeometry, stems: number[]) => {
+    const attribute = geometry.getAttribute("aMood") as THREE.BufferAttribute | undefined;
+    if (!attribute) return;
+    const values = attribute.array as Float32Array;
+    for (let i = 0; i < stems.length; i++) values.set(moods?.get(stems[i]) ?? BLUE, i * 3);
+    attribute.needsUpdate = true;
+  };
+  paint(view.lines.geometry, view.lineStems);
+  paint(view.nodes.geometry, view.nodeStems);
+}
+
 function angerEnvelope(age: number) {
   if (age < 0 || age > ANGER.duration) return 0;
   return Math.min(1, age / ANGER.fadeIn) * Math.min(1, (ANGER.duration - age) / ANGER.fadeOut);
@@ -660,9 +680,11 @@ type BranchesProps = {
   leafArrival: Arrival | null;
   sprouts: Map<number, Sprout>;
   highlight: Set<number> | null;
+  moods?: Map<number, Color>;
+  bare?: boolean;
 };
 
-function Branches({ stems, camera, thornArrival, leafArrival, sprouts, highlight }: BranchesProps) {
+function Branches({ stems, camera, thornArrival, leafArrival, sprouts, highlight, moods, bare = false }: BranchesProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewRef = useRef<View | null>(null);
   const cameraRef = useRef(camera);
@@ -790,9 +812,10 @@ function Branches({ stems, camera, thornArrival, leafArrival, sprouts, highlight
     view.lineStems = geometry.stemIds;
     view.nodeStems = geometry.nodeStems;
     applyLit(view, litRef.current);
-    view.boxCount.value = textBoxes(stems, view.boxes);
+    applyMoods(view, moods);
+    view.boxCount.value = bare ? 0 : textBoxes(stems, view.boxes);
     if (!view.animated) draw(view, cameraRef.current);
-  }, [stems, sprouts]);
+  }, [stems, sprouts, moods, bare]);
 
   useEffect(() => {
     const view = viewRef.current;

@@ -1,52 +1,15 @@
-import { useEffect, useState } from "react";
-import { API, SERVER_DOWN, request } from "../api";
-import PronounsPicker from "./PronounsPicker";
+import { useState } from "react";
+import { API, SERVER_DOWN } from "../api";
 import { TEST_ACCOUNTS, TEST_PASSWORD, recentAccounts, rememberAccount } from "../accounts";
 
 type AccountMenuProps = {
   username: string;
-  token: string;
   pronouns: string | null;
-  onPronounsChange: (pronouns: string) => void;
   onSwitch: (newToken: string) => void;
   onLogout: () => void;
 };
 
-type PronounsSettingProps = {
-  token: string;
-  saved: string;
-  onSaved: (pronouns: string) => void;
-};
-
-function PronounsSetting({ token, saved, onSaved }: PronounsSettingProps) {
-  const [draft, setDraft] = useState(saved);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    const next = draft.trim();
-    if (next === saved) return;
-    const timer = setTimeout(async () => {
-      const response = await request(token, "/user/edit?namespace=conversus", { metadata: { pronouns: next } });
-      if (response?.ok) {
-        setError("");
-        onSaved(next);
-      } else {
-        setError(response ? "Pronoms non enregistrés. Réessaie." : SERVER_DOWN);
-      }
-    }, 600);
-    return () => clearTimeout(timer);
-  }, [draft, saved, token, onSaved]);
-
-  return (
-    <>
-      <span className="account-label">pronoms</span>
-      <PronounsPicker value={draft} onChange={setDraft} />
-      {error && <p className="login-error">{error}</p>}
-    </>
-  );
-}
-
-function AccountMenu({ token, username, pronouns, onPronounsChange, onSwitch, onLogout }: AccountMenuProps) {
+function AccountMenu({ username, pronouns, onSwitch, onLogout }: AccountMenuProps) {
   const [error, setError] = useState("");
   const recent = recentAccounts();
   const accounts = [...new Set([...Object.keys(recent), ...TEST_ACCOUNTS])];
@@ -78,12 +41,12 @@ function AccountMenu({ token, username, pronouns, onPronounsChange, onSwitch, on
 
   return (
     <div className="account-menu">
-      <span className="account-name">{username}</span>
+      <span className="account-name">
+        {username}
+        {pronouns && <span className="pronouns"> · {pronouns}</span>}
+      </span>
       <span className="avatar">{username[0]}</span>
       <div className="account-dropdown">
-        {pronouns !== null && (
-          <PronounsSetting key={username} token={token} saved={pronouns} onSaved={onPronounsChange} />
-        )}
         <span className="account-label">utilisateurices</span>
         {accounts.map((account) => (
           <button

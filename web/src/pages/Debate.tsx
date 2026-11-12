@@ -4,7 +4,7 @@ import { HIDDEN_CHANNELS, isDebate, shownName, workspacePath, type Channel } fro
 import DebatePicker from "../components/DebatePicker";
 import SynthesisModal from "../components/SynthesisModal";
 import CameraIcon from "../components/CameraIcon";
-import Branches, { type Arrival, type Mark, type Stem } from "../components/Branches";
+import Branches, { type Arrival, type Color, type Mark, type Stem } from "../components/Branches";
 import Rain, { type Shower } from "../components/Rain";
 import Leaves from "../components/Leaves";
 import ReactionIcon, { REACTIONS } from "../components/ReactionIcon";
@@ -20,12 +20,14 @@ import { pronounsByName } from "../pronouns";
 
 const ZOOM_STEP = 1.25;
 const MESSAGES = "/channel/message?namespace=conversus";
+const MAX_PREVIEW = 120;
 
 type Synthesis = { text: string | null; error: string; upTo: number; retained: number[] };
 
 type DebateProps = {
   token: string;
   channels: Channel[];
+  me: string | null;
   pronouns: string;
   onTokenExpired: () => void;
 };
@@ -61,19 +63,25 @@ function threadOf(replies: Message[], id: number) {
 const MOOD_FONTS: Record<ReactionValue, string> = { thorn: "LoveAndRage", wilt: "Nudles", leaf: "LigaSans" };
 
 function moodFont(reactions: Message[], message: Message) {
-  const counts = new Map<ReactionValue, { count: number; last: number }>();
-  reactions.forEach((reaction, index) => {
-    const { reactTo, value } = reaction.metadata?.conversus ?? {};
-    if (reactTo !== message.id || (value !== "thorn" && value !== "wilt" && value !== "leaf")) return;
-    const current = counts.get(value) ?? { count: 0, last: -1 };
-    counts.set(value, { count: current.count + 1, last: index });
-  });
-  let winner: ReactionValue | null = null;
-  for (const [value, { count, last }] of counts) {
-    const best = winner ? counts.get(winner)! : null;
-    if (!best || count > best.count || (count === best.count && last > best.last)) winner = value;
-  }
+  const winner = majorityReaction(reactions, message);
   return winner ? MOOD_FONTS[winner] : shownFont(message.metadata?.conversus?.font);
+}
+
+const MOOD_COLORS: Record<ReactionValue, Color> = {
+  leaf: [0.878, 0.31, 0.604],
+  thorn: [1.0, 0.353, 0.212],
+  wilt: [0.608, 0.42, 1.0],
+};
+
+function majorityReaction(reactions: Message[], message: Message) {
+  const counts: Record<ReactionValue, number> = { leaf: 0, thorn: 0, wilt: 0 };
+  for (const reaction of reactions) {
+    const { reactTo, value } = reaction.metadata?.conversus ?? {};
+    if (reactTo === message.id && (value === "leaf" || value === "thorn" || value === "wilt")) counts[value] += 1;
+  }
+  const best = Math.max(counts.leaf, counts.thorn, counts.wilt);
+  const winners = (Object.keys(counts) as ReactionValue[]).filter((value) => counts[value] === best);
+  return best > 0 && winners.length === 1 ? winners[0] : null;
 }
 
 function countWilts(reactions: Message[], message: Message) {
@@ -115,6 +123,13 @@ function displayName(message: Message) {
   return message.anonymous || name === "anonymous" ? "Anonyme" : name;
 }
 
+function preview(text: string) {
+  if (text.length <= MAX_PREVIEW) return text;
+  const cut = text.slice(0, MAX_PREVIEW);
+  const lastSpace = cut.lastIndexOf(" ");
+  return (lastSpace > 0 ? cut.slice(0, lastSpace) : cut).trimEnd() + "…";
+}
+
 function textSize(element: HTMLDivElement): Size {
   const box = element.getBoundingClientRect();
   const scale = element.offsetWidth / box.width || 1;
@@ -130,7 +145,7 @@ function textSize(element: HTMLDivElement): Size {
   return { width: right * scale, height: bottom * scale };
 }
 
-function Debate({ token, channels, pronouns, onTokenExpired }: DebateProps) {
+function Debate({ token, channels, me, pronouns, onTokenExpired }: DebateProps) {
   const { debateId: channelId, channelId: openChannelId } = useParams();
   const navigate = useNavigate();
   const sectionRef = useRef<HTMLElement>(null);
@@ -141,7 +156,7 @@ function Debate({ token, channels, pronouns, onTokenExpired }: DebateProps) {
   const [connectionError, setConnectionError] = useState("");
   const [pendingReactions, setPendingReactions] = useState<string[]>([]);
   const [replies, setReplies] = useState<Message[]>([]);
-  const pronounsOf = useMemo(() => pronounsByName(replies), [replies]);
+  const pronounsOf = useMemo(() => pronounsByName(replies, me, pronouns), [replies, me, pronouns]);
   const [reactions, setReactions] = useState<Message[]>([]);
   const [positions, setPositions] = useState<Placement[]>([]);
   const [textSizes, setTextSizes] = useState<Size[]>([]);
@@ -189,6 +204,16 @@ function Debate({ token, channels, pronouns, onTokenExpired }: DebateProps) {
       return [{ from, to, sag: to.sag, id: message.id, marks, text }];
     });
   }, [replies, reactions, shown, textSizes]);
+  const moods = useMemo(
+    () =>
+      new Map(
+        replies.flatMap((message): [number, Color][] => {
+          const winner = majorityReaction(reactions, message);
+          return winner ? [[message.id, MOOD_COLORS[winner]]] : [];
+        }),
+      ),
+    [replies, reactions],
+  );
   const thread = useMemo(() => (hoveredId === null ? null : threadOf(replies, hoveredId)), [replies, hoveredId]);
   function veilAt(arrival: Arrival) {
     const target = shown.get(arrival.target);
@@ -427,11 +452,13 @@ function Debate({ token, channels, pronouns, onTokenExpired }: DebateProps) {
           onClick={handleSynthesis}
           disabled={replies.length === 0 || synthesis !== null}
         >
-          Synthèse
+          SyntheSus
         </button>
       </div>
       {synthesis && (
         <SynthesisModal
+          stems={stems}
+          moods={moods}
           retainedCount={synthesis.retained.length}
           text={synthesis.text}
           error={synthesis.error}
@@ -496,7 +523,7 @@ function Debate({ token, channels, pronouns, onTokenExpired }: DebateProps) {
                 data-font={moodFont(reactions, message)}
                 style={{ fontFamily: fontFamily(moodFont(reactions, message)) }}
               >
-                {message.content}
+                {openId === message.id ? message.content : preview(message.content)}
               </p>
               {openId === message.id && (
                 <div className="message-actions" onClick={(event) => event.stopPropagation()}>

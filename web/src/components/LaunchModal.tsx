@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Message } from "../pages/Chat";
+import { pronounsByName } from "../pronouns";
 
 type LaunchModalProps = {
   messages: Message[];
@@ -11,6 +12,7 @@ function LaunchModal({ messages, onCancel, onLaunch }: LaunchModalProps) {
   const [subject, setSubject] = useState(messages[0].content);
   const [launching, setLaunching] = useState(false);
   const [unfolded, setUnfolded] = useState<number[]>([]);
+  const pronounsOf = pronounsByName(messages);
 
   function toggleUnfolded(id: number) {
     setUnfolded((current) => (current.includes(id) ? current.filter((other) => other !== id) : [...current, id]));
@@ -40,7 +42,12 @@ function LaunchModal({ messages, onCancel, onLaunch }: LaunchModalProps) {
         <ul className="modal-messages">
           {messages.map((message) => (
             <li key={message.id} className={unfolded.includes(message.id) ? "unfolded" : undefined}>
-              <strong>{message.user}</strong>
+              <strong>
+                {message.user}
+                {!message.anonymous && pronounsOf.get(message.user) && (
+                  <span className="pronouns"> · {pronounsOf.get(message.user)}</span>
+                )}
+              </strong>
               <button type="button" aria-expanded={unfolded.includes(message.id)} onClick={() => toggleUnfolded(message.id)}>
                 {message.content}
               </button>

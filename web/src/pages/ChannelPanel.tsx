@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { SERVER_DOWN, request } from "../api";
 import LaunchModal from "../components/LaunchModal";
 import ChannelComposer from "../components/ChannelComposer";
+import { SmallFlower } from "../components/Logo";
 import type { Message } from "./Chat";
 import type { Channel } from "../channels";
 import { pronounsByName } from "../pronouns";
@@ -51,7 +52,7 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
     tokenExpired.current = onTokenExpired;
   }, [onTokenExpired]);
   const stickToBottom = useRef(true);
-  const pronounsOf = pronounsByName(messages);
+  const pronounsOf = pronounsByName(messages, me, pronouns);
   const selectedMessages = messages.filter((message) => selectedIds.includes(message.id));
   const lastMessageId = messages.at(-1)?.id;
   const debatesSeen = useRef(onDebatesSeen);
@@ -173,6 +174,7 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
           const author = authorOf(message);
           const mine = !!me && !message.anonymous && message.user === me;
           const debateName = message.metadata?.conversus?.channelName;
+          const synthesisOf = message.metadata?.conversus?.synthesisOf;
           return (
             <li className="message" key={message.id}>
               {isSelecting && (
@@ -192,12 +194,23 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
                   )}
                   <time>{formatTime(message)}</time>
                 </div>
-                {message.metadata?.conversus?.synthesisOf ? (
-                  <>
-                    <p>a partagé la synthèse de</p>
-                    <p className="message-subject">{message.metadata.conversus.synthesisOf.split("#")[0]}</p>
-                    <p>{message.content}</p>
-                  </>
+                {synthesisOf ? (
+                  <button type="button" className="synthesis-card" onClick={() => onOpenDebate(synthesisOf)}>
+                    <span>a partagé la synthèse de</span>
+                    <span className="message-subject">
+                      <SmallFlower className="small-flower synthesis-flower" />
+                      {synthesisOf.split("#")[0]}
+                    </span>
+                    <span className="synthesis-excerpt">{message.content}</span>
+                  </button>
+                ) : debateName ? (
+                  <button type="button" className="synthesis-card" onClick={() => onOpenDebate(debateName)}>
+                    <span>a ouvert un ConVersus</span>
+                    <span className="message-subject">
+                      <SmallFlower className="small-flower synthesis-flower" />
+                      {debateName.split("#")[0]}
+                    </span>
+                  </button>
                 ) : (
                   <p>{message.content}</p>
                 )}

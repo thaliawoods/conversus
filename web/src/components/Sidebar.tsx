@@ -5,16 +5,14 @@ import AccountMenu from "./AccountMenu";
 import { HIDDEN_CHANNELS, isDebate, shownName, workspacePath, type Channel } from "../channels";
 
 type SidebarProps = {
-  token: string;
   channels: Channel[];
   username: string;
   pronouns: string | null;
-  onPronounsChange: (pronouns: string) => void;
   onSwitch: (newToken: string) => void;
   onLogout: () => void;
 };
 
-function Sidebar({ token, channels, username, pronouns, onPronounsChange, onSwitch, onLogout }: SidebarProps) {
+function Sidebar({ channels, username, pronouns, onSwitch, onLogout }: SidebarProps) {
   const { channelId, debateId } = useParams();
   const [search, setSearch] = useState("");
   const [folded, setFolded] = useState<string[]>([]);
@@ -85,10 +83,8 @@ function Sidebar({ token, channels, username, pronouns, onPronounsChange, onSwit
         ))}
       </div>
       <AccountMenu
-        token={token}
         username={username}
         pronouns={pronouns}
-        onPronounsChange={onPronounsChange}
         onSwitch={onSwitch}
         onLogout={onLogout}
       />

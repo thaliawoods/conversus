@@ -586,7 +586,36 @@
 }
 
 .synthesis-modal {
-  width: min(38rem, 90vw);
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 2.5rem;
+  align-items: center;
+  width: min(68rem, 94vw);
+}
+
+.synthesis-plant {
+  position: relative;
+  height: min(86vh, 52rem);
+  margin-left: max(-12rem, (68rem - 100vw) / 2);
+  margin-right: -2rem;
+}
+
+.synthesis-side {
+  position: relative;
+  z-index: 1;
+}
+
+@media (max-width: 760px) {
+  .synthesis-modal {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .synthesis-plant {
+    height: 40vh;
+    margin-left: 0;
+    margin-right: 0;
+  }
 }
 
 .synthesis-text {
@@ -2194,4 +2223,94 @@
   text-transform: none;
   color: var(--ice-soft);
   opacity: 0.7;
+}
+
+/* Synthèse partagée dans le chat : bloc cliquable qui ouvre le ConVersus */
+.synthesis-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.synthesis-card .message-subject {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  transition: color 0.2s;
+}
+
+.synthesis-flower {
+  width: 1rem;
+  height: 1rem;
+  font-size: 0.75rem;
+}
+
+.synthesis-excerpt {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  color: rgba(196, 230, 255, 0.7);
+  transition: color 0.2s;
+}
+
+.synthesis-card:hover .message-subject,
+.synthesis-card:focus-visible .message-subject {
+  color: var(--ice);
+}
+
+.synthesis-card:hover .synthesis-excerpt,
+.synthesis-card:focus-visible .synthesis-excerpt {
+  color: var(--white);
+}
+
+/* Chat : mêmes tailles pour les blocs ConVersus que pour les messages */
+.channel-panel .synthesis-card > span {
+  font-size: var(--text-body);
+  line-height: 1.35;
+}
+
+.channel-panel .synthesis-card > span:first-child {
+  color: var(--ice-soft);
+}
+
+.channel-panel .synthesis-card .message-subject {
+  margin: 0.15rem 0;
+}
+
+/* Pronoms : même taille que le nom */
+.channel-panel .message-meta .pronouns {
+  font-size: var(--text-small);
+}
+
+/* Rejoindre : lien gris de la DA, sans majuscules ni fond */
+.channel-panel .join-button {
+  padding: 0 0 0.1rem;
+  border-bottom: 1px solid transparent;
+  background: none;
+  color: rgba(196, 230, 255, 0.7);
+  font-size: 0.78rem;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.channel-panel .join-button:hover {
+  background: none;
+  color: var(--white);
+  border-bottom-color: var(--ice);
+}
+
+.modal .synthesis-name,
+.col-head .synthesis-button.synthesis-button {
+  font-family: "PoppinsTN", var(--font-text);
+  font-weight: 600;
+  font-style: italic;
 }

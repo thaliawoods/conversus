@@ -161,11 +161,9 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
       {!closed.side && (
         <div className="column" style={{ width: layout.side }}>
           <Sidebar
-            token={token}
             channels={channels}
             username={username}
             pronouns={pronouns}
-            onPronounsChange={setPronouns}
             onSwitch={onSwitch}
             onLogout={onTokenExpired}
           />
@@ -211,6 +209,7 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
               key={debateId}
               token={token}
               channels={channels}
+              me={username}
               pronouns={pronouns ?? ""}
               onTokenExpired={onTokenExpired}
             />
