@@ -75,7 +75,6 @@ function Rain({ showers, stems, camera }: { showers: Shower[]; stems: Stem[]; ca
       const { width, height } = resize();
       context!.clearRect(0, 0, width, height);
 
-      // Strongest shower right now, and the stems that are crying.
       let strength = 0;
       const crying: number[] = [];
       for (const [key, shower] of starts.current) {
@@ -110,7 +109,6 @@ function Rain({ showers, stems, camera }: { showers: Shower[]; stems: Stem[]; ca
           }
         }
 
-        // Tears live in board coordinates so they follow the camera.
         const { stems, camera } = latest.current;
         spawn += dt;
         if (crying.length > 0 && spawn > TEAR_EVERY) {

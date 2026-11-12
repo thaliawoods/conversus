@@ -66,6 +66,7 @@ function MessageForm({ onSend, placeholder, error }: MessageFormProps) {
                 type="button"
                 key={option.label}
                 className={font === option.value ? "active" : undefined}
+                data-reaction={option.mood}
                 style={{ fontFamily: fontFamily(option.value) }}
                 onClick={() => {
                   setFont(option.value);
@@ -95,6 +96,7 @@ function MessageForm({ onSend, placeholder, error }: MessageFormProps) {
                 key={option.value}
                 className={effect === option.value ? "active" : undefined}
                 data-tip={option.label}
+                data-reaction={option.value}
                 aria-label={option.label}
                 onClick={() => {
                   setEffect(option.value);
@@ -149,7 +151,6 @@ function MessageForm({ onSend, placeholder, error }: MessageFormProps) {
         >
           <AnonymousIcon lit={anonymous} />
         </button>
-        {/* The text is written directly in the chosen font, the arrow ends the line */}
         <div className="send-line">
           <input
             value={content}

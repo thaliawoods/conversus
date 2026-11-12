@@ -77,7 +77,6 @@ export function useCamera() {
     setCamera(START);
   }
 
-  // One step of zoom around the centre of the screen (zoom buttons).
   function zoomBy(factor: number) {
     setCamera((current) => {
       const zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, current.zoom * factor));

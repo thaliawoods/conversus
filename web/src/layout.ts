@@ -13,6 +13,7 @@ const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 const SPACING = 10;
 const GAP = 16;
 const FLOWER_RADIUS = 64;
+const FLOWER_KEEP_OUT = 220;
 
 function spiralPoint(k: number, offset: number) {
   const angle = k * GOLDEN_ANGLE + offset;
@@ -59,9 +60,7 @@ const CONE = Math.PI / 3;
 const WIDE_CONE = Math.PI / 2;
 const AXIS = Math.PI / 9;
 const SEARCH_LIMIT = 4000;
-// Enough points that a long stem can't slip past the corner of a message between two of them.
 const STEM_SAMPLES = 32;
-// Room around another message's text for the stem's leaves, thorns and twigs (added to GAP / 2): about 20 px.
 const STEM_CLEARANCE = 12;
 
 type Rule = { cone: number | null; stems: boolean; sideways: boolean };
@@ -135,15 +134,12 @@ function tiltDown(point: Point, center: Point, tilt: number) {
   const distance = Math.hypot(dx, dy);
   const angle = Math.atan2(dy, dx);
   const turn = Math.atan2(Math.sin(Math.PI / 2 - angle), Math.cos(Math.PI / 2 - angle));
-  // Never more than WILT_TURN towards the ground, so a wilted message stays near its place.
   const tilted = angle + Math.max(-WILT_TURN, Math.min(WILT_TURN, turn)) * tilt;
   return { x: center.x + Math.cos(tilted) * distance, y: center.y + Math.sin(tilted) * distance };
 }
 
 let lastKey = "";
 let lastPositions: Placement[] = [];
-// Where each message was put, measured from its parent, and the data it was placed with.
-// base: its place before Faner tilted it.
 const remembered = new Map<
   number,
   { dx: number; dy: number; inputs: string; baseDx: number; baseDy: number; baseInputs: string }
@@ -161,7 +157,7 @@ export function placeMessages(
   if (key === lastKey) return lastPositions;
 
   const placed: Box[] = [
-    { left: -FLOWER_RADIUS, top: -FLOWER_RADIUS, right: FLOWER_RADIUS, bottom: FLOWER_RADIUS },
+    { left: -FLOWER_KEEP_OUT, top: -FLOWER_KEEP_OUT, right: FLOWER_KEEP_OUT, bottom: FLOWER_KEEP_OUT },
   ];
   const positions: Placement[] = [];
   const lines: Line[] = [];
@@ -219,7 +215,6 @@ export function placeMessages(
       return center;
     };
 
-    // Keep the old place if this message's own data didn't change and the place still fits.
     const id = ids[index];
     const baseInputs = JSON.stringify([size, parent === null ? null : ids[parent], marks[index] ?? 0]);
     const inputs = JSON.stringify([baseInputs, sag]);
@@ -231,7 +226,6 @@ export function placeMessages(
       point = kept;
       base = { x: origin.x + memory!.baseDx, y: origin.y + memory!.baseDy };
     } else {
-      // Faner only tilts the message from its own place, with the usual rules: the plant keeps its shape.
       const oldBase =
         memory && memory.baseInputs === baseInputs ? { x: origin.x + memory.baseDx, y: origin.y + memory.baseDy } : null;
       base = oldBase && fits(oldBase, KEEP_RULE) ? oldBase : search(origin, RULES);
@@ -261,10 +255,8 @@ export function placeMessages(
 
 const STEM_BEND = 0.15;
 
-// Per Faner, how much the stem bows (share of its length), up to WILT_MAX of them.
 const WILT_SAG = 0.06;
 const WILT_MAX = 4;
-// Largest tilt of a wilted message towards the ground, in radians (about 25°).
 const WILT_TURN = 0.45;
 
 export function wiltSag(count: number) {

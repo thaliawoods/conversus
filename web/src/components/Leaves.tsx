@@ -8,7 +8,6 @@ type Blade = { points: Spot[]; width: number; shape: number; veins: [Spot, Spot]
 type Part = { kind: "petiole"; points: Spot[] } | { kind: "blade"; outline: Spot[]; midrib: Spot[]; veins: [Spot, Spot][] };
 type Flyer = { x: number; y: number; angle: number; side: number; start: number; phase: number; parts: Part[] };
 
-// Feuille: 7 bramble leaves bud on the stem aimed at, then spin away upwards.
 const COUNT = 7;
 const LIFE = 2.8;
 const BUD = 0.3;
@@ -19,7 +18,6 @@ const ROSE_CORE = "#ffe6f2";
 const fract = (value: number) => value - Math.floor(value);
 const modulo = (value: number, base: number) => value - base * Math.floor(value / base);
 
-// Same shapes as addLeaflet / addLeaf in Branches.tsx, drawn in 2D.
 function curve(origin: Spot, start: number, turn: number, length: number, wobble = 0, seed = 0) {
   const points = [origin];
   for (let step = 1; step <= 12; step++) {
@@ -69,7 +67,6 @@ function makeLeaflet(origin: Spot, angle: number, side: number, scale: number, s
   return { points, width, shape: 3.05 + lopsided, veins };
 }
 
-// Width of the blade along its length, with the teeth and lobes of the shader.
 function outline({ points, width, shape, veins }: Blade): Part {
   const seed = shape * 37;
   const left: Spot[] = [];
@@ -98,7 +95,6 @@ function outline({ points, width, shape, veins }: Blade): Part {
   return { kind: "blade", outline: left.concat(right.reverse()), midrib, veins };
 }
 
-// A whole leaf, attached at (0, 0) and pointing right: 1, 3 or 5 leaflets.
 function makeLeaf(seed: number): Part[] {
   const pick = noise(seed, 3);
   const count = pick < 0.4 ? 1 : pick < 0.85 ? 3 : 5;
@@ -157,14 +153,12 @@ function drawLeaf(context: CanvasRenderingContext2D, parts: Part[]) {
   }
 }
 
-// Small jump when the leaf buds: grows past its size, then settles.
 function popOut(progress: number) {
   const overshoot = 2.2;
   const clamped = Math.min(1, Math.max(0, progress));
   return 1 + (overshoot + 1) * Math.pow(clamped - 1, 3) + overshoot * Math.pow(clamped - 1, 2);
 }
 
-// A · Tourbillon: rising spiral around the stem, spinning and turning over.
 function spiral(flyer: Flyer, flight: number) {
   const turn = flyer.phase + flight * 5.2 * flyer.side;
   const radius = 6 + 26 * flight;
@@ -229,7 +223,6 @@ function Leaves({ arrival, stems, camera }: { arrival: Arrival | null; stems: St
         return;
       }
 
-      // Flyers live in board coordinates so they follow the camera.
       const { camera } = latest.current;
       for (const flyer of flyers.current) {
         const age = now - flyer.start;

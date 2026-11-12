@@ -17,7 +17,6 @@ function same(a: Map<number, Spot>, b: Map<number, Spot>) {
   return true;
 }
 
-// Messages and stems slide from where they are shown to their new place, instead of jumping.
 export function useGlide(targets: Map<number, Spot>) {
   const [shown, setShown] = useState(targets);
   const shownRef = useRef(targets);

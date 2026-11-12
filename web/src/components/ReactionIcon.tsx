@@ -1,169 +1,65 @@
-import { useId } from "react";
 import type { ReactionValue } from "../pages/Chat";
 
 export const REACTIONS: { value: ReactionValue; label: string }[] = [
-  { value: "leaf", label: "Feuillu" },
-  { value: "thorn", label: "Épineux" },
-  { value: "wilt", label: "Fané" },
+  { value: "leaf", label: "Content" },
+  { value: "thorn", label: "En colère" },
+  { value: "wilt", label: "Triste" },
 ];
 
-// Same sequence of numbers for the same seed: shapes are irregular but identical on every render.
-function random(seed: number) {
-  let state = seed;
-  return () => {
-    state = (state * 9301 + 49297) % 233280;
-    return state / 233280;
-  };
-}
+type Face = { eyes: string[]; lines: string[] };
 
-type Leaflet = { x: number; y: number; angle: number; whole: string; half: string; rib: string; veins: string; dim: boolean };
-type Horn = { x: number; y: number; angle: number; outline: string; core: string };
-type Tube = { d: string; width: number };
-type Dot = { x: number; y: number; r: number };
-type Drawing = { tubes: Tube[]; leaflets: Leaflet[]; horns: Horn[]; nodes: Dot[] };
+const LINE_STROKE = 5.5;
 
-// Bramble leaflet: base at (0, 0), tip upwards, toothed edge, one side wider than the other.
-function leaflet(x: number, y: number, angle: number, length: number, width: number, seed: number, hook: number, dim = false): Leaflet {
-  const next = random(seed);
-  const steps = 16;
-  const lopsided = 0.78 + next() * 0.12;
-  const right: [number, number][] = [];
-  const left: [number, number][] = [];
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    const half = width * Math.pow(Math.sin(Math.PI * Math.pow(t, 0.8)), 0.75);
-    const center = hook * t * t * t;
-    const top = -length * t;
-    right.push([center + half * (i % 2 ? 0.8 + next() * 0.1 : 1), top]);
-    left.push([center - half * lopsided * (i % 2 ? 0.78 + next() * 0.12 : 1), top]);
-  }
-  const line = (points: [number, number][]) => points.map(([px, py]) => `${px.toFixed(2)} ${py.toFixed(2)}`).join(" L");
-  const bend = `${(hook * 0.3).toFixed(2)} ${(-length * 0.5).toFixed(2)}`;
-  const tip = `${hook} ${-length}`;
-  let veins = "";
-  for (let k = 1; k <= 3; k++) {
-    if (next() < 0.2) continue;
-    const t = k / 4.4;
-    const cx = hook * t * t * t;
-    const cy = -length * t;
-    const reach = width * (0.55 + next() * 0.3);
-    veins += `M${cx} ${cy} L${cx + reach} ${cy - length * 0.13} M${cx} ${cy + 0.4} L${cx - reach * lopsided} ${cy - length * 0.1} `;
-  }
-  return {
-    x, y, angle, dim, veins,
-    whole: `M0 0 L${line(right)} L${tip} L${line(left.slice().reverse())} Z`,
-    half: `M0 0 L${line(right)} L${tip} Q${bend} 0 0 Z`,
-    rib: `M0 0 Q${bend} ${tip}`,
-  };
-}
-
-// Curved horn: base on the stem at (0, 0), tip upwards, bent towards +x.
-function horn(x: number, y: number, angle: number, length: number, base: number): Horn {
-  const b = base / 2;
-  const tipX = length * 0.45;
-  const tipY = -length;
-  return {
-    x, y, angle,
-    outline: `M${-b} 0 Q${-b * 0.4} ${tipY * 0.55} ${tipX} ${tipY} Q${b * 0.9} ${tipY * 0.35} ${b} 0 Z`,
-    core: `M0 0 Q${b * 0.1} ${tipY * 0.5} ${tipX * 0.9} ${tipY * 0.95}`,
-  };
-}
-
-// Option C of the preview: a small piece of the plant per reaction.
-const DRAWINGS: Record<ReactionValue, Drawing> = {
-  leaf: {
-    tubes: [{ d: "M-11 11 Q-6 5 -1 0", width: 1.5 }],
-    leaflets: [
-      leaflet(-1, 0, 40, 11, 3.8, 21, 2.75),
-      leaflet(-4.5, 3.8, -18, 8, 2.8, 22, 1),
-      leaflet(-4.5, 3.8, 95, 8, 2.8, 23, -1),
-    ],
-    horns: [],
-    nodes: [{ x: -4.5, y: 3.8, r: 0.6 }],
-  },
+const FACES: Record<ReactionValue, Face> = {
   thorn: {
-    tubes: [{ d: "M-12 7 Q0 2 12 -6", width: 1.6 }],
-    leaflets: [],
-    horns: [horn(-8, 5, -25, 6, 3.4), horn(-3, 3.2, 155, 6, 3.4), horn(2, 1.2, -30, 6, 3.2), horn(7, -2.2, 150, 5.5, 3)],
-    nodes: [],
+    eyes: [
+      "M30 9.84375C30 4.87318 23.2843 0.843748 15 0.843749C6.71573 0.843749 0 4.87319 0 9.84375C0 14.8143 6.71573 18.8437 15 18.8437C23.2843 18.8437 30 14.8143 30 9.84375Z",
+      "M46 7.84375C46 -0.440525 48 -0.498047 36.5 3.00195C25.5 -0.498045 0 -0.440521 0 7.84375C0 16.128 10.2975 22.8437 23 22.8437C35.7025 22.8437 46 16.128 46 7.84375Z",
+      "M86 9.84375C86 4.87318 79.2843 0.843748 71 0.843749C62.7157 0.843749 56 4.87319 56 9.84375C56 14.8143 62.7157 18.8437 71 18.8437C79.2843 18.8437 86 14.8143 86 9.84375Z",
+      "M102.003 7.84375C102.003 -0.440525 74.5 -1.65625 63 1.84375C52 -1.65625 56.0032 -0.440521 56.0032 7.84375C56.0032 16.128 66.3007 22.8437 79.0032 22.8437C91.7058 22.8437 102.003 16.128 102.003 7.84375Z",
+    ],
+    lines: ["M72 30.9987C64.7635 28.1424 46.4096 23.6463 28 31"],
   },
   wilt: {
-    tubes: [{ d: "M-11 -4 Q-2 -12 5 -5 Q8 -2 8 4", width: 1.5 }],
-    leaflets: [leaflet(8, 4, 175, 8, 3, 31, 1.5, true), leaflet(1, -7.3, 160, 7, 2.6, 32, 2, true)],
-    horns: [],
-    nodes: [{ x: 1, y: -7.3, r: 0.6 }],
+    eyes: [
+      "M30 13C30 17.9706 23.2843 22 15 22C6.71573 22 0 17.9706 0 13C0 8.02944 6.71573 4 15 4C23.2843 4 30 8.02944 30 13Z",
+      "M46 15C46 23.2843 34.5 24.5 23 21C12 24.5 0 23.2843 0 15C0 6.71573 10.2975 0 23 0C35.7025 0 46 6.71573 46 15Z",
+      "M86 13C86 17.9706 79.2843 22 71 22C62.7157 22 56 17.9706 56 13C56 8.02944 62.7157 4 71 4C79.2843 4 86 8.02944 86 13Z",
+      "M102 15C102 23.2843 90.5 24.5 79 21C68 24.5 56 23.2843 56 15C56 6.71573 66.2975 0 79 0C91.7025 0 102 6.71573 102 15Z",
+    ],
+    lines: [
+      "M66 41.9331C60.9838 32.484 48.2612 17.6103 35.5 41.9375",
+      "M87.5938 32C88.9844 34.4179 90.9907 39.3714 87.891 39.8424C84.7913 40.3134 86.4013 34.8104 87.5938 32Z",
+    ],
+  },
+  leaf: {
+    eyes: [
+      "M30 13C30 17.9706 23.2843 22 15 22C6.71573 22 0 17.9706 0 13C0 8.02944 6.71573 4 15 4C23.2843 4 30 8.02944 30 13Z",
+      "M46 15C46 23.2843 34.5 24.5 23 21C12 24.5 0 23.2843 0 15C0 6.71573 10.2975 0 23 0C35.7025 0 46 6.71573 46 15Z",
+      "M86 13C86 17.9706 79.2843 22 71 22C62.7157 22 56 17.9706 56 13C56 8.02944 62.7157 4 71 4C79.2843 4 86 8.02944 86 13Z",
+      "M102 15C102 23.2843 90.5 24.5 79 21C68 24.5 56 23.2843 56 15C56 6.71573 66.2975 0 79 0C91.7025 0 102 6.71573 102 15Z",
+    ],
+    lines: ["M37 29.0747C42.178 38.5239 55.3272 53.3897 68.5 29.0625"],
   },
 };
 
 function ReactionIcon({ value, label }: { value: ReactionValue; label?: string }) {
-  // One id per icon: the hidden "who reacted" bubble (display: none) must not hold the only copy of the gradients.
-  const id = useId().replace(/[^a-zA-Z0-9]/g, "");
-  const drawing = DRAWINGS[value];
+  const face = FACES[value];
+  const lines = [...face.eyes, ...face.lines];
 
   return (
     <svg
       className="reaction-icon"
-      viewBox="-12 -12 24 24"
+      viewBox="-6 -6 114 58"
       role={label ? "img" : undefined}
       aria-label={label}
       aria-hidden={label ? undefined : true}
     >
-      <defs>
-        <filter id={`${id}-glow`} x="-60%" y="-60%" width="220%" height="220%">
-          <feGaussianBlur in="SourceGraphic" stdDeviation="0.9" result="blur" />
-          <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.18  0 0 0 0 0.38  0 0 0 0 1  0 0 0 1.4 0" result="blue" />
-          <feMerge>
-            <feMergeNode in="blue" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-        <linearGradient id={`${id}-lit`} x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#7fb0ff" />
-          <stop offset="1" stopColor="#f2f8ff" />
-        </linearGradient>
-        <linearGradient id={`${id}-shade`} x1="1" y1="0" x2="0" y2="0">
-          <stop offset="0" stopColor="#2f62ff" />
-          <stop offset="1" stopColor="#0f2a9a" />
-        </linearGradient>
-        <linearGradient id={`${id}-dim`} x1="1" y1="0" x2="0" y2="0">
-          <stop offset="0" stopColor="#4c78d8" />
-          <stop offset="1" stopColor="#16246e" />
-        </linearGradient>
-        <linearGradient id={`${id}-horn`} x1="0" y1="1" x2="0" y2="0">
-          <stop offset="0" stopColor="#2f62ff" />
-          <stop offset="0.55" stopColor="#cfe4ff" />
-          <stop offset="1" stopColor="#ffffff" />
-        </linearGradient>
-      </defs>
-
-      <g filter={`url(#${id}-glow)`}>
-        {drawing.tubes.map((tube) => (
-          <g key={tube.d}>
-            <path className="reaction-tube" d={tube.d} strokeWidth={tube.width} />
-            <path className="reaction-core" d={tube.d} strokeWidth={tube.width * 0.38} />
-          </g>
-        ))}
-
-        {drawing.leaflets.map((leaf) => (
-          <g key={leaf.whole} transform={`translate(${leaf.x} ${leaf.y}) rotate(${leaf.angle})`} className={leaf.dim ? "reaction-dim" : undefined}>
-            <path className="reaction-leaf" d={leaf.whole} fill={`url(#${id}-${leaf.dim ? "dim" : "shade"})`} />
-            <path d={leaf.half} fill={`url(#${id}-${leaf.dim ? "dim" : "lit"})`} opacity={leaf.dim ? 0.35 : 0.9} />
-            <path className="reaction-veins" d={leaf.veins} />
-            <path className="reaction-rib" d={leaf.rib} />
-          </g>
-        ))}
-
-        {drawing.horns.map((thorn) => (
-          <g key={thorn.outline + thorn.x} transform={`translate(${thorn.x} ${thorn.y}) rotate(${thorn.angle})`}>
-            <path className="reaction-horn" d={thorn.outline} fill={`url(#${id}-horn)`} />
-            <path className="reaction-horn-core" d={thorn.core} />
-          </g>
-        ))}
-
-        {drawing.nodes.map((node) => (
-          <g key={`${node.x} ${node.y}`}>
-            <circle className="reaction-halo" cx={node.x} cy={node.y} r={node.r * 1.8} />
-            <circle className="reaction-node" cx={node.x} cy={node.y} r={node.r} />
+      <g className="reaction-face">
+        {lines.map((d, k) => (
+          <g key={d + k}>
+            <path className="face-tube" d={d} strokeWidth={LINE_STROKE} />
+            <path className="face-core" d={d} strokeWidth={LINE_STROKE * 0.38} />
           </g>
         ))}
       </g>

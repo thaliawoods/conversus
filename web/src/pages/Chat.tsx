@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import Navbar, { type Channel } from "../components/Navbar";
 import LaunchModal from "../components/LaunchModal";
 import SendArrow from "../components/SendArrow";
+import PanelMenu from "../components/PanelMenu";
+import { SmallFlower } from "../components/Logo";
+import { shownName, workspacePath, type Channel } from "../channels";
 import { SERVER_DOWN, formatTime, request } from "../api";
 
 export type ReactionValue = "leaf" | "thorn" | "wilt";
@@ -22,38 +24,39 @@ export type Message = {
       font?: string;
       effect?: ReactionValue;
       reactTo?: number;
-      // Subject message of a debate: the channel it was opened from.
+      pronouns?: string;
       origin?: number;
-      // Synthesis shared in a channel: which debate, last message it covers, messages retained then.
       synthesisOf?: string;
       upTo?: number;
       retained?: number[];
-      // Retenir: aims at a message, value true to retain it, false to take it back.
       retain?: number;
       value?: ReactionValue | boolean;
     };
   };
 };
 
-type ChatProps = { token: string; onTokenExpired: () => void; onSwitch: (newToken: string) => void };
+type ChatProps = {
+  token: string;
+  channels: Channel[];
+  onTokenExpired: () => void;
+  onChannelsChanged: () => void;
+  selecting: boolean;
+  onSelectingChange: (selecting: boolean) => void;
+};
 
 const MESSAGES = "/channel/message?namespace=conversus";
 const OPENED = "a ouvert un ConVersus : ";
 
-function Chat({ token, onTokenExpired, onSwitch }: ChatProps) {
+function Chat({ token, channels, onTokenExpired, onChannelsChanged, selecting: isSelecting, onSelectingChange }: ChatProps) {
   const { channelId } = useParams();
   const navigate = useNavigate();
-  const [channels, setChannels] = useState<Channel[]>([]);
-  const [username, setUsername] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [content, setContent] = useState("");
   const [sending, setSending] = useState(false);
-  // error: an action failed; connectionError: the 2 s reload failed.
   const [error, setError] = useState("");
   const [connectionError, setConnectionError] = useState("");
   const messagesRef = useRef<HTMLUListElement>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [isSelecting, setIsSelecting] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
   const selectedMessages = messages.filter((message) =>
     selectedIds.includes(message.id),
@@ -63,25 +66,11 @@ function Chat({ token, onTokenExpired, onSwitch }: ChatProps) {
     (channel) => channel.id === Number(channelId),
   );
   useEffect(() => {
-    async function loadProfile() {
-      const response = await request(token, "/me");
-      if (response?.status === 401) {
-        onTokenExpired();
-        return;
-      }
-      if (!response?.ok) {
-        setConnectionError(SERVER_DOWN);
-        return;
-      }
-      const profile = await response.json();
-      setChannels(profile.channels);
-      setUsername(profile.username);
-    }
-
-    loadProfile();
-  }, [token, onTokenExpired]);
+    setSelectedIds([]);
+  }, [channelId, isSelecting]);
   useEffect(() => {
     if (!channelId) return;
+    setMessages([]);
 
     async function loadMessages() {
       const response = await request(token, `/channel/message?channel=${channelId}&namespace=conversus`);
@@ -106,7 +95,6 @@ function Chat({ token, onTokenExpired, onSwitch }: ChatProps) {
     if (!messagesRef.current) return;
     messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
   }, [lastMessageId]);
-  // Shared ending of every action: true when it worked, otherwise the error is shown.
   function checkResponse(response: Response | null, failure: string) {
     if (response?.status === 401) {
       onTokenExpired();
@@ -143,7 +131,10 @@ function Chat({ token, onTokenExpired, onSwitch }: ChatProps) {
       channel: Number(channelId),
       metadata: { channelName: debate.name },
     });
-    navigate(`/debate/${debate.id}`);
+    setIsLaunching(false);
+    onSelectingChange(false);
+    onChannelsChanged();
+    navigate(workspacePath(channelId, debate.id));
   }
   async function handleJoin(message: Message) {
     const channelName = message.metadata?.conversus?.channelName;
@@ -151,18 +142,15 @@ function Chat({ token, onTokenExpired, onSwitch }: ChatProps) {
 
     const joined = channels.find((channel) => channel.name === channelName);
     if (joined) {
-      navigate(`/debate/${joined.id}`);
+      navigate(workspacePath(channelId, joined.id));
       return;
     }
 
     const response = await request(token, "/channel/enter", { channel: channelName });
     if (!checkResponse(response, "Impossible de rejoindre ce ConVersus. Réessaie.")) return;
     const debate: Channel = await response!.json();
-    navigate(`/debate/${debate.id}`);
-  }
-  function handleToggleSelecting() {
-    setIsSelecting(!isSelecting);
-    setSelectedIds([]);
+    onChannelsChanged();
+    navigate(workspacePath(channelId, debate.id));
   }
   function handleToggleMessage(messageId: number) {
     if (selectedIds.includes(messageId)) {
@@ -193,13 +181,13 @@ function Chat({ token, onTokenExpired, onSwitch }: ChatProps) {
   const shownError = error || connectionError;
 
   return (
-    <main className="chat">
-      <Navbar channels={channels} username={username} onSwitch={onSwitch} onLogout={onTokenExpired} />
-      <div className="chat-actions">
-        <h2 className="channel-title">{currentChannel?.name}</h2>
-        <button type="button" onClick={handleToggleSelecting}>
-          {isSelecting ? "Annuler" : "Lancer un ConVersus"}
-        </button>
+    <section className="chat">
+      <div className="col-head">
+        {currentChannel && <SmallFlower className="small-flower title-flower" />}
+        <h2 className="channel-title">{currentChannel && shownName(currentChannel)}</h2>
+        {channelId && (
+          <PanelMenu items={[{ label: "Lancer un ConVersus", onClick: () => onSelectingChange(true), disabled: isSelecting }]} />
+        )}
       </div>
       <ul className="messages" ref={messagesRef}>
         {messages.map((message) => (
@@ -211,7 +199,6 @@ function Chat({ token, onTokenExpired, onSwitch }: ChatProps) {
                 onChange={() => handleToggleMessage(message.id)}
               />
             )}
-            {/* Left column: name and time, aligned on the right */}
             <strong className="message-author">
               {message.user}
               {message.posted_at && <time dateTime={message.posted_at}>{formatTime(message.posted_at)}</time>}
@@ -244,16 +231,22 @@ function Chat({ token, onTokenExpired, onSwitch }: ChatProps) {
             {selectedIds.length}{" "}
             {selectedIds.length > 1 ? "messages ciblés" : "message ciblé"}
           </span>
-          <button
-            type="button"
-            disabled={selectedIds.length === 0}
-            onClick={() => setIsLaunching(true)}
-          >
-            Lancer le ConVersus
-          </button>
+          <span className="selection-actions">
+            <button type="button" className="reply-link" onClick={() => onSelectingChange(false)}>
+              Annuler
+            </button>
+            <button
+              type="button"
+              disabled={selectedIds.length === 0}
+              onClick={() => setIsLaunching(true)}
+            >
+              Lancer le ConVersus
+            </button>
+          </span>
         </div>
       )}
       {shownError && <p className="login-error send-error" role="alert">{shownError}</p>}
+      {channelId && (
       <form className="message-form" onSubmit={handleSendMessage}>
         <div className="send-line">
           <input
@@ -266,6 +259,7 @@ function Chat({ token, onTokenExpired, onSwitch }: ChatProps) {
           </button>
         </div>
       </form>
+      )}
       {isLaunching && (
         <LaunchModal
           messages={selectedMessages}
@@ -273,7 +267,7 @@ function Chat({ token, onTokenExpired, onSwitch }: ChatProps) {
           onLaunch={handleLaunch}
         />
       )}
-    </main>
+    </section>
   );
 }
 

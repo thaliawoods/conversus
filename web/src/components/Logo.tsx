@@ -144,7 +144,7 @@ function createGrains(dot: number) {
 
 type LogoProps = { still?: boolean; className?: string };
 
-function Logo({ still = false, className = "login-brand" }: LogoProps) {
+function useFlowerCanvas(still: boolean) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -220,6 +220,33 @@ function Logo({ still = false, className = "login-brand" }: LogoProps) {
     };
   }, [still]);
 
+  return canvasRef;
+}
+
+export function SmallFlower({ className = "small-flower" }: { className?: string }) {
+  const canvasRef = useFlowerCanvas(true);
+  return (
+    <span className={className} aria-hidden>
+      <span className="logo-flower">
+        <canvas ref={canvasRef} />
+      </span>
+    </span>
+  );
+}
+
+export function BigFlower() {
+  const canvasRef = useFlowerCanvas(false);
+  return (
+    <span className="big-flower" aria-hidden>
+      <span className="logo-flower">
+        <canvas ref={canvasRef} />
+      </span>
+    </span>
+  );
+}
+
+function Logo({ still = false, className = "login-brand" }: LogoProps) {
+  const canvasRef = useFlowerCanvas(still);
   return (
     <p className={className} role="img" aria-label="ConVersus">
       C

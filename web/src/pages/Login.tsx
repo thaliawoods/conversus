@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, useState } from "react";
 import Logo from "../components/Logo";
 import { API, SERVER_DOWN } from "../api";
 import { rememberAccount } from "../accounts";
+import PronounsPicker from "../components/PronounsPicker";
 
 const Gladiolus = lazy(() => import("../login-flower/Gladiolus"));
 
@@ -12,6 +13,8 @@ const SHAPE_FONTS = ["PicNic", "Coxinelle", "Nudles", "FixelPont", "LoveAndRage"
 function Login({ onLogin }: LoginProps) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordAgain, setPasswordAgain] = useState("");
+  const [pronouns, setPronouns] = useState("");
   const [fontIndex, setFontIndex] = useState(0);
   const [signingUp, setSigningUp] = useState(false);
   const [error, setError] = useState("");
@@ -26,15 +29,20 @@ function Login({ onLogin }: LoginProps) {
     event.preventDefault();
     const name = username.trim();
     if (!name || !password) return;
+    if (signingUp && password !== passwordAgain) {
+      setError("Les deux mots de passe ne sont pas pareils.");
+      return;
+    }
 
     setError("");
     setLoading(true);
     try {
       if (signingUp) {
-        const signup = await fetch(`${API}/user`, {
+        const mine = pronouns.trim();
+        const signup = await fetch(`${API}/user?namespace=conversus`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username: name, password }),
+          body: JSON.stringify(mine ? { username: name, password, metadata: { pronouns: mine } } : { username: name, password }),
         });
         if (!signup.ok) {
           setError("Impossible de créer ce compte (le nom est peut-être déjà pris).");
@@ -71,6 +79,7 @@ function Login({ onLogin }: LoginProps) {
 
       <form className="login-card" onSubmit={handleSubmit}>
         <Logo />
+        {signingUp && <p className="login-mode">Crée ton compte</p>}
         <h2>
           Ici exprime toi librement avec tes messages qui{" "}
           <span className="shape-word" style={{ fontFamily: SHAPE_FONTS[fontIndex] }}>
@@ -95,12 +104,29 @@ function Login({ onLogin }: LoginProps) {
             autoComplete={signingUp ? "new-password" : "current-password"}
           />
         </label>
+        {signingUp && (
+          <div className="login-extra">
+            <label className="login-field">
+              <span>Confirme ton mot de passe</span>
+              <input
+                type="password"
+                value={passwordAgain}
+                onChange={(event) => setPasswordAgain(event.target.value)}
+                autoComplete="new-password"
+              />
+            </label>
+            <div className="login-field">
+              <span>Pronoms (facultatif)</span>
+              <PronounsPicker value={pronouns} onChange={setPronouns} />
+            </div>
+          </div>
+        )}
 
         {error && <p className="login-error">{error}</p>}
         <button className="login-button" type="submit" disabled={loading}>
           {loading ? "…" : signingUp ? "Créer mon compte" : "Se connecter"}
-          {/* Variante à montrer à la créa : pictogramme à la place de « Se connecter »
-              (ajouter aria-label="Se connecter" et title="Se connecter" sur le bouton)
+          {/* variante pour la créa : une flèche au lieu du texte du bouton.
+              si on la prend, ajouter aria-label et title sur le bouton
           <svg viewBox="0 0 24 24" aria-hidden>
             <path d="M14 4h6v16h-6" />
             <path d="M3 12h12M11 8l4 4-4 4" />

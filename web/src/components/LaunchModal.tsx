@@ -10,6 +10,11 @@ type LaunchModalProps = {
 function LaunchModal({ messages, onCancel, onLaunch }: LaunchModalProps) {
   const [subject, setSubject] = useState(messages[0].content);
   const [launching, setLaunching] = useState(false);
+  const [unfolded, setUnfolded] = useState<number[]>([]);
+
+  function toggleUnfolded(id: number) {
+    setUnfolded((current) => (current.includes(id) ? current.filter((other) => other !== id) : [...current, id]));
+  }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -29,11 +34,16 @@ function LaunchModal({ messages, onCancel, onLaunch }: LaunchModalProps) {
             onChange={(event) => setSubject(event.target.value)}
           />
         </label>
-        <p className="modal-label">Messages à l'origine</p>
+        <p className="modal-label">
+          Messages à l'origine <span className="modal-count">{messages.length}</span>
+        </p>
         <ul className="modal-messages">
           {messages.map((message) => (
-            <li key={message.id}>
-              <strong>{message.user}</strong> {message.content}
+            <li key={message.id} className={unfolded.includes(message.id) ? "unfolded" : undefined}>
+              <strong>{message.user}</strong>
+              <button type="button" aria-expanded={unfolded.includes(message.id)} onClick={() => toggleUnfolded(message.id)}>
+                {message.content}
+              </button>
             </li>
           ))}
         </ul>

@@ -1,7 +1,5 @@
-// Accounts already signed in on this browser: username -> token.
 const KEY = "accounts";
 
-// Test accounts only, to remove once the tests are over.
 export const TEST_ACCOUNTS = ["thalia", "clara"];
 export const TEST_PASSWORD = "motdepasse";
 

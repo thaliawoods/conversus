@@ -1,4 +1,3 @@
-// Preview of a synthesis: seen first, then shared in the channel or dropped.
 type SynthesisModalProps = {
   retainedCount: number;
   text: string | null;

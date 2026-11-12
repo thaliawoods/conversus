@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
-import { pointOnStem, type Placement } from "../layout";
+import { pointOnStem, type Placement, type Size } from "../layout";
 import { createCentralFlower } from "./centralFlower";
 import type { Sprout } from "../hooks/useSprouts";
 
@@ -14,9 +14,7 @@ const WIGGLE_LENGTH = 9;
 const GLOW_RADIUS = 3;
 const GLOW = 0.3;
 const SWAY = 1.5;
-// M1: slow breath away from the flower, in px at the tips.
 const BREATH = 3;
-// F1: pale band of light crossing the screen diagonally (0 = off).
 const SWEEP = 0.6;
 const POINT_GAP = 1.5;
 export const LEAF = { length: 16, width: 8, turn: 0.35, petiole: 14 };
@@ -25,17 +23,16 @@ const VEIN_WIDTH = { base: 0.6, tip: 0.2 };
 const THORN = { length: 10, spacing: 7, turn: 1.4 };
 const THORN_WIDTH = { base: 6, tip: 0.05 };
 const MARK_ROOM = 18;
+const FLOWER_CLEAR = 130;
+const TEXT_CLEAR = 30;
 const SPIKE = 2;
 const BLADE = 3;
 const UNDER_TEXT = 0.2;
+const UNDER_TEXT_LIT = 0.4;
 const TEXT_MARGIN = 4;
 const MAX_BOXES = 128;
-// Épine animation: the stem turns ember red and shakes, its newest thorns grow.
 const ANGER = { duration: 2, fadeIn: 0.3, fadeOut: 0.8 };
-// Tint of the stem aimed at: ember red for Épine, raspberry pink for Feuille.
 const TINT = { thorn: [1.0, 0.353, 0.212], leaf: [0.878, 0.31, 0.604] } as const;
-// Growth (from Kilian): a branch grows once from the flower. Share of the time for each part,
-// a twig, leaf or thorn starts when the trunk reaches it.
 const GROW_SECONDS = 2.4;
 const TRUNK_SHARE = 0.7;
 const TWIG_SHARE = 0.22;
@@ -43,15 +40,13 @@ const FORK_SHARE = 0.12;
 const CREASE_SHARE = 0.08;
 const LEAF_SHARE = 0.28;
 const THORN_SHARE = 0.14;
-// Hovered thread (from Kilian): fade speed (s), light left to the other branches, share of cyan.
 const FOCUS_FADE = 0.12;
 const DIMMED = 0.6;
-const THREAD_MIX = 0.85;
-// Seconds until the trunk reaches its message (same easing as sprouted() in the shader).
+const THREAD_MIX = 1.0;
 export const ARRIVE_SECONDS = GROW_SECONDS * (1 - Math.sqrt(1 - TRUNK_SHARE / 1.05));
 
 export type Mark = "leaf" | "thorn";
-export type Stem = { from: Placement | null; to: Placement; sag: number; id: number; marks: Mark[] };
+export type Stem = { from: Placement | null; to: Placement; sag: number; id: number; marks: Mark[]; text: Size };
 export type Arrival = { key: number; target: number };
 type Camera = { x: number; y: number; zoom: number };
 type Point = { x: number; y: number; angle: number };
@@ -122,7 +117,6 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
   const positions: number[] = [];
   const grows: number[] = [];
   const nodeGrows: number[] = [];
-  // When the part being built appears: start and length (share of the growth), and birth of its branch (s).
   let growth = { start: 0, span: 1, birth: 0 };
   const normals: number[] = [];
   const sides: number[] = [];
@@ -134,7 +128,6 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
   const stemIds: number[] = [];
   const freshOrders: number[] = [];
   const nodeStems: number[] = [];
-  // Stem being built, and the order (1 to 4) of a newest thorn, 0 for the rest.
   let stemId = 0;
   let freshOrder = 0;
 
@@ -270,7 +263,15 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
     const visible = length * (range.end - range.start);
     const indexAt = (u: number) => Math.round((range.start + (range.end - range.start) * u) * samples);
 
-    const markPlaces = stem.marks.map((_, k) => (k + 1) / (stem.marks.length + 1));
+    let bare = 0;
+    if (stem.from === null) {
+      while (bare < samples && Math.hypot(axis[bare].x, axis[bare].y) < FLOWER_CLEAR) bare++;
+    }
+    const span = Math.max(range.end - range.start, 1e-6);
+    const clear = Math.min(0.8, Math.max(0, (bare / samples - range.start) / span));
+    const beforeText = stem.from === null ? Math.min(0.8 - clear, TEXT_CLEAR / Math.max(visible, 1)) : 0;
+    const markSpan = 1 - clear - Math.max(0, beforeText);
+    const markPlaces = stem.marks.map((_, k) => clear + (markSpan * (k + 1)) / (stem.marks.length + 1));
     const room = MARK_ROOM / Math.max(visible, 1);
     const free = (t: number, before: boolean) => {
       const place = markPlaces.find((other) => Math.abs(other - t) < room);
@@ -321,7 +322,6 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
       addNode(trunk[index], 2 + noise(stem.id, 95 + b) * 1.5, stem.id * 7 + b);
     }
 
-    // The newest thorn reaction is the last one: those are the thorns that grow.
     const newestThorn = stem.marks.lastIndexOf("thorn");
     stem.marks.forEach((mark, k) => {
       const index = indexAt(markPlaces[k]);
@@ -341,7 +341,6 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
   lines.setAttribute("aStem", new THREE.Float32BufferAttribute(stemIds, 1));
   lines.setAttribute("aFresh", new THREE.Float32BufferAttribute(freshOrders, 1));
   lines.setAttribute("aGrow", new THREE.Float32BufferAttribute(grows, 2));
-  // aLit = 1 on the hovered thread, filled by applyLit.
   lines.setAttribute("aLit", new THREE.Float32BufferAttribute(new Float32Array(stemIds.length), 1));
   lines.setIndex(indices);
 
@@ -366,7 +365,6 @@ vec2 sway(vec2 p) {
   float breath = (0.5 + 0.5 * sin(uTime * 0.6 - r * 0.012)) * smoothstep(40.0, 260.0, r) * uBreath;
   return wave + outward * breath;
 }
-// clip = gl_Position. Band crosses the screen in 4 s, then rests 5 s.
 float sweep(vec4 clip) {
   float diagonal = (clip.x + clip.y) * 0.5;
   float head = mix(-1.4, 1.4, clamp(mod(uTime, 9.0) / 4.0, 0.0, 1.0));
@@ -374,8 +372,6 @@ float sweep(vec4 clip) {
 }
 `;
 
-// Épine or Feuille: uTarget = stem aimed at, uAngry = 0 to 1 over 2 s, uAge = seconds since it arrived,
-// uShake = 1 for Épine (the stem trembles), 0 for Feuille.
 const ANGER_GLSL = `
 uniform float uTarget;
 uniform float uAngry;
@@ -388,7 +384,6 @@ vec2 shake(float hit) {
   vec2 jolt = vec2(sin(uTime * 47.0) * 2.6 + sin(uTime * 31.0) * 1.2, cos(uTime * 39.0) * 2.2);
   return jolt * uAngry * hit * uShake;
 }
-// Newest thorns grow one after the other (order 1 to 4); 2.0 = fully shown.
 float grown(float order) {
   if (order < 0.5) return 2.0;
   float k = clamp((uAge - 0.15 - (order - 1.0) * 0.2) / 0.6, 0.0, 1.0);
@@ -396,8 +391,6 @@ float grown(float order) {
 }
 `;
 
-// aGrow.x = when the point appears (0 = foot of the trunk, 1 = tip of the leaves), aGrow.y = birth (s).
-// Returns 0 (not there yet) to 1 (grown).
 const GROW_GLSL = `
 attribute vec2 aGrow;
 float sprouted() {
@@ -407,7 +400,6 @@ float sprouted() {
 }
 `;
 
-// uFocus = 0 to 1 while a message is hovered. vOn = on the thread, vDim = light kept.
 const FOCUS_GLSL = `
 attribute float aLit;
 uniform float uFocus;
@@ -437,7 +429,7 @@ float shown(vec2 p) {
 
 const COLORS_GLSL = `
 const vec3 WHITE = vec3(1.0);
-const vec3 THREAD = vec3(0.561, 0.659, 1.0);
+const vec3 THREAD = vec3(1.0, 0.875, 0.306);
 const vec3 ICE = vec3(0.769, 0.902, 1.0);
 const vec3 BRIGHT = vec3(0.184, 0.384, 1.0);
 uniform vec3 uTint;
@@ -471,7 +463,7 @@ varying float vSweep;
 void main() {
   float t = aT;
   float growing = sprouted();
-  vShown = shown(position.xy) * growing;
+  vShown = max(shown(position.xy), ${UNDER_TEXT_LIT.toFixed(2)} * aLit * uFocus) * growing;
   float blade = step(2.5, aWidth.z);
   float spike = step(1.5, aWidth.z) - blade;
   float palm = 0.45 + 0.55 * abs(0.7 * sin(t * 6.0 + aWidth.z * 6.28) + 0.3 * sin(t * 15.0 + aWidth.z * 3.0));
@@ -484,7 +476,6 @@ void main() {
   teeth *= mix(1.0, lobes, blade);
   float lopsided = 1.0 + aSide * (aWidth.z - 3.225) * 2.0 * blade;
   float leaf = (aWidth.y + aWidth.x * pow(sin(3.14159 * pow(t, 0.75)), 0.8) * teeth * lopsided) * uZoom;
-  // A point being reached starts thin and widens; before that, it has no width at all.
   float core = (line * (1.0 - spike - blade) + needle * spike + leaf * blade) * mix(0.2, 1.0, growing);
   float halfWidth = (core / 2.0 + uGlowRadius) * step(0.001, growing);
   vec3 p = position;
@@ -540,13 +531,14 @@ void main() {
   a = mix(a, bladeAlpha, vBlade);
   color = mix(color, bladeColor, vBlade);
   a *= vShown;
-  // A growing thorn shows only from its base up to vReveal.
   a *= step(vT, vReveal - 0.001);
   a = min(1.0, a * (1.0 + vSweep));
   color = mix(color, WHITE, vSweep * 0.5);
   float threadLit = vOn * ${THREAD_MIX.toFixed(2)};
-  color = mix(color, mix(THREAD, WHITE, pow(center, 2.0) * 0.3), threadLit);
-  a = min(1.0, a * (1.0 + 0.6 * threadLit)) * vDim;
+  float light = smoothstep(0.3, 1.0, dot(color, vec3(0.299, 0.587, 0.114)));
+  vec3 gold = mix(THREAD * 0.45, mix(THREAD, WHITE, 0.6), light);
+  color = mix(color, gold, threadLit);
+  a = min(1.0, a * (1.0 + 0.6 * threadLit * inside)) * vDim;
   if (a < 0.01) discard;
   gl_FragColor = vec4(color, a);
 }
@@ -571,7 +563,7 @@ void main() {
   vAnger = hit * uAngry;
   focus();
   float growing = sprouted();
-  vPulse = (0.75 + 0.25 * sin(uTime * 1.2 + aNode.y)) * shown(position.xy) * growing;
+  vPulse = (0.75 + 0.25 * sin(uTime * 1.2 + aNode.y)) * max(shown(position.xy), ${UNDER_TEXT_LIT.toFixed(2)} * aLit * uFocus) * growing;
   gl_PointSize = aNode.x * 4.0 * uPixelRatio * growing;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
   vPulse *= 1.0 + sweep(gl_Position);
@@ -617,14 +609,12 @@ type View = {
     uTint: { value: THREE.Vector3 };
   };
   angerStart: number | null;
-  // Hovered thread: current fade (uFocus), where it goes, and the message of each vertex.
   focus: { value: number };
   focusTarget: number;
   lineStems: number[];
   nodeStems: number[];
 };
 
-// Puts aLit = 1 on the vertices of the lit messages, 0 elsewhere.
 function applyLit(view: View, lit: Set<number> | null) {
   const paint = (geometry: THREE.BufferGeometry, stems: number[]) => {
     const attribute = geometry.getAttribute("aLit") as THREE.BufferAttribute | undefined;
@@ -643,9 +633,11 @@ function angerEnvelope(age: number) {
 }
 
 function textBoxes(stems: Stem[], boxes: THREE.Vector4[]) {
-  const messages = stems.map((stem) => stem.to).slice(0, MAX_BOXES);
-  messages.forEach((box, k) => {
-    boxes[k].set(box.x - box.width / 2, -(box.y + box.height / 2), box.x + box.width / 2, -(box.y - box.height / 2));
+  const messages = stems.slice(0, MAX_BOXES);
+  messages.forEach(({ to, text }, k) => {
+    const left = to.x - to.width / 2;
+    const top = to.y - to.height / 2;
+    boxes[k].set(left, -(top + text.height), left + text.width, -top);
   });
   return messages.length;
 }
@@ -661,8 +653,6 @@ function draw(view: View, camera: Camera) {
   view.renderer.render(view.scene, view.camera);
 }
 
-// sprouts: when each branch starts to grow, by message id (see useSprouts).
-// highlight: messages of the hovered thread (null = nothing hovered).
 type BranchesProps = {
   stems: Stem[];
   camera: Camera;
@@ -676,7 +666,6 @@ function Branches({ stems, camera, thornArrival, leafArrival, sprouts, highlight
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewRef = useRef<View | null>(null);
   const cameraRef = useRef(camera);
-  // Last lit thread: kept while it fades out.
   const litRef = useRef<Set<number> | null>(null);
 
   useEffect(() => {
@@ -705,7 +694,6 @@ function Branches({ stems, camera, thornArrival, leafArrival, sprouts, highlight
     const boxCount = { value: 0 };
     const focus = { value: 0 };
     const underText = { uBoxes: { value: boxes }, uBoxCount: boxCount, uUnderText: { value: UNDER_TEXT } };
-    // uAge 1000 = no animation running: every thorn fully shown.
     const anger = {
       uTarget: { value: -1 },
       uAngry: { value: 0 },
@@ -765,12 +753,10 @@ function Branches({ stems, camera, thornArrival, leafArrival, sprouts, highlight
       renderer.setAnimationLoop((now: number) => {
         const dt = Math.min(0.1, Math.max(0, now / 1000 - time.value));
         time.value = now / 1000;
-        // The lit thread fades in and out instead of switching at once.
         focus.value += (view.focusTarget - focus.value) * (1 - Math.exp(-dt / FOCUS_FADE));
         if (view.angerStart !== null) {
           const age = time.value - view.angerStart;
           const over = age > ANGER.duration;
-          // A Feuille grows no thorn: they stay fully shown.
           anger.uAge.value = over || anger.uShake.value === 0 ? 1000 : age;
           anger.uAngry.value = angerEnvelope(age);
           if (over) view.angerStart = null;
@@ -797,7 +783,6 @@ function Branches({ stems, camera, thornArrival, leafArrival, sprouts, highlight
     if (!view) return;
     view.lines.geometry.dispose();
     view.nodes.geometry.dispose();
-    // Without motion, every branch is born long ago: shown fully grown.
     const births = new Map(stems.map((stem) => [stem.id, view.animated ? (sprouts.get(stem.id)?.birth ?? -1e6) : -1e6]));
     const geometry = buildGeometry(stems, births);
     view.lines.geometry = geometry.lines;
@@ -811,7 +796,6 @@ function Branches({ stems, camera, thornArrival, leafArrival, sprouts, highlight
 
   useEffect(() => {
     const view = viewRef.current;
-    // On leaving, keep the old thread lit so it can fade out.
     if (highlight) {
       litRef.current = highlight;
       if (view) applyLit(view, highlight);
@@ -824,7 +808,6 @@ function Branches({ stems, camera, thornArrival, leafArrival, sprouts, highlight
     }
   }, [highlight]);
 
-  // Épine and Feuille share the same 2 s tint: the latest one to arrive wins.
   function tint(arrival: Arrival | null, kind: keyof typeof TINT) {
     const view = viewRef.current;
     if (!view || !view.animated || !arrival) return;
