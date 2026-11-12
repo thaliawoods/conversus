@@ -8,7 +8,7 @@ export function shownName(channel: Channel) {
   return channel.name.replace(/#\d+$/, "");
 }
 
-export const HIDDEN_CHANNELS = ["general"];
+export const HIDDEN_CHANNELS: string[] = [];
 
 export function workspacePath(channelId: number | string | undefined, debateId: number | string | undefined) {
   const channel = channelId === undefined ? "" : `/channel/${channelId}`;

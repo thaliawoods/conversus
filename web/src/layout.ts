@@ -142,7 +142,7 @@ let lastKey = "";
 let lastPositions: Placement[] = [];
 const remembered = new Map<
   number,
-  { dx: number; dy: number; inputs: string; baseDx: number; baseDy: number; baseInputs: string }
+  { dx: number; dy: number; sag: number; baseDx: number; baseDy: number; parentId: number | null }
 >();
 const KEEP_RULE: Rule = { cone: null, stems: true, sideways: false };
 
@@ -215,30 +215,30 @@ export function placeMessages(
       return center;
     };
 
+    const nearest = (start: Point) =>
+      findSpot(start, offset, (point) => fits(point, KEEP_RULE), SEARCH_LIMIT) ?? search(origin, RULES);
+
     const id = ids[index];
-    const baseInputs = JSON.stringify([size, parent === null ? null : ids[parent], marks[index] ?? 0]);
-    const inputs = JSON.stringify([baseInputs, sag]);
+    const parentId = parent === null ? null : ids[parent];
     const memory = remembered.get(id);
-    const kept = memory && memory.inputs === inputs ? { x: origin.x + memory.dx, y: origin.y + memory.dy } : null;
+    const known = memory && memory.parentId === parentId ? memory : null;
     let point: Point;
     let base: Point;
-    if (kept && fits(kept, KEEP_RULE)) {
-      point = kept;
-      base = { x: origin.x + memory!.baseDx, y: origin.y + memory!.baseDy };
+    if (known && known.sag === sag) {
+      base = { x: origin.x + known.baseDx, y: origin.y + known.baseDy };
+      point = nearest({ x: origin.x + known.dx, y: origin.y + known.dy });
     } else {
-      const oldBase =
-        memory && memory.baseInputs === baseInputs ? { x: origin.x + memory.baseDx, y: origin.y + memory.baseDy } : null;
-      base = oldBase && fits(oldBase, KEEP_RULE) ? oldBase : search(origin, RULES);
+      base = known ? nearest({ x: origin.x + known.baseDx, y: origin.y + known.baseDy }) : search(origin, RULES);
       const tilt = sag / (WILT_MAX * WILT_SAG);
-      point = tilt > 0 ? search(tiltDown(base, origin, tilt), RULES) : base;
+      point = tilt > 0 ? nearest(tiltDown(base, origin, tilt)) : base;
     }
     remembered.set(id, {
       dx: point.x - origin.x,
       dy: point.y - origin.y,
-      inputs,
+      sag,
       baseDx: base.x - origin.x,
       baseDy: base.y - origin.y,
-      baseInputs,
+      parentId,
     });
     if (parent === null) flowerChildren++;
 

@@ -1,7 +1,7 @@
-const KEY = "accounts";
+import { API } from "./api";
 
-export const TEST_ACCOUNTS = ["thalia", "clara"];
-export const TEST_PASSWORD = "motdepasse";
+// One list per server: accounts from another server would not log in here.
+const KEY = `accounts@${API}`;
 
 export function recentAccounts(): Record<string, string> {
   try {

@@ -6,7 +6,8 @@ import { BigFlower } from "../components/Logo";
 import ChannelPanel from "./ChannelPanel";
 import Debate from "./Debate";
 import { SERVER_DOWN, request } from "../api";
-import { workspacePath, type Channel } from "../channels";
+import { isDebate, workspacePath, type Channel } from "../channels";
+import type { Message } from "./Chat";
 
 type WorkspaceProps = { token: string; onTokenExpired: () => void; onSwitch: (newToken: string) => void };
 
@@ -18,7 +19,9 @@ const SIDE_MIN = 140;
 const SIDE_MAX = 320;
 const CHANNEL_MIN = 260;
 const DEBATE_MIN = 320;
-const HOME_CHANNEL = "test canal general";
+const HOME_CHANNEL = "m1-ecni";
+// Every account joins these, plus each ConVersus announced in them, so a new visitor sees everything.
+const DEMO_CHANNELS = ["general", "m1-ecni", "projet-conversus", "random"];
 const ARRIVAL_SIDE = 0.14;
 const ARRIVAL_CHANNEL = 0.28;
 
@@ -64,7 +67,9 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
     }
     setProfileError("");
     const profile = await response.json();
-    setChannels(profile.channels);
+    // The server can list a channel twice when someone entered it twice.
+    const unique: Channel[] = [...new Map((profile.channels as Channel[]).map((channel) => [channel.id, channel])).values()];
+    setChannels(unique);
     setUsername(profile.username);
     setPronouns(profile.metadata?.conversus?.pronouns ?? "");
   }, [token, onTokenExpired]);
@@ -72,6 +77,46 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
   useEffect(() => {
     loadProfile();
   }, [loadProfile]);
+
+  // Names already joined (or being joined), so nothing is entered twice.
+  const joined = useRef(new Set<string>());
+  useEffect(() => {
+    for (const channel of channels) joined.current.add(channel.name);
+  }, [channels]);
+
+  const joinMissing = useCallback(
+    async (names: string[]) => {
+      const missing = names.filter((name) => !joined.current.has(name));
+      if (missing.length === 0) return;
+      missing.forEach((name) => joined.current.add(name));
+      for (const name of missing) await request(token, "/channel/enter", { channel: name });
+      loadProfile();
+    },
+    [token, loadProfile],
+  );
+
+  useEffect(() => {
+    async function joinEverything() {
+      const before = await request(token, "/me");
+      if (!before?.ok) return;
+      for (const channel of (await before.json()).channels as Channel[]) joined.current.add(channel.name);
+      await joinMissing(DEMO_CHANNELS);
+      const after = await request(token, "/me");
+      if (!after?.ok) return;
+      const rooms = ((await after.json()).channels as Channel[]).filter((channel) => !isDebate(channel));
+      const debates = new Set<string>();
+      for (const room of rooms) {
+        const response = await request(token, `/channel/message?channel=${room.id}&namespace=conversus`);
+        if (!response?.ok) continue;
+        for (const message of ((await response.json()) ?? []) as Message[]) {
+          const name = message.metadata?.conversus?.channelName ?? message.metadata?.conversus?.synthesisOf;
+          if (name) debates.add(name);
+        }
+      }
+      await joinMissing([...debates]);
+    }
+    joinEverything();
+  }, [token, joinMissing]);
 
   useEffect(() => {
     setSelecting(false);
@@ -102,10 +147,12 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
 
   const currentChannel = channels.find((channel) => channel.id === Number(channelId));
 
-  async function openDebate(name: string) {
+  // synthesis: a synthesis shared in the channel, shown over the debate when it opens.
+  async function openDebate(name: string, synthesis?: { text: string; sharedAt: string }) {
+    const state = synthesis === undefined ? undefined : { synthesis };
     const joined = channels.find((channel) => channel.name === name);
     if (joined) {
-      navigate(workspacePath(channelId, joined.id));
+      navigate(workspacePath(channelId, joined.id), { state });
       return;
     }
     const response = await request(token, "/channel/enter", { channel: name });
@@ -119,7 +166,7 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
     }
     const debate: Channel = await response.json();
     await loadProfile();
-    navigate(workspacePath(channelId, debate.id));
+    navigate(workspacePath(channelId, debate.id), { state });
   }
 
   async function handleDebateLaunched(debate: Channel) {
@@ -196,6 +243,7 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
         onDragStart={() => (dragStart.current = layout)}
         onDrag={handleSideDrag}
         onReopen={() => setClosed("side", false)}
+        closeLeft={{ label: "Fermer les canaux", onClose: () => setClosed("side", true) }}
       />
       {!closed.channel && (
         <div className={channelFills ? "column fill" : "column"} style={channelFills ? undefined : { width: channelWidth }}>
@@ -207,6 +255,7 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
               me={username}
               pronouns={pronouns ?? ""}
               onOpenDebate={openDebate}
+              onDebatesSeen={joinMissing}
               onDebateLaunched={handleDebateLaunched}
               onTokenExpired={onTokenExpired}
               selecting={selecting}
@@ -222,6 +271,8 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
         onDragStart={() => (dragStart.current = { ...layout, channel: channelWidth })}
         onDrag={handleChannelDrag}
         onReopen={() => setClosed(closed.channel ? "channel" : "debate", false)}
+        closeLeft={{ label: "Fermer le canal", onClose: () => setClosed("channel", true) }}
+        closeRight={{ label: "Fermer le ConVersus", onClose: () => setClosed("debate", true) }}
       />
       {!closed.debate && (
         <div className={debateFills ? "column fill" : "column"}>

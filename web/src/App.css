@@ -2240,17 +2240,13 @@
   cursor: pointer;
 }
 
+/* Sujet coupé à 2 lignes + « … » (couleur plus bas, .channel-panel) */
 .synthesis-card .message-subject {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
   transition: color 0.2s;
-}
-
-.synthesis-flower {
-  width: 1rem;
-  height: 1rem;
-  font-size: 0.75rem;
 }
 
 .synthesis-excerpt {
@@ -2284,6 +2280,13 @@
 
 .channel-panel .synthesis-card .message-subject {
   margin: 0.15rem 0;
+  color: #8fa8ff;
+}
+
+/* Survol : glace (après la couleur ci-dessus pour passer devant) */
+.channel-panel .synthesis-card:hover .message-subject,
+.channel-panel .synthesis-card:focus-visible .message-subject {
+  color: var(--ice);
 }
 
 /* Pronoms : même taille que le nom */
@@ -2306,4 +2309,73 @@
   background: none;
   color: var(--white);
   border-bottom-color: var(--ice);
+}
+
+/* Boutons d'action (Lancer un ConVersus, Synthesis, Rejoindre) : même DA, contour fin */
+.channel-panel .panel-action,
+.channel-panel .join-button,
+.col-head .synthesis-button {
+  padding: 0.35rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: rgba(196, 230, 255, 0.85);
+  font: inherit;
+  font-size: var(--text-body);
+  letter-spacing: normal;
+  text-transform: none;
+  cursor: pointer;
+  transition: border-color 0.25s, color 0.25s;
+}
+
+.channel-panel .panel-action:hover,
+.channel-panel .join-button:hover,
+.col-head .synthesis-button:hover:not(:disabled) {
+  border-color: var(--ice);
+  background: transparent;
+  color: var(--white);
+}
+
+/* Rejoindre : même DA, mais plus discret dans le flux du chat */
+.channel-panel .join-button {
+  padding: 0.2rem 0.6rem;
+  border-color: rgba(196, 230, 255, 0.16);
+  color: rgba(196, 230, 255, 0.7);
+  font-size: var(--text-small);
+}
+
+/* Poignée ouverte : chevrons pour fermer d'un clic, comme celui qui rouvre */
+.handle-close {
+  position: absolute;
+  top: 50%;
+  width: 1rem;
+  height: 1rem;
+  margin-top: -0.5rem;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.handle-close.left {
+  right: 6px;
+}
+
+.handle-close.right {
+  left: 6px;
+}
+
+.handle-close svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: var(--ice);
+  stroke-width: 1.4;
+}
+
+.resize-handle:hover .handle-close,
+.handle-close:focus-visible {
+  opacity: 1;
 }

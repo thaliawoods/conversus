@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useLocation, useNavigate, useParams } from "react-router";
 import { HIDDEN_CHANNELS, isDebate, shownName, workspacePath, type Channel } from "../channels";
 import DebatePicker from "../components/DebatePicker";
 import SynthesisModal from "../components/SynthesisModal";
@@ -149,6 +149,8 @@ function textSize(element: HTMLDivElement): Size {
 function Debate({ token, channels, me, pronouns, onTokenExpired }: DebateProps) {
   const { debateId: channelId, channelId: openChannelId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const sharedSynthesis: { text: string; sharedAt: string } | undefined = location.state?.synthesis;
   const sectionRef = useRef<HTMLElement>(null);
   const [subject, setSubject] = useState<Message | null>(null);
   const [synthesis, setSynthesis] = useState<Synthesis | null>(null);
@@ -457,9 +459,23 @@ function Debate({ token, channels, me, pronouns, onTokenExpired }: DebateProps) 
           onClick={handleSynthesis}
           disabled={replies.length === 0 || synthesis !== null}
         >
-          SyntheSus
+          Faire ma Synthesis
         </button>
       </div>
+      {!synthesis && sharedSynthesis && (
+        <SynthesisModal
+          stems={stems}
+          moods={moods}
+          retainedCount={0}
+          text={sharedSynthesis.text}
+          sharedAt={sharedSynthesis.sharedAt}
+          error=""
+          sharing={false}
+          readOnly
+          onCancel={() => navigate(location.pathname, { replace: true, state: null })}
+          onShare={() => {}}
+        />
+      )}
       {synthesis && (
         <SynthesisModal
           stems={stems}

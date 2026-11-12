@@ -15,6 +15,10 @@ type SynthesisModalProps = {
   sharing: boolean;
   onCancel: () => void;
   onShare: () => void;
+  // A synthesis already shared: no share button.
+  readOnly?: boolean;
+  // When it was shared, e.g. "partagée aujourd'hui à 15:40".
+  sharedAt?: string;
 };
 
 function fitPlant(stems: Stem[], width: number, height: number) {
@@ -32,7 +36,7 @@ function fitPlant(stems: Stem[], width: number, height: number) {
   return { x: (-(left + right) / 2) * zoom, y: (-(top + bottom) / 2) * zoom, zoom };
 }
 
-function SynthesisModal({ stems, moods, retainedCount, text, error, sharing, onCancel, onShare }: SynthesisModalProps) {
+function SynthesisModal({ stems, moods, retainedCount, text, error, sharing, onCancel, onShare, readOnly = false, sharedAt }: SynthesisModalProps) {
   const plantRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 1, height: 1 });
   const scope =
@@ -64,18 +68,23 @@ function SynthesisModal({ stems, moods, retainedCount, text, error, sharing, onC
           />
         </div>
         <div className="synthesis-side">
-          <h2 id="synthesis-title">SyntheSus</h2>
-          <p className="modal-label">{scope}</p>
+          <h2 id="synthesis-title">Synthesis</h2>
+          <p className="modal-label">
+            {scope}
+            {sharedAt && ` · ${sharedAt}`}
+          </p>
           {text === null && !error && <p className="synthesis-text waiting">La synthèse s'écrit…</p>}
           {text !== null && <p className="synthesis-text">{text}</p>}
           {error && <p className="synthesis-error">{error}</p>}
           <div className="modal-actions">
             <button type="button" onClick={onCancel} autoFocus>
-              Annuler
+              {readOnly ? "Fermer" : "Annuler"}
             </button>
-            <button type="submit" disabled={text === null || sharing} onClick={onShare}>
-              Partager dans le canal
-            </button>
+            {!readOnly && (
+              <button type="submit" disabled={text === null || sharing} onClick={onShare}>
+                Partager dans le canal
+              </button>
+            )}
           </div>
         </div>
       </div>

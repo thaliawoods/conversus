@@ -3,7 +3,6 @@ import { SERVER_DOWN, request } from "../api";
 import { FALLBACK_POLL, listenToChannel } from "../live";
 import LaunchModal from "../components/LaunchModal";
 import ChannelComposer from "../components/ChannelComposer";
-import { SmallFlower } from "../components/Logo";
 import type { Message } from "./Chat";
 import type { Channel } from "../channels";
 import { pronounsByName } from "../pronouns";
@@ -14,7 +13,7 @@ type ChannelPanelProps = {
   me: string | null;
   pronouns: string;
   onDebatesSeen?: (names: string[]) => void;
-  onOpenDebate: (name: string) => void;
+  onOpenDebate: (name: string, synthesis?: { text: string; sharedAt: string }) => void;
   onDebateLaunched: (debate: Channel) => void;
   onTokenExpired: () => void;
   selecting: boolean;
@@ -29,6 +28,13 @@ function formatTime(message: Message) {
   const time = date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
   const today = new Date().toDateString() === date.toDateString();
   return today ? `Aujourd'hui à ${time}` : `${date.toLocaleDateString("fr-FR")} à ${time}`;
+}
+
+// "partagée aujourd'hui à 15:40" or "partagée le 11/11/2026 à 22:02".
+function sharedLabel(message: Message) {
+  const when = formatTime(message);
+  if (!when) return "";
+  return when.startsWith("Aujourd'hui") ? `partagée a${when.slice(1)}` : `partagée le ${when}`;
 }
 
 function authorOf(message: Message) {
@@ -178,6 +184,7 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
           const mine = !!me && !message.anonymous && message.user === me;
           const debateName = message.metadata?.conversus?.channelName;
           const synthesisOf = message.metadata?.conversus?.synthesisOf;
+          const joinTarget = debateName || synthesisOf;
           return (
             <li className="message" key={message.id}>
               {isSelecting && (
@@ -198,10 +205,9 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
                   <time>{formatTime(message)}</time>
                 </div>
                 {synthesisOf ? (
-                  <button type="button" className="synthesis-card" onClick={() => onOpenDebate(synthesisOf)}>
+                  <button type="button" className="synthesis-card" onClick={() => onOpenDebate(synthesisOf, { text: message.content, sharedAt: sharedLabel(message) })}>
                     <span>a partagé la synthèse de</span>
                     <span className="message-subject">
-                      <SmallFlower className="small-flower synthesis-flower" />
                       {synthesisOf.split("#")[0]}
                     </span>
                     <span className="synthesis-excerpt">{message.content}</span>
@@ -210,15 +216,14 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
                   <button type="button" className="synthesis-card" onClick={() => onOpenDebate(debateName)}>
                     <span>a ouvert un ConVersus</span>
                     <span className="message-subject">
-                      <SmallFlower className="small-flower synthesis-flower" />
                       {debateName.split("#")[0]}
                     </span>
                   </button>
                 ) : (
                   <p>{message.content}</p>
                 )}
-                {debateName && (
-                  <button className="join-button" type="button" onClick={() => onOpenDebate(debateName)}>
+                {joinTarget && (
+                  <button className="join-button" type="button" onClick={() => onOpenDebate(joinTarget)}>
                     Rejoindre
                   </button>
                 )}
