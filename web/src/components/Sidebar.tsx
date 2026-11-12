@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router";
 import Logo from "./Logo";
 import { PetalFlower } from "./PetalIcons";
 import AccountMenu from "./AccountMenu";
-import { HIDDEN_CHANNELS, isDebate, shownName, workspacePath, type Channel } from "../channels";
+import { HIDDEN_CHANNELS, isDebate, SHARED_CHANNEL, shownName, workspacePath, type Channel } from "../channels";
 import type { Member } from "../hooks/usePresence";
 import { unreadLabel } from "../hooks/useUnread";
 
@@ -26,8 +26,11 @@ function Sidebar({ channels, unread, members, username, pronouns, onSwitch, onLo
   const [search, setSearch] = useState("");
   const [folded, setFolded] = useState<string[]>([]);
   const query = search.trim().toLowerCase();
+  // The shared channel stays hidden from ConVersus lookups, but is listed here so it can be opened (from Kilian, f23790b).
   const found = channels.filter(
-    (channel) => !HIDDEN_CHANNELS.includes(channel.name) && shownName(channel).toLowerCase().includes(query),
+    (channel) =>
+      (channel.name === SHARED_CHANNEL || !HIDDEN_CHANNELS.includes(channel.name)) &&
+      shownName(channel).toLowerCase().includes(query),
   );
   const foundMembers = members.filter((member) => member.online && member.username.toLowerCase().includes(query));
   const onlineCount = members.filter((member) => member.online).length;
@@ -42,7 +45,8 @@ function Sidebar({ channels, unread, members, username, pronouns, onSwitch, onLo
     {
       title: "ConVersus",
       tour: "debates",
-      items: found.filter(isDebate),
+      // Newest ConVersus at the top, as in the picker of the debate column.
+      items: found.filter(isDebate).toSorted((a, b) => b.id - a.id),
       activeId: debateId,
       path: (channel: Channel) => workspacePath(channelId, channel.id),
     },
