@@ -787,7 +787,6 @@
   overflow: visible;
 }
 
-.rain,
 .leaves,
 .branches {
   position: absolute;
@@ -796,36 +795,6 @@
   height: 100%;
   pointer-events: none;
 }
-.thorn-veil {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), rgba(90, 26, 10, 0.42), rgba(90, 26, 10, 0.2) 70%);
-  opacity: 0;
-  animation: thorn-veil 2s linear forwards;
-}
-
-@keyframes thorn-veil {
-  15% { opacity: 1; }
-  60% { opacity: 1; }
-  100% { opacity: 0; }
-}
-.leaf-veil {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), rgba(64, 16, 46, 0.42), rgba(64, 16, 46, 0.2) 70%);
-  opacity: 0;
-  animation: thorn-veil 2s linear forwards;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .thorn-veil,
-  .leaf-veil {
-    display: none;
-  }
-}
-
 .flower {
   position: absolute;
   left: -3rem;
@@ -1427,6 +1396,9 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* Same thin scrollbar as the channel messages. */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(196, 230, 255, 0.22) transparent;
 }
 
 .sidebar-group {
@@ -1497,6 +1469,53 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.sidebar-count {
+  margin-left: auto;
+  letter-spacing: 0.08em;
+  text-transform: none;
+  opacity: 0.7;
+}
+
+.sidebar-member {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: rgba(196, 230, 255, 0.35);
+  font-size: var(--text-body, 0.8rem);
+  line-height: 1.35;
+}
+
+.sidebar-member.online {
+  color: rgba(196, 230, 255, 0.75);
+}
+
+.sidebar-me {
+  opacity: 0.6;
+}
+
+.presence-dot {
+  width: 0.42rem;
+  height: 0.42rem;
+  box-sizing: border-box;
+  border: 1px solid rgba(196, 230, 255, 0.35);
+  border-radius: 50%;
+}
+
+.sidebar-member.online .presence-dot {
+  border-color: #4fe39b;
+  background: #4fe39b;
+  box-shadow: 0 0 0.35rem rgba(79, 227, 155, 0.7);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .small-flower {
   display: inline-grid;
