@@ -13,11 +13,21 @@ type WorkspaceProps = { token: string; onTokenExpired: () => void; onSwitch: (ne
 type Layout = { side: number; channel: number; closed: { side: boolean; channel: boolean; debate: boolean } };
 
 const LAYOUT_KEY = "conversus-layout";
-const DEFAULT_LAYOUT: Layout = { side: 176, channel: 360, closed: { side: false, channel: false, debate: false } };
+const DEFAULT_LAYOUT: Layout = { side: 166, channel: 320, closed: { side: false, channel: false, debate: false } };
 const SIDE_MIN = 140;
 const SIDE_MAX = 320;
 const CHANNEL_MIN = 260;
 const DEBATE_MIN = 320;
+const HOME_CHANNEL = "test canal general";
+const ARRIVAL_SIDE = 0.14;
+const ARRIVAL_CHANNEL = 0.28;
+
+function arrivalLayout(): Layout {
+  const width = window.innerWidth;
+  const side = Math.round(Math.min(240, Math.max(180, width * ARRIVAL_SIDE)));
+  const channel = Math.round(Math.min(440, Math.max(320, width * ARRIVAL_CHANNEL)));
+  return { side, channel, closed: DEFAULT_LAYOUT.closed };
+}
 
 function readLayout(): Layout {
   try {
@@ -82,6 +92,14 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
     }
   }, [layout]);
 
+  useEffect(() => {
+    if (channelId || debateId) return;
+    setLayout(arrivalLayout());
+    const home = channels.find((channel) => channel.name === HOME_CHANNEL);
+    if (!home) return;
+    navigate(workspacePath(home.id, undefined), { replace: true });
+  }, [channelId, debateId, channels, navigate]);
+
   const currentChannel = channels.find((channel) => channel.id === Number(channelId));
 
   async function openDebate(name: string) {
@@ -132,7 +150,9 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
       setLayout((current) => ({ ...current, side: dragStart.current.side, closed: { ...current.closed, side: true } }));
       return;
     }
-    setLayout((current) => ({ ...current, side: Math.min(SIDE_MAX, Math.max(SIDE_MIN, width)) }));
+    const others = (closed.channel ? 0 : closed.debate ? CHANNEL_MIN : channelWidth) + (closed.debate ? 0 : DEBATE_MIN);
+    const largest = Math.min(SIDE_MAX, total - others);
+    setLayout((current) => ({ ...current, side: Math.max(SIDE_MIN, Math.min(largest, width)) }));
   }
 
   function handleChannelDrag(dx: number) {
@@ -152,6 +172,7 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
     setLayout((current) => ({ ...current, channel: Math.max(CHANNEL_MIN, Math.min(largest, width)) }));
   }
 
+  const sideFills = closed.channel && closed.debate;
   const channelFills = closed.debate;
   const channelWidth = Math.max(CHANNEL_MIN, Math.min(layout.channel, total - (closed.side ? 0 : layout.side) - DEBATE_MIN));
   const debateFills = !closed.debate;
@@ -159,7 +180,7 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
   return (
     <div className="workspace" ref={workspaceRef}>
       {!closed.side && (
-        <div className="column" style={{ width: layout.side }}>
+        <div className={sideFills ? "column fill" : "column"} style={sideFills ? undefined : { width: layout.side }}>
           <Sidebar
             channels={channels}
             username={username}
