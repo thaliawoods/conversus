@@ -16,6 +16,7 @@ import useSprouts from "../hooks/useSprouts";
 import MessageForm from "../components/MessageForm";
 import { fontFamily, shownFont } from "../fonts";
 import { SERVER_DOWN, formatTime, request } from "../api";
+import { FALLBACK_POLL, listenToChannel } from "../live";
 import { pronounsByName } from "../pronouns";
 
 const ZOOM_STEP = 1.25;
@@ -278,8 +279,12 @@ function Debate({ token, channels, me, pronouns, onTokenExpired }: DebateProps) 
 
     seenReactions.current = null;
     loadMessages();
-    const intervalId = setInterval(loadMessages, 2000);
-    return () => clearInterval(intervalId);
+    const stopListening = listenToChannel(token, channelId, loadMessages);
+    const intervalId = setInterval(loadMessages, FALLBACK_POLL);
+    return () => {
+      stopListening();
+      clearInterval(intervalId);
+    };
   }, [token, channelId, onTokenExpired]);
 
   useLayoutEffect(() => {

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { SERVER_DOWN, request } from "../api";
+import { FALLBACK_POLL, listenToChannel } from "../live";
 import LaunchModal from "../components/LaunchModal";
 import ChannelComposer from "../components/ChannelComposer";
 import { SmallFlower } from "../components/Logo";
@@ -83,9 +84,11 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
     }
 
     loadMessages();
-    const intervalId = setInterval(loadMessages, 2000);
+    const stopListening = listenToChannel(token, channel.id, loadMessages);
+    const intervalId = setInterval(loadMessages, FALLBACK_POLL);
     return () => {
       cancelled = true;
+      stopListening();
       clearInterval(intervalId);
     };
   }, [token, channel.id]);
