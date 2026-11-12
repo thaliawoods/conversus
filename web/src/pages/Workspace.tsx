@@ -7,7 +7,8 @@ import ChannelPanel from "./ChannelPanel";
 import Debate from "./Debate";
 import { SERVER_DOWN, request } from "../api";
 import { usePresence } from "../hooks/usePresence";
-import { isDebate, SHARED_CHANNEL, workspacePath, type Channel } from "../channels";
+import { HIDDEN_CHANNELS, isDebate, SHARED_CHANNEL, workspacePath, type Channel } from "../channels";
+import Tutorial, { type TutorialColumn } from "../components/Tutorial";
 import type { Message } from "./Chat";
 
 type WorkspaceProps = { token: string; onTokenExpired: () => void; onSwitch: (newToken: string) => void };
@@ -26,6 +27,16 @@ const HOME_CHANNEL = "m1-ecni";
 const PRESENCE_CHANNEL = "general";
 // Every account joins these, plus each ConVersus announced in them, so a new visitor sees everything.
 const DEMO_CHANNELS = ["general", "m1-ecni", "projet-conversus", "random"];
+// Also kept in the browser, in case the server refuses to save it on the account.
+const TUTORIAL_KEY = "conversus-tutorial-seen:";
+
+function tutorialSeenHere(username: string) {
+  try {
+    return localStorage.getItem(TUTORIAL_KEY + username) === "1";
+  } catch {
+    return false;
+  }
+}
 const ARRIVAL_SIDE = 0.14;
 // Below TABLET_MAX the channel list becomes a drawer; below MOBILE_MAX one view at a time, with tabs.
 const TABLET_MAX = 900;
@@ -69,6 +80,9 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [username, setUsername] = useState("");
   const [pronouns, setPronouns] = useState<string | null>(null);
+  const [tutorial, setTutorial] = useState(false);
+  // Token whose account was already checked for a first visit (switching account checks again).
+  const tutorialChecked = useRef<string | null>(null);
   const [profileError, setProfileError] = useState("");
   const [selecting, setSelecting] = useState(false);
   const [layout, setLayout] = useState<Layout>(readLayout);
@@ -108,7 +122,28 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
     setChannels(unique);
     setUsername(profile.username);
     setPronouns(profile.metadata?.conversus?.pronouns ?? "");
+    // First visit in ConVersus: nothing in the account's "conversus" metadata says the tour was
+    // seen, whichever app created the account on the shared server.
+    if (tutorialChecked.current !== token) {
+      tutorialChecked.current = token;
+      setTutorial(!profile.metadata?.conversus?.tutorialSeen && !tutorialSeenHere(profile.username));
+    }
   }, [token, onTokenExpired]);
+
+  const closeTutorial = useCallback(async () => {
+    setTutorial(false);
+    try {
+      localStorage.setItem(TUTORIAL_KEY + username, "1");
+    } catch {
+      // Private browsing: the account metadata below still remembers it.
+    }
+    // The server replaces the whole "conversus" metadata: start from the current one (pronouns…).
+    const response = await request(token, "/me");
+    if (!response?.ok) return;
+    const conversus = (await response.json()).metadata?.conversus ?? {};
+    if (conversus.tutorialSeen) return;
+    await request(token, "/user?namespace=conversus", { metadata: { ...conversus, tutorialSeen: true } }, "PUT");
+  }, [token, username]);
 
   useEffect(() => {
     loadProfile();
@@ -279,6 +314,23 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
     CHANNEL_MIN,
     Math.min(layout.channel, CHANNEL_MAX, total - (sideInFlow ? sideWidth : 0) - DEBATE_MIN),
   );
+  // The tour opens the column it is about to explain.
+  const revealForTutorial = useCallback(
+    (column: TutorialColumn) => {
+      if (screen === "mobile") {
+        setTab(column);
+        return;
+      }
+      if (screen === "tablet") {
+        setDrawerOpen(column === "side");
+        if (column === "side") return;
+      }
+      setExpanded(false);
+      setLayout((current) => ({ ...current, closed: { ...current.closed, [column]: false } }));
+    },
+    [screen],
+  );
+  const hasDebates = channels.some((channel) => isDebate(channel) && !HIDDEN_CHANNELS.includes(channel.name));
   const fullScreen = !mobile && expanded && debateId !== undefined && !closed.debate;
   const showSide = mobile ? tab === "side" : !fullScreen && sideInFlow;
   const showChannel = mobile ? tab === "channel" : !fullScreen && !closed.channel;
@@ -292,6 +344,7 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
       pronouns={pronouns}
       onSwitch={onSwitch}
       onLogout={onTokenExpired}
+      onTutorial={() => setTutorial(true)}
     />
   );
   const debateFills = !closed.debate;
@@ -379,6 +432,15 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
             {sidebar}
           </div>
         </div>
+      )}
+      {tutorial && username && (
+        <Tutorial
+          debateId={debateId}
+          hasDebates={hasDebates}
+          selecting={selecting}
+          onReveal={revealForTutorial}
+          onClose={closeTutorial}
+        />
       )}
       {mobile && (
         <nav className="mobile-tabs" aria-label="Vues">

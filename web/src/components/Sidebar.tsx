@@ -15,9 +15,10 @@ type SidebarProps = {
   pronouns: string | null;
   onSwitch: (newToken: string) => void;
   onLogout: () => void;
+  onTutorial: () => void;
 };
 
-function Sidebar({ channels, members, username, pronouns, onSwitch, onLogout }: SidebarProps) {
+function Sidebar({ channels, members, username, pronouns, onSwitch, onLogout, onTutorial }: SidebarProps) {
   const { channelId, debateId } = useParams();
   const [search, setSearch] = useState("");
   const [folded, setFolded] = useState<string[]>([]);
@@ -30,12 +31,14 @@ function Sidebar({ channels, members, username, pronouns, onSwitch, onLogout }: 
   const groups = [
     {
       title: "Canaux",
+      tour: "channels",
       items: found.filter((channel) => !isDebate(channel)),
       activeId: channelId,
       path: (channel: Channel) => workspacePath(channel.id, debateId),
     },
     {
       title: "ConVersus",
+      tour: "debates",
       items: found.filter(isDebate),
       activeId: debateId,
       path: (channel: Channel) => workspacePath(channelId, channel.id),
@@ -64,7 +67,7 @@ function Sidebar({ channels, members, username, pronouns, onSwitch, onLogout }: 
       <div className="sidebar-groups">
         {nothingFound && <p className="sidebar-empty">Aucun résultat</p>}
         {shownGroups.map((group) => (
-          <section className="sidebar-group" key={group.title}>
+          <section className="sidebar-group" key={group.title} data-tour={group.tour}>
             <button
               type="button"
               className="sidebar-group-title"
@@ -133,6 +136,7 @@ function Sidebar({ channels, members, username, pronouns, onSwitch, onLogout }: 
         pronouns={pronouns}
         onSwitch={onSwitch}
         onLogout={onLogout}
+        onTutorial={onTutorial}
       />
     </aside>
   );
