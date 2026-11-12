@@ -1,4 +1,6 @@
-export const API = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
+// The shared class server: every group's accounts, channels and messages live there.
+// To use a local API instead (docker compose), set VITE_API_URL=http://localhost:4000 in web/.env.local.
+export const API = import.meta.env.VITE_API_URL || "https://gobelins-chat-api.leomouraire.com:4000";
 
 export const SERVER_DOWN = "Le serveur ne répond pas. Réessaie dans un instant.";
 
