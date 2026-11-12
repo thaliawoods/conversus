@@ -1,4 +1,6 @@
 curl -w "code:%{http_code}" -XPOST 0.0.0.0:4000/user -d '{"username":"isabelle","password":"reisen"}'
+curl -XPOST 0.0.0.0:4000/login -d '{"username":"isabelle","password":"reisen"}'
+
 curl -w "code:%{http_code}" -XPOST 0.0.0.0:4000/user -H 'Namespace: space' -d '{"username":"sanae","password":"sanae", "metadata": [1,2,3,4,8,16,32]}'
 
 curl -XGET 0.0.0.0:4000/channel/message?channel=1 -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImlzYWJlbGxlIiwiaWQiOjQsImV4cCI6MTc5NDQxMTA0MH0.jFobv5pN04zIpzsYPkGT_GuJ5lepPdvxtZSek9u4dzw'
@@ -28,5 +30,38 @@ curl -XPOST 0.0.0.0:4000/channel/enter -H 'Authorization: Bearer eyJhbGciOiJIUzI
 psql -p 6432 -h 0.0.0.0  --username=postgres --dbname=chat-goblin-db -W
 
 
-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImlzYWJlbGxlIiwiaWQiOjQsImV4cCI6MTc5NDQxMTA0MH0.jFobv5pN04zIpzsYPkGT_GuJ5lepPdvxtZSek9u4dzw
-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InNhbmFlIiwiaWQiOjUsImV4cCI6MTc5NDQxMTgyMX0.6kvqO-IkEHgrxEVzl1gOVjflyDTaUFA8kHx1RTT6ml8
+
+
+curl -XGET 0.0.0.0:4000/socket -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImlzYWJlbGxlIiwiaWQiOjIsImV4cCI6MTc5NDY0NTYzNX0.eqxnl43l88H1U2jq91nGZVLBnr94uD9ll9a75xRbS08'
+
+
+curl --include \
+     --header "Connection: Upgrade" \
+     --header "Upgrade: websocket" \
+     --header "Host: 0.0.0.0:4000" \
+     --header "Sec-WebSocket-Key: SGVsbG8sIHdvcmxkIQ==" \
+     --header "Sec-WebSocket-Version: 13" \
+     -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImlzYWJlbGxlIiwiaWQiOjIsImV4cCI6MTc5NDY0NTYzNX0.eqxnl43l88H1U2jq91nGZVLBnr94uD9ll9a75xRbS08'\
+     0.0.0.0:4000/socket?channel=1
+
+curl --include \
+     --header "Connection: Upgrade" \
+     --header "Upgrade: websocket" \
+     --header "Host: 0.0.0.0:4000" \
+     --header "Sec-WebSocket-Key: SGVsbG8sIHdvcmxkIQ==" \
+     --header "Sec-WebSocket-Version: 13" \
+     -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImlzYWJlbGxlIiwiaWQiOjIsImV4cCI6MTc5NDY0NTYzNX0.eqxnl43l88H1U2jq91nGZVLBnr94uD9ll9a75xRbS08'\
+     0.0.0.0:4000/socket?channel=2
+
+
+curl -XPOST 0.0.0.0:4000/channel/message?namespace=space -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImlzYWJlbGxlIiwiaWQiOjIsImV4cCI6MTc5NDY0NTYzNX0.eqxnl43l88H1U2jq91nGZVLBnr94uD9ll9a75xRbS08' -d '{"content":"this is some kind of rare content", "metadata": [5,6],"channel":1, "anonymous": true, "posted_at":"2026-11-09T06:42:59.331319Z"}'
+
+
+curl -XGET 0.0.0.0:4000/channel/message?channel=1 -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImlzYWJlbGxlIiwiaWQiOjIsImV4cCI6MTc5NDY0NTYzNX0.eqxnl43l88H1U2jq91nGZVLBnr94uD9ll9a75xRbS08'
+
+curl -XGET 82.229.112.208:32769/channel/message?channel=1 -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImlzYWJlbGxlIiwiaWQiOjIsImV4cCI6MTc5NDY0NTYzNX0.eqxnl43l88H1U2jq91nGZVLBnr94uD9ll9a75xRbS08'
+
+curl -XGET 82.229.112.208:32769/channel/connected?channel=1 -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImlzYWJlbGxlIiwiaWQiOjIsImV4cCI6MTc5NDY0NTYzNX0.eqxnl43l88H1U2jq91nGZVLBnr94uD9ll9a75xRbS08'
+
+serveur publique :
+http://37.27.91.240:4000/

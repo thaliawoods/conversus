@@ -8,4 +8,10 @@ type User struct {
 	ID           int64  `json:"id"`
 	RawMetadata  []byte  `db:"metadata" json:"-"`
 	Metadata     map[string]json.RawMessage  `db:"-" json:"metadata"`
+	Operation    *string `db:"-" json:"operation,omitempty"`
+}
+
+type ConnectedUser struct{
+	Operation string `json:"operation"`
+	ID int64 `json:"id"`
 }

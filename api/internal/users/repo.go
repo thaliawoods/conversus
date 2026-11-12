@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"chat-gobelin-api/internal"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -13,6 +14,8 @@ type Repo interface {
 	GetByID(ctx context.Context, id int64) (*User, error)
 	Create(ctx context.Context, name string, metadata json.RawMessage, passwordHash []byte) (*User, error)
 	EditMetadata(ctx context.Context, user User, rawMetadata json.RawMessage) (*User, error)
+	GetByIDs(ctx context.Context, userIDs []int64) ([]User, error)
+	GetAll(ctx context.Context) ([]User, error)
 }
 
 type repo struct {
@@ -41,8 +44,9 @@ func (r *repo) GetByUserName(ctx context.Context, username string) (*User, error
 		return &user, fmt.Errorf("Error retrieving users by username: %w", err)
 	}
 
-	var metadata map[string]json.RawMessage
-	if len(user.RawMetadata) > 0 {
+	metadata := make(map[string]json.RawMessage)
+	//This will catch null value, [] who were introduced as a bug, and useless {}
+	if len(user.RawMetadata) > 2 {
 		err = json.Unmarshal(user.RawMetadata, &metadata)
 		if err != nil {
 			return &user, fmt.Errorf("Error unmarshaling metadata: %w", err)
@@ -68,8 +72,9 @@ func (r *repo) GetByID(ctx context.Context, id int64) (*User, error) {
 		return &user, fmt.Errorf("Error retrieving user by id: %w", err)
 	}
 
-	var metadata map[string]json.RawMessage
-	if len(user.RawMetadata) > 0 {
+	metadata := make(map[string]json.RawMessage)
+	//This will catch null value, [] who were introduced as a bug, and useless {}
+	if len(user.RawMetadata) > 2 {
 		err = json.Unmarshal(user.RawMetadata, &metadata)
 		if err != nil {
 			return &user, fmt.Errorf("Error unmarshaling metadata: %w", err)
@@ -78,6 +83,49 @@ func (r *repo) GetByID(ctx context.Context, id int64) (*User, error) {
 	user.Metadata = metadata
 
 	return &user, nil
+}
+
+func (r *repo) GetByIDs(ctx context.Context, userIDs []int64) ([]User, error) {
+	if len(userIDs) == 0 {
+		return nil, nil
+	}
+	//We don't retrieve balance nor passwords (or hashes) when retrieving multiple users
+	query, args, err := sqlx.In(`SELECT
+			id,
+			username,
+			metadata
+		FROM users
+		WHERE id IN (?)`, userIDs)
+	if err != nil {
+		return nil, fmt.Errorf("Error hydrating query: %w", err)
+	}
+	query = r.db.Rebind(query)
+
+	var users []User
+	err = r.db.SelectContext(ctx, &users, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("Error retrieving users: %w", err)
+	}
+
+	return users, nil
+}
+
+func (r *repo) GetAll(ctx context.Context) ([]User, error) {
+	//We don't retrieve balance nor passwords (or hashes) when retrieving multiple users
+	query := `SELECT
+			id,
+			username,
+			metadata
+		FROM users`
+	query = r.db.Rebind(query)
+
+	var users []User
+	err := r.db.SelectContext(ctx, &users, query)
+	if err != nil {
+		return nil, fmt.Errorf("Error retrieving users: %w", err)
+	}
+
+	return users, nil
 }
 
 func (r *repo) Create(ctx context.Context, name string, rawMetadata json.RawMessage, passwordHash []byte) (*User, error) {
@@ -99,6 +147,7 @@ func (r *repo) Create(ctx context.Context, name string, rawMetadata json.RawMess
 	}
 
 	user.Metadata = metadata
+	user.Operation = &internal.USER_CREATED
 
 	return &user, nil
 }
@@ -123,6 +172,7 @@ func (r *repo) EditMetadata(ctx context.Context, user User, rawMetadata json.Raw
 	}
 
 	editedUser.Metadata = metadata
+	editedUser.Operation = &internal.USER_EDITED
 
 	return &editedUser, nil
 }

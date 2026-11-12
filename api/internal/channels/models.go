@@ -8,4 +8,5 @@ type Channel struct {
 	CreationDate string `db:"creation_date" json:"creation_date"`
 	RawMetadata  []byte  `db:"metadata" json:"-"`
 	Metadata     map[string]json.RawMessage  `db:"-" json:"metadata"`
+	Operation    *string `db:"-" json:"operation,omitempty"`
 }

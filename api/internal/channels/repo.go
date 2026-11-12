@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"chat-gobelin-api/internal"
 	"chat-gobelin-api/internal/users"
 
 	"github.com/jmoiron/sqlx"
@@ -46,6 +47,19 @@ func (r *repo) GetByUser(ctx context.Context, user users.User) ([]Channel, error
 	if err != nil {
 		return channels, fmt.Errorf("Error retrieving channels: %w", err)
 	}
+
+	for i, channel := range channels {
+		metadata := make(map[string]json.RawMessage)
+		//This will catch null value, [] who were introduced as a bug, and useless {}
+		if len(channel.RawMetadata) > 2 {
+			err = json.Unmarshal(channel.RawMetadata, &metadata)
+			if err != nil {
+				return channels, fmt.Errorf("Error unmarshaling metadata: %w for %s", err, channel.RawMetadata)
+			}
+		}
+		channels[i].Metadata = metadata
+	}
+
 	return channels, nil
 }
 
@@ -61,6 +75,17 @@ func (r *repo) GetAllChannels(ctx context.Context) ([]Channel, error) {
 	err := r.db.SelectContext(ctx, &channels, query)
 	if err != nil {
 		return channels, fmt.Errorf("Error retrieving channels: %w", err)
+	}
+	for i, channel := range channels {
+		metadata := make(map[string]json.RawMessage)
+		//This will catch null value, [] who were introduced as a bug, and useless {}
+		if len(channel.RawMetadata) > 2 {
+			err = json.Unmarshal(channel.RawMetadata, &metadata)
+			if err != nil {
+				return channels, fmt.Errorf("Error unmarshaling metadata: %w for %s", err, channel.RawMetadata)
+			}
+		}
+		channels[i].Metadata = metadata
 	}
 	return channels, nil
 }
@@ -79,6 +104,14 @@ func (r *repo) GetByName(ctx context.Context, name string) (*Channel, error) {
 	err := r.db.GetContext(ctx, &channel, query, name)
 	if err != nil {
 		return nil, fmt.Errorf("Error retrieving channels: %w", err)
+	}
+	metadata := make(map[string]json.RawMessage)
+	//This will catch null value, [] who were introduced as a bug, and useless {}
+	if len(channel.RawMetadata) > 2 {
+		err = json.Unmarshal(channel.RawMetadata, &metadata)
+		if err != nil {
+			return &channel, fmt.Errorf("Error unmarshaling metadata: %w", err)
+		}
 	}
 	return &channel, nil
 }
@@ -112,6 +145,8 @@ func (r *repo) Create(ctx context.Context, name string, metadata json.RawMessage
 	if err != nil {
 		return nil, fmt.Errorf("Error creating channel: %w", err)
 	}
+
+	channel.Operation = &internal.CHANNEL_CREATED
 
 	//TODO: add creator to it
 	return &channel, nil
@@ -151,6 +186,7 @@ func (r *repo) Edit(ctx context.Context, channel Channel, content string, rawMet
 		return nil, fmt.Errorf("Error unmarshaling edited metadata for user: %w", err)
 	}
 	editedChannel.Metadata = metadata
+	editedChannel.Operation = &internal.CHANNEL_EDITED
 
 	return &editedChannel, nil
 }

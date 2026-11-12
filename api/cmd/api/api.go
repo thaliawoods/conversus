@@ -17,6 +17,7 @@ import (
 	"chat-gobelin-api/internal/users"
 	"chat-gobelin-api/internal/channels"
 	"chat-gobelin-api/internal/messages"
+	"chat-gobelin-api/internal/websockets"
 	"chat-gobelin-api/internal"
 
 	"github.com/gorilla/mux"
@@ -34,6 +35,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	//New event broadcaster, run in background to dispatch update to websockets
+	hub := websockets.NewBroadcastHub()
+	go hub.Run()
 
 	userRepo, err := users.NewRepo(db)
 	if err != nil {
@@ -67,7 +72,7 @@ func main() {
 
 	generalChannel, _ := channelRepo.GetByName(ctx, "general")
 	if generalChannel == nil {
-		generalChannel, err = channelRepo.Create(ctx, "general", nil)
+		generalChannel, err = channelRepo.Create(ctx, "general", json.RawMessage(`{}`))
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -87,22 +92,22 @@ func main() {
 			case <- ctx.Done():
 				return
 			case _ = <-ticker.C:
-				messageRepo.Create(ctx, fmt.Sprintf("clock tick : %s", time.Now().Format(time.UnixDate)), json.RawMessage(`[]`), *generalChannel, *internalUser, true, nil)
+				messageRepo.Create(ctx, fmt.Sprintf("clock tick : %s", time.Now().Format(time.UnixDate)), json.RawMessage(`{}`), *generalChannel, *internalUser, true, nil)
 			}
 		}
 	}()
 
-	userHandler, err := handlers.NewUserHandler(userRepo, channelRepo, *generalChannel)
+	userHandler, err := handlers.NewUserHandler(hub, userRepo, channelRepo, *generalChannel)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	channelHandler, err := handlers.NewChannelHandler(channelRepo, userRepo)
+	channelHandler, err := handlers.NewChannelHandler(hub, channelRepo, userRepo)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	messageHandler, err := handlers.NewMessageHandler(messageRepo)
+	messageHandler, err := handlers.NewMessageHandler(hub, messageRepo)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -119,10 +124,14 @@ func main() {
 
 	router.HandleFunc("/login", userHandler.Login).Methods(http.MethodPost)
 	router.HandleFunc("/user", userHandler.Create).Methods(http.MethodPost)
-	router.HandleFunc("/user/edit", userHandler.Edit).Methods(http.MethodPost)
+	router.HandleFunc("/user", userHandler.Edit).Methods(http.MethodPut)
+	router.HandleFunc("/users", userHandler.GetAll).Methods(http.MethodGet)
 	router.HandleFunc("/me", userHandler.Me).Methods(http.MethodGet)
+	router.HandleFunc("/channel/socket", channelHandler.ServeWS).Methods(http.MethodGet)
 	/*router.HandleFunc("/channel", channelHandler.Get).Methods(http.MethodGet)*/
+	router.HandleFunc("/channel/connected", channelHandler.GetConnectedUsers).Methods(http.MethodGet)
 	router.HandleFunc("/channel", channelHandler.Create).Methods(http.MethodPost)
+	router.HandleFunc("/channel", channelHandler.Edit).Methods(http.MethodPut)
 	router.HandleFunc("/channel/enter", channelHandler.EnterChannel).Methods(http.MethodPost)
 	router.HandleFunc("/channel/message", messageHandler.GetMessages).Methods(http.MethodGet)
 	router.HandleFunc("/channel/message", messageHandler.CreateMessage).Methods(http.MethodPost)
@@ -149,7 +158,7 @@ func setAccessControlHeader(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Namespace")
 		next.ServeHTTP(w, r)
 	})
 }
@@ -157,7 +166,15 @@ func setAccessControlHeader(next http.Handler) http.Handler {
 func (amw *authenticationMiddleware) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		//No auth required for login
-		if strings.TrimPrefix(r.URL.Path, "/") == "login" || strings.TrimPrefix(r.URL.Path, "/") == "user" {
+		if strings.TrimPrefix(r.URL.Path, "/") == "login" && r.Method == http.MethodPost {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if strings.TrimPrefix(r.URL.Path, "/") == "user" && r.Method == http.MethodPost {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if strings.TrimPrefix(r.URL.Path, "/") == "users" && r.Method == http.MethodGet {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -166,7 +183,12 @@ func (amw *authenticationMiddleware) authMiddleware(next http.Handler) http.Hand
 			next.ServeHTTP(w, r)
 			return
 		}
+
 		tokenStr := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+
+		if tokenStr == "" {
+			tokenStr = r.URL.Query().Get("authorization")
+		}
 		if tokenStr == "" {
 			log.Printf("No token")
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -185,6 +207,8 @@ func (amw *authenticationMiddleware) authMiddleware(next http.Handler) http.Hand
 		currentUser, err := amw.Repo.GetByID(r.Context(), claims.ID)
 		if err != nil  {
 			log.Printf("Error retrieving user: %s", err.Error())
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
 		}
 		ctx := context.WithValue(r.Context(), "user", currentUser)
 		next.ServeHTTP(w, r.WithContext(ctx))

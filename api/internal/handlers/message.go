@@ -11,14 +11,17 @@ import (
 	"chat-gobelin-api/internal/users"
 	"chat-gobelin-api/internal/channels"
 	"chat-gobelin-api/internal/messages"
+	"chat-gobelin-api/internal/websockets"
 )
 
 type messageHandler struct {
+	hub *websockets.BroadcastHub
 	messageRepo messages.Repo
 }
 
-func NewMessageHandler(s messages.Repo) (*messageHandler, error) {
+func NewMessageHandler(h *websockets.BroadcastHub, s messages.Repo) (*messageHandler, error) {
 	return &messageHandler{
+		hub: h,
 		messageRepo: s,
 	}, nil
 }
@@ -144,6 +147,7 @@ func (h messageHandler) CreateMessage(writer http.ResponseWriter, request *http.
 		writer.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	h.hub.Broadcast(result, []int64{channel.ID})
 	writer.WriteHeader(http.StatusOK)
 	writer.Write(result)
 }
@@ -208,6 +212,7 @@ func (h messageHandler) EditMessage(writer http.ResponseWriter, request *http.Re
 		writer.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	h.hub.Broadcast(result, []int64{message.ChannelID})
 	writer.WriteHeader(http.StatusOK)
 	writer.Write(result)
 }
