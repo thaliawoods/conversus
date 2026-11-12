@@ -49,11 +49,11 @@ void main() {
             snoise(vec3(p.xy * 0.006 + 13.0, tm * 0.08))) * amp;
   p.x += snoise(vec3(0.0, p.y * 0.0015, tm * 0.05)) * 16.0 * smoothstep(-500.0, 500.0, p.y);
   vec2 d = p.xy - uPointer.xy;
-  float influence = exp(-dot(d, d) / (80.0 * 80.0));
-  p.xy += normalize(d + 1e-4) * influence * 22.0;
+  float influence = exp(-dot(d, d) / (36.0 * 36.0));
+  p.xy += normalize(d + 1e-4) * influence * 12.0 * smoothstep(0.0, 15.5, length(d)) * mix(0.55, 1.0, fract(aGrain.y * 7.31));
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   float life = 0.75 + 0.25 * sin(uTime * 0.7 + aGrain.y);
-  vColor = aColor * life * (1.0 + influence * 0.8);
+  vColor = aColor * life * (1.0 + influence * 0.25);
   vAlpha = 0.7;
   gl_PointSize = uSize / -mv.z;
   gl_Position = projectionMatrix * mv;
