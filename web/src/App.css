@@ -2307,10 +2307,3 @@
   color: var(--white);
   border-bottom-color: var(--ice);
 }
-
-.modal .synthesis-name,
-.col-head .synthesis-button.synthesis-button {
-  font-family: "PoppinsTN", var(--font-text);
-  font-weight: 600;
-  font-style: italic;
-}

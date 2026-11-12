@@ -64,7 +64,7 @@ function SynthesisModal({ stems, moods, retainedCount, text, error, sharing, onC
           />
         </div>
         <div className="synthesis-side">
-          <h2 id="synthesis-title" className="synthesis-name">SyntheSus</h2>
+          <h2 id="synthesis-title">SyntheSus</h2>
           <p className="modal-label">{scope}</p>
           {text === null && !error && <p className="synthesis-text waiting">La synthèse s'écrit…</p>}
           {text !== null && <p className="synthesis-text">{text}</p>}
