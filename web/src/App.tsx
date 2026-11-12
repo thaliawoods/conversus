@@ -27,6 +27,8 @@ function App() {
       <Route path="/channel/:channelId" element={workspaceOrLogin} />
       <Route path="/channel/:channelId/debate/:debateId" element={workspaceOrLogin} />
       <Route path="/debate/:debateId" element={workspaceOrLogin} />
+      {/* Unknown address: back to the start (or to the login page if logged out). */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

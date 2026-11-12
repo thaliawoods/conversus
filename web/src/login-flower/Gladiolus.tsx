@@ -13,6 +13,8 @@ const SCALE = 2;
 const COVER = 1.2;
 const GRAINS_ACROSS = 520;
 const GRAIN_SIZE = 1.1;
+// Fade-in of the flower once its image is loaded.
+const APPEAR_MS = 1200;
 const CENTER = 0.3;
 const SHIFT = 0.15;
 
@@ -64,8 +66,9 @@ const FRAGMENT = `
 ${SOFT_POINT}
 varying vec3 vColor;
 varying float vAlpha;
+uniform float uAppear;
 void main() {
-  float a = softPoint() * vAlpha;
+  float a = softPoint() * vAlpha * uAppear;
   if (a < 0.02) discard;
   gl_FragColor = vec4(vColor, a);
 }
@@ -143,6 +146,8 @@ function Gladiolus() {
       uMotion: { value: motion },
       uSize: { value: 5 * view.pixelRatio * camera.position.z },
       uPointer: { value: new THREE.Vector3(1e6, 1e6, 0) },
+      // 0 → 1 once the image is loaded: the flower fades in instead of popping up.
+      uAppear: { value: 0 },
     };
     const material = new THREE.ShaderMaterial({
       uniforms,
@@ -153,9 +158,11 @@ function Gladiolus() {
       blending: THREE.NormalBlending,
     });
     let cloud: THREE.Points | null = null;
+    let appearAt: number | null = null;
     const image = new Image();
     image.onload = () => {
       if (disposed) return;
+      appearAt = performance.now();
       cloud = new THREE.Points(createGrains(image), material);
       cloud.frustumCulled = false;
       flower.add(cloud);
@@ -212,6 +219,7 @@ function Gladiolus() {
     const timer = new THREE.Timer();
     view.renderer.setAnimationLoop((now: number) => {
       timer.update(now);
+      if (appearAt !== null) uniforms.uAppear.value = Math.min(1, (now - appearAt) / APPEAR_MS);
       const dt = Math.min(0.1, timer.getDelta());
       const t = timer.getElapsed();
       const tm = t * motion;

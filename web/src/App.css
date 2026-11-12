@@ -154,6 +154,9 @@
 
 .login-error {
   margin: 0;
+  /* One line kept even when empty, so the form never moves. */
+  min-height: 1.2em;
+  line-height: 1.2;
   font-size: 0.8rem;
   color: #ffb3c4;
 }
@@ -685,6 +688,19 @@
   height: 0.6rem;
 }
 
+.account-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.account-menu.open .account-dropdown,
 .account-menu:hover .account-dropdown {
   opacity: 1;
   pointer-events: auto;
@@ -749,6 +765,10 @@
   display: flex;
   flex-direction: row;
   gap: 0.4rem;
+  /* Au-dessus des messages de la plante, avec un voile de nuit flou (comme sous les messages) pour ne pas se mélanger au texte. */
+  z-index: 6;
+  background: rgba(9, 11, 23, 0.82);
+  box-shadow: 0 0 1.2rem 0.8rem rgba(9, 11, 23, 0.82);
 }
 .camera-controls button {
   padding: 0.4rem;
@@ -875,7 +895,8 @@
   top: 100%;
   margin-top: 0.4rem;
   display: flex;
-  gap: 0.4rem;
+  align-items: center;
+  gap: 0.6rem;
   width: max-content;
 }
 
@@ -913,8 +934,9 @@
 
 .reaction-icon {
   display: block;
-  width: 1.9rem;
-  height: 0.97rem;
+  /* x1,5 (QA du 12 nov.) : à 1,9rem les trois visages étaient trop petits pour se distinguer. */
+  width: 2.85rem;
+  height: 1.45rem;
   overflow: visible;
 }
 .face-tube,
@@ -1141,7 +1163,7 @@
   left: 50%;
   transform: translateX(-50%);
   padding: 0.25rem 0.55rem;
-  border: 1px solid var(--line);
+  /* Pas de cadre (règle du 12 nov.) : seulement le voile de nuit. */
   background: var(--night);
   color: var(--ice);
   font-family: var(--font-text);
@@ -2327,6 +2349,13 @@
   color: var(--ice);
 }
 
+/* Plante : pronoms aussi lisibles que le nom (avant, opacités cumulées autour de 30 %). */
+.board-message .pronouns {
+  font-size: 1em;
+  color: inherit;
+  opacity: 1;
+}
+
 /* Pronoms : même taille que le nom */
 .channel-panel .message-meta .pronouns {
   font-size: var(--text-small);
@@ -2495,7 +2524,9 @@
   line-height: calc(var(--text-body) * 1.35);
   border: none;
   border-radius: 0;
-  background: rgba(155, 160, 173, 0.18);
+  /* Fond opaque : sur une ligne pleine, Répondre recouvre la fin du texte au survol au lieu de lui réserver une ligne. */
+  background: linear-gradient(rgba(155, 160, 173, 0.18), rgba(155, 160, 173, 0.18)), var(--night);
+  box-shadow: -1rem 0 0.6rem -0.2rem var(--night);
   color: var(--ice-soft);
   font-size: 0.72rem;
   opacity: 0;
@@ -2508,14 +2539,8 @@
 }
 
 .channel-panel .message-text .reply-link:hover {
-  background: rgba(155, 160, 173, 0.3);
+  background: linear-gradient(rgba(155, 160, 173, 0.3), rgba(155, 160, 173, 0.3)), var(--night);
   color: var(--white);
-}
-
-/* Place vide de la largeur de Répondre, au bout de la dernière ligne seulement */
-.channel-panel .reply-space {
-  display: inline-block;
-  width: 5.5rem;
 }
 
 /* Fleur de la créa à 5 pétales, partout (canaux, ConVersus, Lancer un ConVersus) */
@@ -2606,7 +2631,8 @@
 }
 
 .mobile-tabs button.active {
-  background: rgba(196, 230, 255, 0.06);
+  /* Trait fin glace au-dessus de l'onglet actif (pas de fond gris, règle du 12 nov.). */
+  box-shadow: inset 0 1px 0 var(--ice);
   color: var(--white);
 }
 
@@ -2617,6 +2643,15 @@
     opacity: 1;
   }
 
+  /* Toujours visible ici : suit le texte au lieu de recouvrir la fin d'une ligne pleine. */
+  .channel-panel .message-text .reply-link {
+    position: static;
+    display: inline-block;
+    margin-left: 0.5rem;
+    box-shadow: none;
+    vertical-align: baseline;
+  }
+
   .resize-handle {
     width: 20px;
     margin: 0 -10px;
@@ -2625,4 +2660,18 @@
   [data-tip]::after {
     display: none;
   }
+}
+
+/* Recherche sans résultat dans la barre latérale : lien gris de la DA */
+.sidebar-empty {
+  margin: 0.5rem 0 0;
+  padding: 0 0.25rem;
+  font-size: 0.78rem;
+  color: var(--ice-soft);
+}
+
+/* ConVersus introuvable : la ligne rouge prend la place du champ d'écriture */
+.debate-missing {
+  margin: 0;
+  padding: 1.4rem 1rem;
 }

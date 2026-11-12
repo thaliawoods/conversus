@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { SERVER_DOWN, request } from "../api";
+import { SERVER_DOWN, formatTime, request } from "../api";
 import { FALLBACK_POLL, listenToChannel } from "../live";
 import LaunchModal from "../components/LaunchModal";
 import ChannelComposer from "../components/ChannelComposer";
@@ -21,19 +21,9 @@ type ChannelPanelProps = {
   onSelectingChange: (selecting: boolean) => void;
 };
 
-function formatTime(message: Message) {
-  const raw = message.posted_at;
-  if (!raw) return "";
-  const date = new Date(raw);
-  if (Number.isNaN(date.getTime())) return "";
-  const time = date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-  const today = new Date().toDateString() === date.toDateString();
-  return today ? `Aujourd'hui à ${time}` : `${date.toLocaleDateString("fr-FR")} à ${time}`;
-}
-
 // "partagée aujourd'hui à 15:40" or "partagée le 11/11/2026 à 22:02".
 function sharedLabel(message: Message) {
-  const when = formatTime(message);
+  const when = formatTime(message.posted_at);
   if (!when) return "";
   return when.startsWith("Aujourd'hui") ? `partagée a${when.slice(1)}` : `partagée le ${when}`;
 }
@@ -238,7 +228,7 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
                   {!message.anonymous && pronounsOf.get(message.user) && (
                     <span className="pronouns">· {pronounsOf.get(message.user)}</span>
                   )}
-                  <time>{formatTime(message)}</time>
+                  <time>{formatTime(message.posted_at)}</time>
                 </div>
                 {synthesisOf ? (
                   <button type="button" className="synthesis-card" onClick={() => onOpenDebate(synthesisOf, { text: message.content, sharedAt: sharedLabel(message) })}>
@@ -260,7 +250,6 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
                     {message.content}
                     {!isSelecting && (
                       <>
-                        <span className="reply-space" aria-hidden />
                         <button type="button" className="reply-link" onClick={() => setReply({ channelId: channel.id, message })}>
                           Répondre
                         </button>

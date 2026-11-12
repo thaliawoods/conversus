@@ -41,6 +41,11 @@ function Sidebar({ channels, members, username, pronouns, onSwitch, onLogout }: 
       path: (channel: Channel) => workspacePath(channelId, channel.id),
     },
   ];
+  // While searching, empty sections disappear; nothing left = "Aucun résultat".
+  const searching = query !== "";
+  const shownGroups = searching ? groups.filter((group) => group.items.length > 0) : groups;
+  const showMembers = !searching || foundMembers.length > 0;
+  const nothingFound = searching && shownGroups.length === 0 && !showMembers;
 
   function toggleGroup(title: string) {
     setFolded(folded.includes(title) ? folded.filter((item) => item !== title) : [...folded, title]);
@@ -54,10 +59,11 @@ function Sidebar({ channels, members, username, pronouns, onSwitch, onLogout }: 
           <circle cx="10.5" cy="10.5" r="6" />
           <path d="M15 15l5 5" />
         </svg>
-        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher" />
+        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher" aria-label="Rechercher" />
       </label>
       <div className="sidebar-groups">
-        {groups.map((group) => (
+        {nothingFound && <p className="sidebar-empty">Aucun résultat</p>}
+        {shownGroups.map((group) => (
           <section className="sidebar-group" key={group.title}>
             <button
               type="button"
@@ -87,6 +93,7 @@ function Sidebar({ channels, members, username, pronouns, onSwitch, onLogout }: 
             )}
           </section>
         ))}
+        {showMembers && (
         <section className="sidebar-group">
           <button
             type="button"
@@ -119,6 +126,7 @@ function Sidebar({ channels, members, username, pronouns, onSwitch, onLogout }: 
             </ul>
           )}
         </section>
+        )}
       </div>
       <AccountMenu
         username={username}

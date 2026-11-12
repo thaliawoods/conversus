@@ -18,11 +18,12 @@ export async function request(token: string, path: string, body?: unknown) {
   }
 }
 
+// Always the date and the time: "Aujourd'hui à 14:32" or "09/11/2026 à 15:19" (chat, ConVersus, synthesis).
 export function formatTime(date: string | undefined) {
   if (!date) return "";
   const time = new Date(date);
   if (Number.isNaN(time.getTime())) return "";
   const hour = time.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-  if (time.toDateString() === new Date().toDateString()) return hour;
-  return `${time.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} ${hour}`;
+  if (time.toDateString() === new Date().toDateString()) return `Aujourd'hui à ${hour}`;
+  return `${time.toLocaleDateString("fr-FR")} à ${hour}`;
 }

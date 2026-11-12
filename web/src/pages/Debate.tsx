@@ -188,6 +188,8 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
   const [sharing, setSharing] = useState(false);
   const [error, setError] = useState("");
   const [connectionError, setConnectionError] = useState("");
+  // A real ConVersus always has at least its subject: no message at all = it doesn't exist.
+  const [missing, setMissing] = useState(false);
   const [pendingReactions, setPendingReactions] = useState<string[]>([]);
   const [replies, setReplies] = useState<Message[]>([]);
   const pronounsOf = useMemo(() => pronounsByName(replies, me, pronouns), [replies, me, pronouns]);
@@ -265,6 +267,7 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
       setConnectionError("");
       const data = await response.json();
       const all: Message[] = (data ?? []).toReversed();
+      setMissing(all.length === 0);
       setSubject(all[0] ?? null);
       const messages = all.slice(1);
       setReplies(
@@ -486,7 +489,7 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
       <div className="col-head">
         <DebatePicker
           current={debate ?? null}
-          debates={channels.filter((channel) => isDebate(channel) && !HIDDEN_CHANNELS.includes(channel.name)).toSorted((a, b) => b.id - a.id)}
+          debates={channels.filter((channel) => isDebate(channel) && !HIDDEN_CHANNELS.includes(channel.name)).toSorted((a, b) => a.id - b.id)}
           onSelect={(entry) => entry.id !== undefined && navigate(workspacePath(openChannelId, entry.id))}
         />
         <button
@@ -643,11 +646,15 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
           <button type="button" onClick={() => setReplyingTo(null)}>Annuler</button>
         </div>
       )}
-      <MessageForm
-        onSend={handleSendMessage}
-        placeholder={replyingTo ? `Réponds à ${displayName(replyingTo)}…` : "Réponds au sujet…"}
-        error={error || connectionError}
-      />
+      {missing ? (
+        <p className="login-error send-error debate-missing" role="alert">Ce ConVersus est introuvable.</p>
+      ) : (
+        <MessageForm
+          onSend={handleSendMessage}
+          placeholder={replyingTo ? `Réponds à ${displayName(replyingTo)}…` : "Réponds au sujet…"}
+          error={error || connectionError}
+        />
+      )}
     </section>
   );
 }

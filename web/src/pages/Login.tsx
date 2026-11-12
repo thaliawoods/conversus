@@ -28,7 +28,10 @@ function Login({ onLogin }: LoginProps) {
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = username.trim();
-    if (!name || !password) return;
+    if (!name || !password) {
+      setError("Écris ton nom et ton mot de passe.");
+      return;
+    }
     if (signingUp && password !== passwordAgain) {
       setError("Les deux mots de passe ne sont pas pareils.");
       return;
@@ -81,7 +84,7 @@ function Login({ onLogin }: LoginProps) {
         <Logo />
         {signingUp && <p className="login-mode">Crée ton compte</p>}
         <h2>
-          Ici exprime toi librement avec tes messages qui{" "}
+          Ici, exprime-toi librement avec tes messages qui{" "}
           <span className="shape-word" style={{ fontFamily: SHAPE_FONTS[fontIndex] }}>
             changent de forme
           </span>
@@ -122,7 +125,8 @@ function Login({ onLogin }: LoginProps) {
           </div>
         )}
 
-        {error && <p className="login-error">{error}</p>}
+        {/* Always there (empty when no error): the form doesn't jump when an error appears. */}
+        <p className="login-error" aria-live="polite">{error}</p>
         <button className="login-button" type="submit" disabled={loading}>
           {loading ? "…" : signingUp ? "Créer mon compte" : "Se connecter"}
           {/* variante pour la créa : une flèche au lieu du texte du bouton.
@@ -139,9 +143,12 @@ function Login({ onLogin }: LoginProps) {
           onClick={() => {
             setSigningUp((current) => !current);
             setError("");
+            // The password typed for one form is not carried into the other.
+            setPassword("");
+            setPasswordAgain("");
           }}
         >
-          {signingUp ? "J’ai déjà un compte" : "Pas encore de compte ? Inscris toi"}
+          {signingUp ? "J’ai déjà un compte" : "Pas encore de compte ? Inscris-toi"}
         </button>
       </form>
     </main>
