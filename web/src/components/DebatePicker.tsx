@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { PetalFlower } from "./PetalIcons";
-const debateLabel = (name: string) => name.replace(/#\d+$/, "");
+import { channelLabel } from "../channels";
 
 export type DebateEntry = { name: string; id?: number };
 
@@ -33,7 +33,7 @@ function DebatePicker({ current, debates, onSelect }: DebatePickerProps) {
   return (
     <div className="debate-picker" ref={rootRef}>
       <button type="button" className="debate-picker-title" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <span>{current ? debateLabel(current.name) : "Choisir un ConVersus"}</span>
+        <span>{current ? channelLabel(current.name) : "Choisir un ConVersus"}</span>
         <svg viewBox="0 0 12 12" aria-hidden className={open ? "chevron up" : "chevron"}>
           <path d="M2.5 4.5 6 8l3.5-3.5" />
         </svg>
@@ -51,7 +51,7 @@ function DebatePicker({ current, debates, onSelect }: DebatePickerProps) {
                 }}
               >
                 <span className="sidebar-mark">{current?.name === debate.name && <PetalFlower />}</span>
-                <span className="debate-picker-name">{debateLabel(debate.name)}</span>
+                <span className="debate-picker-name">{channelLabel(debate.name)}</span>
                 {debate.id === undefined && <span className="debate-picker-new">rejoindre</span>}
               </button>
             </li>

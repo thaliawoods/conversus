@@ -27,6 +27,24 @@ const PRESENCE_CHANNEL = "general";
 // Every account joins these, plus each ConVersus announced in them, so a new visitor sees everything.
 const DEMO_CHANNELS = ["general", "m1-ecni", "projet-conversus", "random"];
 const ARRIVAL_SIDE = 0.14;
+// Below TABLET_MAX the channel list becomes a drawer; below MOBILE_MAX one view at a time, with tabs.
+const TABLET_MAX = 900;
+const MOBILE_MAX = 600;
+
+type Screen = "desktop" | "tablet" | "mobile";
+type Tab = "side" | "channel" | "debate";
+
+const TABS: { value: Tab; label: string }[] = [
+  { value: "side", label: "Canaux" },
+  { value: "channel", label: "Chat" },
+  { value: "debate", label: "ConVersus" },
+];
+
+function screenOf(width: number): Screen {
+  if (width < MOBILE_MAX) return "mobile";
+  if (width < TABLET_MAX) return "tablet";
+  return "desktop";
+}
 const ARRIVAL_CHANNEL = 0.28;
 
 function arrivalLayout(): Layout {
@@ -59,6 +77,17 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
   const dragStart = useRef(layout);
   const [total, setTotal] = useState(window.innerWidth);
   const { closed } = layout;
+  const [screen, setScreen] = useState<Screen>(() => screenOf(window.innerWidth));
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [tab, setTab] = useState<Tab>("channel");
+  // Route seen at the last render: opening a channel or a ConVersus shows it on mobile and closes the drawer.
+  const [seenRoute, setSeenRoute] = useState({ channelId, debateId });
+  if (seenRoute.channelId !== channelId || seenRoute.debateId !== debateId) {
+    setSeenRoute({ channelId, debateId });
+    setDrawerOpen(false);
+    if (debateId && debateId !== seenRoute.debateId) setTab("debate");
+    else if (channelId !== seenRoute.channelId) setTab("channel");
+  }
   const presenceChannel = channels.find((channel) => channel.name === PRESENCE_CHANNEL)?.id;
   const members = usePresence(token, presenceChannel, username);
 
@@ -186,6 +215,19 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
   }
 
   useEffect(() => {
+    const update = () => setScreen(screenOf(window.innerWidth));
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const close = (event: KeyboardEvent) => event.key === "Escape" && setDrawerOpen(false);
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [drawerOpen]);
+
+  useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return;
       const key = event.key.toLowerCase();
@@ -210,7 +252,7 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
   }
 
   function handleChannelDrag(dx: number) {
-    const side = closed.side ? 0 : sideWidth;
+    const side = sideInFlow ? sideWidth : 0;
     const width = dragStart.current.channel + dx;
     const debateWidth = total - side - width;
     const before = dragStart.current.channel;
@@ -226,42 +268,53 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
     setLayout((current) => ({ ...current, channel: Math.max(CHANNEL_MIN, Math.min(largest, width)) }));
   }
 
+  const mobile = screen === "mobile";
+  // On a tablet the channel list never takes a column: it opens as a drawer over the page.
+  const sideInFlow = screen === "desktop" && !closed.side;
   const sideFills = closed.channel && closed.debate;
   const channelFills = closed.debate;
-  const sideWidth = Math.max(SIDE_MIN, Math.min(SIDE_MAX, layout.side));
+  // A layout saved on a wide screen must still fit a narrower one.
+  const sideWidth = Math.max(SIDE_MIN, Math.min(SIDE_MAX, layout.side, total - CHANNEL_MIN - DEBATE_MIN));
   const channelWidth = Math.max(
     CHANNEL_MIN,
-    Math.min(layout.channel, CHANNEL_MAX, total - (closed.side ? 0 : sideWidth) - DEBATE_MIN),
+    Math.min(layout.channel, CHANNEL_MAX, total - (sideInFlow ? sideWidth : 0) - DEBATE_MIN),
   );
-  const fullScreen = expanded && debateId !== undefined && !closed.debate;
+  const fullScreen = !mobile && expanded && debateId !== undefined && !closed.debate;
+  const showSide = mobile ? tab === "side" : !fullScreen && sideInFlow;
+  const showChannel = mobile ? tab === "channel" : !fullScreen && !closed.channel;
+  const showDebate = mobile ? tab === "debate" : !closed.debate;
+  const showHandles = !mobile && !fullScreen;
+  const sidebar = (
+    <Sidebar
+      channels={channels}
+      members={members}
+      username={username}
+      pronouns={pronouns}
+      onSwitch={onSwitch}
+      onLogout={onTokenExpired}
+    />
+  );
   const debateFills = !closed.debate;
 
   return (
-    <div className="workspace" ref={workspaceRef}>
-      {!fullScreen && !closed.side && (
-        <div className={sideFills ? "column fill" : "column"} style={sideFills ? undefined : { width: sideWidth }}>
-          <Sidebar
-            channels={channels}
-            members={members}
-            username={username}
-            pronouns={pronouns}
-            onSwitch={onSwitch}
-            onLogout={onTokenExpired}
-          />
+    <div className={`workspace ${screen}`} ref={workspaceRef}>
+      {showSide && (
+        <div className={mobile || sideFills ? "column fill" : "column"} style={mobile || sideFills ? undefined : { width: sideWidth }}>
+          {sidebar}
         </div>
       )}
-      {!fullScreen && (
+      {showHandles && (
         <ResizeHandle
-          closed={closed.side ? "left" : null}
+          closed={sideInFlow ? null : "left"}
           label="Ouvrir les canaux"
           onDragStart={() => (dragStart.current = layout)}
           onDrag={handleSideDrag}
-          onReopen={() => setClosed("side", false)}
+          onReopen={() => (screen === "tablet" ? setDrawerOpen(true) : setClosed("side", false))}
           closeLeft={{ label: "Fermer les canaux", onClose: () => setClosed("side", true) }}
         />
       )}
-      {!fullScreen && !closed.channel && (
-        <div className={channelFills ? "column fill" : "column"} style={channelFills ? undefined : { width: channelWidth }}>
+      {showChannel && (
+        <div className={mobile || channelFills ? "column fill" : "column"} style={mobile || channelFills ? undefined : { width: channelWidth }}>
           {currentChannel && (
             <ChannelPanel
               key={currentChannel.id}
@@ -280,7 +333,7 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
           {profileError && <p className="login-error send-error" role="alert">{profileError}</p>}
         </div>
       )}
-      {!fullScreen && (
+      {showHandles && (
         <ResizeHandle
           closed={closed.channel ? "left" : closed.debate ? "right" : null}
           label={closed.channel ? "Ouvrir le canal" : "Ouvrir le ConVersus"}
@@ -291,8 +344,8 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
           closeRight={{ label: "Fermer le ConVersus", onClose: () => setClosed("debate", true) }}
         />
       )}
-      {!closed.debate && (
-        <div className={debateFills ? "column fill" : "column"}>
+      {showDebate && (
+        <div className={mobile || debateFills ? "column fill" : "column"}>
           {debateId ? (
             <Debate
               key={debateId}
@@ -310,6 +363,7 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
               {channelId && !selecting && (
                 <button type="button" className="login-button" onClick={() => {
                   setClosed("channel", false);
+                  setTab("channel");
                   setSelecting(true);
                 }}>
                   Lancer un ConVersus
@@ -318,6 +372,28 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
             </section>
           )}
         </div>
+      )}
+      {screen === "tablet" && drawerOpen && (
+        <div className="drawer-backdrop" onClick={() => setDrawerOpen(false)}>
+          <div className="drawer" role="dialog" aria-label="Canaux" onClick={(event) => event.stopPropagation()}>
+            {sidebar}
+          </div>
+        </div>
+      )}
+      {mobile && (
+        <nav className="mobile-tabs" aria-label="Vues">
+          {TABS.map((option) => (
+            <button
+              type="button"
+              key={option.value}
+              className={tab === option.value ? "active" : undefined}
+              aria-pressed={tab === option.value}
+              onClick={() => setTab(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </nav>
       )}
     </div>
   );

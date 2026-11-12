@@ -1491,8 +1491,13 @@
   color: rgba(196, 230, 255, 0.75);
 }
 
+.sidebar-member .sidebar-name {
+  text-transform: capitalize;
+}
+
 .sidebar-me {
   opacity: 0.6;
+  text-transform: none;
 }
 
 .presence-dot {
@@ -1504,9 +1509,9 @@
 }
 
 .sidebar-member.online .presence-dot {
-  border-color: #4fe39b;
-  background: #4fe39b;
-  box-shadow: 0 0 0.35rem rgba(79, 227, 155, 0.7);
+  border-color: #ffdf4e;
+  background: #ffdf4e;
+  box-shadow: 0 0 0.35rem rgba(255, 223, 78, 0.7);
 }
 
 .visually-hidden {
@@ -1740,6 +1745,19 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+  container-type: inline-size;
+}
+
+/* Narrow chat column: the button keeps only its flower, so the channel name has room. */
+@container (max-width: 380px) {
+  .channel-panel .launch-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 .channel-panel .panel-header {
@@ -2516,4 +2534,95 @@
 .petal-split {
   stroke: var(--night);
   stroke-width: 14;
+}
+
+/* ---------- Responsive ---------- */
+
+/* Mobile browsers: 100vh hides the bottom of the page behind the address bar, 100dvh does not. */
+.workspace {
+  height: 100dvh;
+}
+
+/* Tablet: the channel list opens as a drawer over the page. */
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: rgba(9, 11, 23, 0.6);
+}
+
+.drawer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: min(280px, 80vw);
+  overflow-y: auto;
+  border-right: 1px solid var(--faint);
+  background: var(--night);
+  animation: drawer-in 0.2s ease-out;
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+/* Mobile: one view at a time, tabs at the bottom. */
+.workspace.mobile {
+  --tabs-h: 3.4rem;
+  flex-direction: column;
+}
+
+.workspace.mobile .column {
+  width: 100%;
+  height: auto;
+  min-height: 0;
+}
+
+.workspace.mobile::after {
+  bottom: calc(var(--foot-h) + var(--tabs-h));
+}
+
+.mobile-tabs {
+  flex: none;
+  display: flex;
+  height: var(--tabs-h);
+  padding-bottom: env(safe-area-inset-bottom);
+  border-top: 1px solid var(--faint);
+  background: var(--night);
+}
+
+.mobile-tabs button {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--ice-soft);
+  font: inherit;
+  font-size: var(--text-small);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.mobile-tabs button.active {
+  background: rgba(196, 230, 255, 0.06);
+  color: var(--white);
+}
+
+/* Touch screens: no hover, so what only appears on hover stays visible, and handles are wider. */
+@media (hover: none) {
+  .handle-close,
+  .channel-panel .reply-link {
+    opacity: 1;
+  }
+
+  .resize-handle {
+    width: 20px;
+    margin: 0 -10px;
+  }
+
+  [data-tip]::after {
+    display: none;
+  }
 }

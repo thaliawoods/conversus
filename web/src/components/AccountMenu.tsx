@@ -10,6 +10,8 @@ type AccountMenuProps = {
 function AccountMenu({ username, pronouns, onSwitch, onLogout }: AccountMenuProps) {
   const recent = recentAccounts();
   const accounts = Object.keys(recent);
+  // Agreed with the connected account's pronoun; iel or no pronoun keeps the inclusive form.
+  const userLabel = pronouns === "elle" ? "utilisatrice" : pronouns === "il" ? "utilisateur" : "utilisateurice";
 
   function handleSwitch(account: string) {
     rememberAccount(account, recent[account]);
@@ -24,7 +26,7 @@ function AccountMenu({ username, pronouns, onSwitch, onLogout }: AccountMenuProp
       </span>
       <span className="avatar">{username[0]}</span>
       <div className="account-dropdown">
-        {accounts.length > 0 && <span className="account-label">utilisateurices</span>}
+        {accounts.length > 0 && <span className="account-label">{userLabel}</span>}
         {accounts.map((account) => (
           <button
             className={account === username ? "active" : ""}

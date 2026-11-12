@@ -4,8 +4,14 @@ export function isDebate(channel: Channel) {
   return /#\d+$/.test(channel.name);
 }
 
+// Name as shown on screen: without the "#<time>" of a ConVersus, first letter in capitals.
+export function channelLabel(name: string) {
+  const shown = name.replace(/#\d+$/, "");
+  return shown.charAt(0).toUpperCase() + shown.slice(1);
+}
+
 export function shownName(channel: Channel) {
-  return channel.name.replace(/#\d+$/, "");
+  return channelLabel(channel.name);
 }
 
 // "general" is shared by every group on the public server; the others are test ConVersus

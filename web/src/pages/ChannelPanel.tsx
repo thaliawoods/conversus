@@ -5,7 +5,7 @@ import LaunchModal from "../components/LaunchModal";
 import ChannelComposer from "../components/ChannelComposer";
 import { PetalFlower } from "../components/PetalIcons";
 import type { Message } from "./Chat";
-import { isClockTick, SHARED_CHANNEL, type Channel } from "../channels";
+import { channelLabel, isClockTick, SHARED_CHANNEL, shownName, type Channel } from "../channels";
 import { pronounsByName } from "../pronouns";
 
 type ChannelPanelProps = {
@@ -184,7 +184,7 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
   return (
     <section className="channel-panel">
       <header className="panel-header">
-        <h2 className="channel-title">{channel.name}</h2>
+        <h2 className="channel-title">{shownName(channel)}</h2>
         <button
           type="button"
           className="panel-action"
@@ -196,7 +196,7 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
           {isSelecting ? "Annuler" : (
             <>
               <PetalFlower className="petal-flower launch-flower" flat />
-              Lancer un ConVersus
+              <span className="launch-label">Lancer un ConVersus</span>
             </>
           )}
         </button>
@@ -244,7 +244,7 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
                   <button type="button" className="synthesis-card" onClick={() => onOpenDebate(synthesisOf, { text: message.content, sharedAt: sharedLabel(message) })}>
                     <span>a partagé la synthèse de</span>
                     <span className="message-subject">
-                      {synthesisOf.split("#")[0]}
+                      {channelLabel(synthesisOf)}
                     </span>
                     <span className="synthesis-excerpt">{message.content}</span>
                   </button>
@@ -252,7 +252,7 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
                   <button type="button" className="synthesis-card" onClick={() => onOpenDebate(debateName)}>
                     <span>a ouvert un ConVersus</span>
                     <span className="message-subject">
-                      {debateName.split("#")[0]}
+                      {channelLabel(debateName)}
                     </span>
                   </button>
                 ) : (
@@ -300,7 +300,7 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
         </div>
       )}
       <ChannelComposer
-        placeholder={replyingTo ? `Réponds à ${authorOf(replyingTo)}…` : `Écrire dans ${channel.name}`}
+        placeholder={replyingTo ? `Réponds à ${authorOf(replyingTo)}…` : `Écrire dans ${shownName(channel)}`}
         onSend={handleSend}
       />
       {isLaunching && (

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import EmojiPicker, { EmojiStyle, Theme } from "emoji-picker-react";
 import { FONTS, fontFamily } from "../fonts";
-import ReactionIcon, { REACTIONS } from "./ReactionIcon";
 import AnonymousIcon from "./AnonymousIcon";
 import SendArrow from "./SendArrow";
 import type { ReactionValue } from "../pages/Chat";
@@ -17,7 +16,7 @@ type MessageFormProps = {
   error: string;
 };
 
-type Panel = "emoji" | "font" | "effect" | null;
+type Panel = "emoji" | "font" | null;
 
 function MessageForm({ onSend, placeholder, error }: MessageFormProps) {
   const [content, setContent] = useState("");
@@ -78,36 +77,6 @@ function MessageForm({ onSend, placeholder, error }: MessageFormProps) {
             ))}
           </div>
         )}
-        {panel === "effect" && (
-          <div className="composer-panel">
-            <button
-              type="button"
-              className={effect === undefined ? "active" : undefined}
-              onClick={() => {
-                setEffect(undefined);
-                setPanel(null);
-              }}
-            >
-              Aucun
-            </button>
-            {REACTIONS.map((option) => (
-              <button
-                type="button"
-                key={option.value}
-                className={effect === option.value ? "active" : undefined}
-                data-tip={option.label}
-                data-reaction={option.value}
-                aria-label={option.label}
-                onClick={() => {
-                  setEffect(option.value);
-                  setPanel(null);
-                }}
-              >
-                <ReactionIcon value={option.value} />
-              </button>
-            ))}
-          </div>
-        )}
         {error && <p className="login-error" role="alert">{error}</p>}
       </div>
       <form className="message-form" onSubmit={handleSubmit}>
@@ -130,16 +99,6 @@ function MessageForm({ onSend, placeholder, error }: MessageFormProps) {
           onClick={() => togglePanel("font")}
         >
           Aa
-        </button>
-        <button
-          type="button"
-          className={panel === "effect" ? "composer-tool on" : "composer-tool"}
-          data-tip="Choisis ton effet"
-          aria-label="Choisis ton effet"
-          aria-expanded={panel === "effect"}
-          onClick={() => togglePanel("effect")}
-        >
-          ✦
         </button>
         <button
           type="button"

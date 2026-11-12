@@ -25,7 +25,7 @@ function Sidebar({ channels, members, username, pronouns, onSwitch, onLogout }: 
   const found = channels.filter(
     (channel) => !HIDDEN_CHANNELS.includes(channel.name) && shownName(channel).toLowerCase().includes(query),
   );
-  const foundMembers = members.filter((member) => member.username.toLowerCase().includes(query));
+  const foundMembers = members.filter((member) => member.online && member.username.toLowerCase().includes(query));
   const onlineCount = members.filter((member) => member.online).length;
   const groups = [
     {
