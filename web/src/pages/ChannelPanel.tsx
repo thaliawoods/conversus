@@ -5,7 +5,7 @@ import LaunchModal from "../components/LaunchModal";
 import ChannelComposer from "../components/ChannelComposer";
 import { PetalFlower } from "../components/PetalIcons";
 import type { Message } from "./Chat";
-import { channelLabel, isClockTick, SHARED_CHANNEL, shownName, type Channel } from "../channels";
+import { channelLabel, isClockTick, isSynthesis, SHARED_CHANNEL, shownName, SYNTHESIS_CHANNEL, type Channel } from "../channels";
 import { pronounsByName } from "../pronouns";
 
 type ChannelPanelProps = {
@@ -41,6 +41,7 @@ async function post(token: string, body: object) {
 
 function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebate, onDebateLaunched, onTokenExpired, selecting, onSelectingChange }: ChannelPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
+  const readOnly = channel.name === SYNTHESIS_CHANNEL;
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const isSelecting = selecting;
   const setIsSelecting = onSelectingChange;
@@ -80,7 +81,11 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
       setConnectionError("");
       const data: Message[] | null = await response.json();
       if (cancelled) return;
-      const ordered = (data ?? []).filter((message) => !isClockTick(message)).toReversed();
+      // The synthesis channel only shows syntheses, even if something else was posted there.
+      const onlySyntheses = channel.name === SYNTHESIS_CHANNEL;
+      const ordered = (data ?? [])
+        .filter((message) => !isClockTick(message) && (!onlySyntheses || isSynthesis(message)))
+        .toReversed();
       setMessages(ordered);
       const names = ordered.flatMap((message) => message.metadata?.conversus?.channelName ?? []);
       if (names.length > 0 && channel.name !== SHARED_CHANNEL) debatesSeen.current?.(names);
@@ -175,21 +180,23 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
     <section className="channel-panel">
       <header className="panel-header">
         <h2 className="channel-title">{shownName(channel)}</h2>
-        <button
-          type="button"
-          className="panel-action"
-          onClick={() => {
-            setIsSelecting(!isSelecting);
-            setSelectedIds([]);
-          }}
-        >
-          {isSelecting ? "Annuler" : (
-            <>
-              <PetalFlower className="petal-flower launch-flower" flat />
-              <span className="launch-label">Lancer un ConVersus</span>
-            </>
-          )}
-        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            className="panel-action"
+            onClick={() => {
+              setIsSelecting(!isSelecting);
+              setSelectedIds([]);
+            }}
+          >
+            {isSelecting ? "Annuler" : (
+              <>
+                <PetalFlower className="petal-flower launch-flower" flat />
+                <span className="launch-label">Lancer un ConVersus</span>
+              </>
+            )}
+          </button>
+        )}
       </header>
       <ul className="messages" ref={listRef} onScroll={handleScroll}>
         {messages.map((message) => {
@@ -288,10 +295,12 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
           <button type="button" onClick={() => setReply(null)}>Annuler</button>
         </div>
       )}
-      <ChannelComposer
-        placeholder={replyingTo ? `Réponds à ${authorOf(replyingTo)}…` : `Écrire dans ${shownName(channel)}`}
-        onSend={handleSend}
-      />
+      {!readOnly && (
+        <ChannelComposer
+          placeholder={replyingTo ? `Réponds à ${authorOf(replyingTo)}…` : `Écrire dans ${shownName(channel)}`}
+          onSend={handleSend}
+        />
+      )}
       {isLaunching && (
         <LaunchModal messages={selectedMessages} onCancel={() => setIsLaunching(false)} onLaunch={handleLaunch} />
       )}

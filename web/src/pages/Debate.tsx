@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
-import { HIDDEN_CHANNELS, isDebate, shownName, workspacePath, type Channel } from "../channels";
+import { enterSynthesisChannel, HIDDEN_CHANNELS, isDebate, shownName, SYNTHESIS_CHANNEL, workspacePath, type Channel } from "../channels";
 import DebatePicker from "../components/DebatePicker";
 import SynthesisModal from "../components/SynthesisModal";
 import SynthesisIcon from "../components/SynthesisIcon";
@@ -466,20 +466,30 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
       setSharing(false);
       return;
     }
-    const response = await request(token, MESSAGES, {
+    const shared = {
       content: synthesis.text,
-      channel: origin,
       metadata: { synthesisOf: debate.name, upTo: synthesis.upTo, retained: synthesis.retained, pronouns },
-    });
-    setSharing(false);
+    };
+    const response = await request(token, MESSAGES, { ...shared, channel: origin });
     if (response?.status === 401) {
+      setSharing(false);
       onTokenExpired();
       return;
     }
     if (!response?.ok) {
+      setSharing(false);
       setSynthesis({ ...synthesis, error: response ? "La synthèse n'a pas pu être partagée. Réessaie." : SERVER_DOWN });
       return;
     }
+    // Also in the synthesis channel. Already shared in the origin channel, so a failure here
+    // shows no error: retrying would post the synthesis twice in the origin channel.
+    let target = channels.find((channel) => channel.name === SYNTHESIS_CHANNEL)?.id;
+    if (target === undefined) {
+      const entered = await enterSynthesisChannel(token);
+      if (entered?.ok) target = ((await entered.json()) as Channel).id;
+    }
+    if (target !== undefined) await request(token, MESSAGES, { ...shared, channel: target });
+    setSharing(false);
     setSynthesis(null);
     navigate(workspacePath(origin, channelId));
   }

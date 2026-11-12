@@ -1,3 +1,5 @@
+import { request } from "./api";
+
 export type Channel = { id: number; name: string };
 
 export function isDebate(channel: Channel) {
@@ -18,6 +20,8 @@ export function shownName(channel: Channel) {
 // left there (names carry their creation time, so they are unique).
 export const HIDDEN_CHANNELS: string[] = [
   "general",
+  // Old synthesis channel, replaced by "synthesis".
+  "synthèses",
   "heyy !#1794500233817",
   "Qui déteste Laïa ici ?#1794500886492",
   "test#1794476394832",
@@ -27,6 +31,23 @@ export const HIDDEN_CHANNELS: string[] = [
 
 // Channel where every group talks: its announced ConVersus are not joined automatically.
 export const SHARED_CHANNEL = "general";
+
+// Read-only channel: every shared ConVersus synthesis also lands here (code from Kilian, f23790b).
+// The server cannot forbid writing, so the app hides the composer and shows syntheses only.
+export const SYNTHESIS_CHANNEL = "synthesis";
+
+export function isSynthesis(message: { metadata?: { conversus?: { synthesisOf?: string } } }) {
+  return message.metadata?.conversus?.synthesisOf !== undefined;
+}
+
+// Joins the synthesis channel, creating it first if nobody has yet (channel names are
+// unique on the server, so two visitors creating it at once still end up in the same one).
+export async function enterSynthesisChannel(token: string) {
+  const entered = await request(token, "/channel/enter", { channel: SYNTHESIS_CHANNEL });
+  if (entered?.ok || entered?.status === 401) return entered;
+  await request(token, "/channel?namespace=conversus", { name: SYNTHESIS_CHANNEL, metadata: {} });
+  return request(token, "/channel/enter", { channel: SYNTHESIS_CHANNEL });
+}
 
 // Messages posted by the server every 10 minutes.
 export function isClockTick(message: { content: string }) {

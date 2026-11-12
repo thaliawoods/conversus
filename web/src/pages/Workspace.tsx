@@ -7,7 +7,7 @@ import ChannelPanel from "./ChannelPanel";
 import Debate from "./Debate";
 import { SERVER_DOWN, request } from "../api";
 import { usePresence } from "../hooks/usePresence";
-import { HIDDEN_CHANNELS, isDebate, SHARED_CHANNEL, workspacePath, type Channel } from "../channels";
+import { enterSynthesisChannel, HIDDEN_CHANNELS, isDebate, SHARED_CHANNEL, SYNTHESIS_CHANNEL, workspacePath, type Channel } from "../channels";
 import Tutorial, { type TutorialColumn } from "../components/Tutorial";
 import type { Message } from "./Chat";
 
@@ -26,7 +26,7 @@ const HOME_CHANNEL = "m1-ecni";
 // Every account joins it, so a socket kept open on it tells the server who is on the site.
 const PRESENCE_CHANNEL = "general";
 // Every account joins these, plus each ConVersus announced in them, so a new visitor sees everything.
-const DEMO_CHANNELS = ["general", "m1-ecni", "projet-conversus", "random"];
+const DEMO_CHANNELS = ["general", "m1-ecni", "projet-conversus", "random", SYNTHESIS_CHANNEL];
 // Also kept in the browser, in case the server refuses to save it on the account.
 const TUTORIAL_KEY = "conversus-tutorial-seen:";
 
@@ -160,7 +160,11 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
       const missing = names.filter((name) => !joined.current.has(name));
       if (missing.length === 0) return;
       missing.forEach((name) => joined.current.add(name));
-      for (const name of missing) await request(token, "/channel/enter", { channel: name });
+      for (const name of missing) {
+        // The synthesis channel may not exist yet: it is created on the first visit.
+        if (name === SYNTHESIS_CHANNEL) await enterSynthesisChannel(token);
+        else await request(token, "/channel/enter", { channel: name });
+      }
       loadProfile();
     },
     [token, loadProfile],
