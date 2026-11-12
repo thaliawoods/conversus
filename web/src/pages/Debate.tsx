@@ -466,7 +466,7 @@ function Debate({ token, channels, me, pronouns, onTokenExpired }: DebateProps) 
       <div className="col-head">
         <DebatePicker
           current={debate ?? null}
-          debates={channels.filter(isDebate).toSorted((a, b) => b.id - a.id)}
+          debates={channels.filter((channel) => isDebate(channel) && !HIDDEN_CHANNELS.includes(channel.name)).toSorted((a, b) => b.id - a.id)}
           onSelect={(entry) => entry.id !== undefined && navigate(workspacePath(openChannelId, entry.id))}
         />
         <button

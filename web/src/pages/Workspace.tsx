@@ -6,7 +6,7 @@ import { BigFlower } from "../components/Logo";
 import ChannelPanel from "./ChannelPanel";
 import Debate from "./Debate";
 import { SERVER_DOWN, request } from "../api";
-import { isDebate, workspacePath, type Channel } from "../channels";
+import { isDebate, SHARED_CHANNEL, workspacePath, type Channel } from "../channels";
 import type { Message } from "./Chat";
 
 type WorkspaceProps = { token: string; onTokenExpired: () => void; onSwitch: (newToken: string) => void };
@@ -103,7 +103,7 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
       await joinMissing(DEMO_CHANNELS);
       const after = await request(token, "/me");
       if (!after?.ok) return;
-      const rooms = ((await after.json()).channels as Channel[]).filter((channel) => !isDebate(channel));
+      const rooms = ((await after.json()).channels as Channel[]).filter((channel) => !isDebate(channel) && channel.name !== SHARED_CHANNEL);
       const debates = new Set<string>();
       for (const room of rooms) {
         const response = await request(token, `/channel/message?channel=${room.id}&namespace=conversus`);

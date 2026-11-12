@@ -5,7 +5,7 @@ import LaunchModal from "../components/LaunchModal";
 import ChannelComposer from "../components/ChannelComposer";
 import { PetalFlower } from "../components/PetalIcons";
 import type { Message } from "./Chat";
-import type { Channel } from "../channels";
+import { isClockTick, SHARED_CHANNEL, type Channel } from "../channels";
 import { pronounsByName } from "../pronouns";
 
 type ChannelPanelProps = {
@@ -90,10 +90,10 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
       setConnectionError("");
       const data: Message[] | null = await response.json();
       if (cancelled) return;
-      const ordered = (data ?? []).toReversed();
+      const ordered = (data ?? []).filter((message) => !isClockTick(message)).toReversed();
       setMessages(ordered);
       const names = ordered.flatMap((message) => message.metadata?.conversus?.channelName ?? []);
-      if (names.length > 0) debatesSeen.current?.(names);
+      if (names.length > 0 && channel.name !== SHARED_CHANNEL) debatesSeen.current?.(names);
     }
 
     loadMessages();
