@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router";
-import Logo, { SmallFlower } from "./Logo";
+import Logo from "./Logo";
+import { PetalFlower } from "./PetalIcons";
 import AccountMenu from "./AccountMenu";
 import { HIDDEN_CHANNELS, isDebate, shownName, workspacePath, type Channel } from "../channels";
 
@@ -71,7 +72,7 @@ function Sidebar({ channels, username, pronouns, onSwitch, onLogout }: SidebarPr
                   return (
                     <li key={channel.id}>
                       <Link className={active ? "active" : undefined} to={group.path(channel)} aria-current={active ? "page" : undefined}>
-                        <span className="sidebar-mark">{active && <SmallFlower />}</span>
+                        <span className="sidebar-mark">{active && <PetalFlower flat />}</span>
                         <span className="sidebar-name">{shownName(channel)}</span>
                       </Link>
                     </li>

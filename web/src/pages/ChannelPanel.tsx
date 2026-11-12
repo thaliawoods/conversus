@@ -3,6 +3,7 @@ import { SERVER_DOWN, request } from "../api";
 import { FALLBACK_POLL, listenToChannel } from "../live";
 import LaunchModal from "../components/LaunchModal";
 import ChannelComposer from "../components/ChannelComposer";
+import { PetalFlower } from "../components/PetalIcons";
 import type { Message } from "./Chat";
 import type { Channel } from "../channels";
 import { pronounsByName } from "../pronouns";
@@ -41,6 +42,9 @@ function authorOf(message: Message) {
   return message.anonymous || !message.user ? "Anonyme" : message.user;
 }
 
+// Tige en tourbillon : de la ligne citée (en haut à droite) jusqu'au haut de l'avatar.
+const CURL = "M40 8 C 33 8, 28 2, 21 3 C 14 4, 11 10, 15 12 C 19 14, 23 8, 18 6 C 13 4, 15 13, 16 20";
+
 async function post(token: string, body: object) {
   return request(token, "/channel/message?namespace=conversus", body);
 }
@@ -62,6 +66,9 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
   const pronounsOf = pronounsByName(messages, me, pronouns);
   const selectedMessages = messages.filter((message) => selectedIds.includes(message.id));
   const lastMessageId = messages.at(-1)?.id;
+  const [reply, setReply] = useState<{ channelId: number; message: Message } | null>(null);
+  const replyingTo = reply?.channelId === channel.id ? reply.message : null;
+  const messageById = new Map(messages.map((message) => [message.id, message]));
   const debatesSeen = useRef(onDebatesSeen);
   useEffect(() => {
     debatesSeen.current = onDebatesSeen;
@@ -104,6 +111,15 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
     if (list && stickToBottom.current) list.scrollTop = list.scrollHeight;
   }, [lastMessageId]);
 
+  useEffect(() => {
+    if (!replyingTo) return;
+    function cancelOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setReply(null);
+    }
+    window.addEventListener("keydown", cancelOnEscape);
+    return () => window.removeEventListener("keydown", cancelOnEscape);
+  }, [replyingTo]);
+
   function handleScroll() {
     const list = listRef.current;
     if (!list) return;
@@ -124,11 +140,13 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
   }
 
   async function handleSend(content: string) {
-    const response = await post(token, { content, channel: channel.id, metadata: { pronouns } });
+    const metadata = replyingTo ? { pronouns, replyTo: replyingTo.id } : { pronouns };
+    const response = await post(token, { content, channel: channel.id, metadata });
     if (!checkResponse(response, "Message non envoyé. Réessaie.")) return false;
     const message: Message = await response.json();
     stickToBottom.current = true;
     setMessages((current) => [...current, message]);
+    setReply(null);
     return true;
   }
 
@@ -175,7 +193,12 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
             setSelectedIds([]);
           }}
         >
-          {isSelecting ? "Annuler" : "Lancer un ConVersus"}
+          {isSelecting ? "Annuler" : (
+            <>
+              <PetalFlower className="petal-flower launch-flower" flat />
+              Lancer un ConVersus
+            </>
+          )}
         </button>
       </header>
       <ul className="messages" ref={listRef} onScroll={handleScroll}>
@@ -185,8 +208,21 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
           const debateName = message.metadata?.conversus?.channelName;
           const synthesisOf = message.metadata?.conversus?.synthesisOf;
           const joinTarget = debateName || synthesisOf;
+          const replyId = message.metadata?.conversus?.replyTo;
+          const quoted = replyId === undefined ? undefined : messageById.get(replyId);
           return (
-            <li className="message" key={message.id}>
+            <li className={quoted ? "message has-quote" : "message"} key={message.id}>
+              {quoted && (
+                <>
+                  <svg className="reply-curl" viewBox="0 0 42 20" aria-hidden>
+                    <path className="reply-curl-glow" d={CURL} />
+                    <path className="reply-curl-core" d={CURL} />
+                  </svg>
+                  <p className="reply-quote">
+                    <span className="reply-quote-name">{authorOf(quoted)}</span> {quoted.content}
+                  </p>
+                </>
+              )}
               {isSelecting && (
                 <input
                   type="checkbox"
@@ -220,7 +256,17 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
                     </span>
                   </button>
                 ) : (
-                  <p>{message.content}</p>
+                  <p className="message-text">
+                    {message.content}
+                    {!isSelecting && (
+                      <>
+                        <span className="reply-space" aria-hidden />
+                        <button type="button" className="reply-link" onClick={() => setReply({ channelId: channel.id, message })}>
+                          Répondre
+                        </button>
+                      </>
+                    )}
+                  </p>
                 )}
                 {joinTarget && (
                   <button className="join-button" type="button" onClick={() => onOpenDebate(joinTarget)}>
@@ -245,7 +291,18 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
       {(error || connectionError) && (
         <p className="login-error send-error" role="alert">{error || connectionError}</p>
       )}
-      <ChannelComposer placeholder={`Écrire dans ${channel.name}`} onSend={handleSend} />
+      {replyingTo && (
+        <div className="reply-banner">
+          <p>
+            Réponse à {authorOf(replyingTo)} : « {replyingTo.content} »
+          </p>
+          <button type="button" onClick={() => setReply(null)}>Annuler</button>
+        </div>
+      )}
+      <ChannelComposer
+        placeholder={replyingTo ? `Réponds à ${authorOf(replyingTo)}…` : `Écrire dans ${channel.name}`}
+        onSend={handleSend}
+      />
       {isLaunching && (
         <LaunchModal messages={selectedMessages} onCancel={() => setIsLaunching(false)} onLaunch={handleLaunch} />
       )}

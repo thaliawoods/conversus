@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router";
 import LaunchModal from "../components/LaunchModal";
 import SendArrow from "../components/SendArrow";
 import PanelMenu from "../components/PanelMenu";
-import { SmallFlower } from "../components/Logo";
+import { PetalFlower } from "../components/PetalIcons";
 import { shownName, workspacePath, type Channel } from "../channels";
 import { SERVER_DOWN, formatTime, request } from "../api";
 
@@ -183,7 +183,7 @@ function Chat({ token, channels, onTokenExpired, onChannelsChanged, selecting: i
   return (
     <section className="chat">
       <div className="col-head">
-        {currentChannel && <SmallFlower className="small-flower title-flower" />}
+        {currentChannel && <PetalFlower className="petal-flower title-flower" />}
         <h2 className="channel-title">{currentChannel && shownName(currentChannel)}</h2>
         {channelId && (
           <PanelMenu items={[{ label: "Lancer un ConVersus", onClick: () => onSelectingChange(true), disabled: isSelecting }]} />

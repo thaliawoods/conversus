@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { SmallFlower } from "./Logo";
+import { PetalFlower } from "./PetalIcons";
 const debateLabel = (name: string) => name.replace(/#\d+$/, "");
 
 export type DebateEntry = { name: string; id?: number };
@@ -50,7 +50,7 @@ function DebatePicker({ current, debates, onSelect }: DebatePickerProps) {
                   onSelect(debate);
                 }}
               >
-                <span className="sidebar-mark">{current?.name === debate.name && <SmallFlower />}</span>
+                <span className="sidebar-mark">{current?.name === debate.name && <PetalFlower />}</span>
                 <span className="debate-picker-name">{debateLabel(debate.name)}</span>
                 {debate.id === undefined && <span className="debate-picker-new">rejoindre</span>}
               </button>

@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from "react-router";
 import { HIDDEN_CHANNELS, isDebate, shownName, workspacePath, type Channel } from "../channels";
 import DebatePicker from "../components/DebatePicker";
 import SynthesisModal from "../components/SynthesisModal";
+import SynthesisIcon from "../components/SynthesisIcon";
 import CameraIcon from "../components/CameraIcon";
 import Branches, { type Arrival, type Color, type Mark, type Stem } from "../components/Branches";
 import Rain, { type Shower } from "../components/Rain";
@@ -60,6 +61,13 @@ function threadOf(replies: Message[], id: number) {
   }
   return thread;
 }
+
+// Son des feuilles (freesound « crunching leaves »), joué quand on réagit Content.
+const LEAF_SOUND = new Audio("/sounds/feuilles.mp3");
+// Pluie (dragon-studio « calming rain ») : 2 s du milieu, fondus calés sur Rain.tsx.
+const RAIN_SOUND = new Audio("/sounds/pluie.mp3");
+// Orage (evanaeva « thunderstorm ») : de 2 à 4 s, joué quand on réagit En colère.
+const THUNDER_SOUND = new Audio("/sounds/orage.mp3");
 
 const MOOD_FONTS: Record<ReactionValue, string> = { thorn: "LoveAndRage", wilt: "Nudles", leaf: "LigaSans" };
 
@@ -348,13 +356,21 @@ function Debate({ token, channels, me, pronouns, onTokenExpired }: DebateProps) 
     if (pendingReactions.includes(key)) return;
     setPendingReactions((current) => [...current, key]);
     setOpenId(null);
+    if (value === "thorn") {
+      THUNDER_SOUND.currentTime = 0;
+      THUNDER_SOUND.play().catch(() => {});
+    }
     if (value === "wilt") {
       ownWilts.current.push(message.id);
       setShowers([{ key: -Date.now(), target: message.id }]);
+      RAIN_SOUND.currentTime = 0;
+      RAIN_SOUND.play().catch(() => {});
     }
     if (value === "leaf") {
       ownLeaves.current.push(message.id);
       setLeafArrival({ key: -Date.now(), target: message.id });
+      LEAF_SOUND.currentTime = 0;
+      LEAF_SOUND.play().catch(() => {});
     }
     const response = await request(token, MESSAGES, {
       content: "",
@@ -459,6 +475,7 @@ function Debate({ token, channels, me, pronouns, onTokenExpired }: DebateProps) 
           onClick={handleSynthesis}
           disabled={replies.length === 0 || synthesis !== null}
         >
+          <SynthesisIcon />
           Faire ma Synthesis
         </button>
       </div>

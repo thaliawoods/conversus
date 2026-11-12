@@ -1487,8 +1487,8 @@
 
 .sidebar-mark {
   flex: none;
-  width: 0.75rem;
-  height: 0.75rem;
+  width: 1.15rem;
+  height: 1.15rem;
   display: grid;
   place-items: center;
 }
@@ -2378,4 +2378,122 @@
 .resize-handle:hover .handle-close,
 .handle-close:focus-visible {
   opacity: 1;
+}
+
+/* Faire ma Synthesis : logo de la créa dans le bouton, lumineux comme les autres icônes */
+.col-head .synthesis-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.synthesis-icon {
+  width: 1.15rem;
+  height: 1.15rem;
+  fill: currentColor;
+  filter: drop-shadow(0 0 2px rgba(169, 212, 255, 0.75));
+}
+
+/* Chat : répondre à un message, tige en tourbillon jusqu'à l'avatar (fil lumineux du débat) */
+.channel-panel .message.has-quote {
+  position: relative;
+  flex-wrap: wrap;
+  row-gap: 0.2rem;
+}
+
+.channel-panel .reply-quote {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding-left: 2.6rem;
+  font-size: 0.74rem;
+  line-height: 1rem;
+  color: var(--ice-soft);
+  opacity: 0.8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.channel-panel .reply-quote-name {
+  color: var(--ice);
+  text-transform: capitalize;
+}
+
+.reply-curl {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 42px;
+  height: 20px;
+  overflow: visible;
+  fill: none;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.reply-curl-glow {
+  stroke: #2f62ff;
+  stroke-width: 2.4;
+  filter: drop-shadow(0 0 2px rgba(47, 98, 255, 0.9));
+}
+
+.reply-curl-core {
+  stroke: #ffffff;
+  stroke-width: 0.8;
+}
+
+.channel-panel .message-text {
+  position: relative;
+}
+
+/* Exception voulue à « pas de fond gris » (12 nov.) : Répondre en fond gris, sans cadre, au bout de la ligne du texte */
+.channel-panel .message-text .reply-link {
+  position: absolute;
+  right: 0;
+  bottom: -0.27rem;
+  height: calc(var(--text-body) * 1.35);
+  padding: 0 0.6rem;
+  line-height: calc(var(--text-body) * 1.35);
+  border: none;
+  border-radius: 0;
+  background: rgba(155, 160, 173, 0.18);
+  color: var(--ice-soft);
+  font-size: 0.72rem;
+  opacity: 0;
+  transition: opacity 0.2s, background 0.2s, color 0.2s;
+}
+
+.channel-panel .message:hover .reply-link,
+.channel-panel .reply-link:focus-visible {
+  opacity: 1;
+}
+
+.channel-panel .message-text .reply-link:hover {
+  background: rgba(155, 160, 173, 0.3);
+  color: var(--white);
+}
+
+/* Place vide de la largeur de Répondre, au bout de la dernière ligne seulement */
+.channel-panel .reply-space {
+  display: inline-block;
+  width: 5.5rem;
+}
+
+/* Fleur de la créa à 5 pétales, partout (canaux, ConVersus, Lancer un ConVersus) */
+.petal-flower {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.channel-panel .panel-action:has(.launch-flower) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+/* Fleur unie : fine ligne couleur de fond entre les pétales */
+.petal-split {
+  stroke: var(--night);
+  stroke-width: 14;
 }
