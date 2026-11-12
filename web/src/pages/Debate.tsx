@@ -1,11 +1,10 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { HIDDEN_CHANNELS, isDebate, shownName, workspacePath, type Channel } from "../channels";
 import DebatePicker from "../components/DebatePicker";
 import SynthesisModal from "../components/SynthesisModal";
 import CameraIcon from "../components/CameraIcon";
 import Branches, { type Arrival, type Color, type Mark, type Stem } from "../components/Branches";
-import Rain, { type Shower } from "../components/Rain";
 import Leaves from "../components/Leaves";
 import ReactionIcon, { REACTIONS } from "../components/ReactionIcon";
 import type { Message, ReactionValue } from "./Chat";
@@ -18,6 +17,7 @@ import { fontFamily, shownFont } from "../fonts";
 import { SERVER_DOWN, formatTime, request } from "../api";
 import { FALLBACK_POLL, listenToChannel } from "../live";
 import { pronounsByName } from "../pronouns";
+import { SYNTHESIS_USERS } from "../synthesis";
 
 const ZOOM_STEP = 1.25;
 const MESSAGES = "/channel/message?namespace=conversus";
@@ -31,6 +31,9 @@ type DebateProps = {
   me: string | null;
   pronouns: string;
   onTokenExpired: () => void;
+  // Full screen: the ConVersus takes the whole window, without the channels beside it.
+  expanded: boolean;
+  onToggleExpanded: () => void;
 };
 
 function findParents(replies: Message[]) {
@@ -74,38 +77,58 @@ const MOOD_COLORS: Record<ReactionValue, Color> = {
   wilt: [0.608, 0.42, 1.0],
 };
 
-function majorityReaction(reactions: Message[], message: Message) {
-  const counts: Record<ReactionValue, number> = { leaf: 0, thorn: 0, wilt: 0 };
+function isReactionValue(value: unknown): value is ReactionValue {
+  return value === "leaf" || value === "thorn" || value === "wilt";
+}
+
+// One vote per person: reacting again replaces your previous reaction. Oldest vote first.
+function currentVotes(reactions: Message[], message: Message): ReactionValue[] {
+  const latest = new Map<string, Message>();
   for (const reaction of reactions) {
     const { reactTo, value } = reaction.metadata?.conversus ?? {};
-    if (reactTo === message.id && (value === "leaf" || value === "thorn" || value === "wilt")) counts[value] += 1;
+    if (reactTo !== message.id || !isReactionValue(value)) continue;
+    const previous = latest.get(reaction.user);
+    if (!previous || previous.id < reaction.id) latest.set(reaction.user, reaction);
   }
+  return [...latest.values()]
+    .sort((a, b) => a.id - b.id)
+    .map((reaction) => reaction.metadata!.conversus!.value as ReactionValue);
+}
+
+// The most voted reaction; on a tie, the most recent vote among the tied ones wins.
+function majorityReaction(reactions: Message[], message: Message) {
+  const votes = currentVotes(reactions, message);
+  const counts: Record<ReactionValue, number> = { leaf: 0, thorn: 0, wilt: 0 };
+  for (const vote of votes) counts[vote] += 1;
   const best = Math.max(counts.leaf, counts.thorn, counts.wilt);
-  const winners = (Object.keys(counts) as ReactionValue[]).filter((value) => counts[value] === best);
-  return best > 0 && winners.length === 1 ? winners[0] : null;
+  if (best === 0) return null;
+  return votes.findLast((vote) => counts[vote] === best) ?? null;
 }
 
 function countWilts(reactions: Message[], message: Message) {
-  const fromReactions = reactions.filter(
-    (reaction) =>
-      reaction.metadata?.conversus?.reactTo === message.id &&
-      reaction.metadata?.conversus?.value === "wilt",
-  ).length;
+  const fromVotes = currentVotes(reactions, message).filter((vote) => vote === "wilt").length;
   const fromEffect = message.metadata?.conversus?.effect === "wilt" ? 1 : 0;
-  return fromReactions + fromEffect;
+  return fromVotes + fromEffect;
 }
 
 const MAX_MARKS = 8;
 
+// Leaves and thorns on a branch, in the order they came: every "content" adds a flower,
+// every "en colère" a thorn, and a "triste" makes all the flowers there fall off.
 function marksOf(reactions: Message[], message: Message) {
-  return [
+  const values = [
     message.metadata?.conversus?.effect,
     ...reactions
       .filter((reaction) => reaction.metadata?.conversus?.reactTo === message.id)
+      .toSorted((a, b) => a.id - b.id)
       .map((reaction) => reaction.metadata?.conversus?.value),
-  ]
-    .filter((value): value is Mark => value === "leaf" || value === "thorn")
-    .slice(-MAX_MARKS);
+  ];
+  let marks: Mark[] = [];
+  for (const value of values) {
+    if (value === "wilt") marks = marks.filter((mark) => mark !== "leaf");
+    else if (value === "leaf" || value === "thorn") marks.push(value);
+  }
+  return marks.slice(-MAX_MARKS);
 }
 
 function arrivalsOf(messages: Message[], value: ReactionValue): Arrival[] {
@@ -146,7 +169,7 @@ function textSize(element: HTMLDivElement): Size {
   return { width: right * scale, height: bottom * scale };
 }
 
-function Debate({ token, channels, me, pronouns, onTokenExpired }: DebateProps) {
+function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onToggleExpanded }: DebateProps) {
   const { debateId: channelId, channelId: openChannelId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -167,9 +190,9 @@ function Debate({ token, channels, me, pronouns, onTokenExpired }: DebateProps) 
   const [openId, setOpenId] = useState<number | null>(null);
   const [hoveredId, setHoveredId] = useState<number | null>(null);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
-  const [showers, setShowers] = useState<Shower[]>([]);
   const [thornArrival, setThornArrival] = useState<Arrival | null>(null);
   const [leafArrival, setLeafArrival] = useState<Arrival | null>(null);
+  const [wiltArrival, setWiltArrival] = useState<Arrival | null>(null);
   const seenReactions = useRef<Set<number> | null>(null);
   const ownWilts = useRef<number[]>([]);
   const ownLeaves = useRef<number[]>([]);
@@ -184,6 +207,7 @@ function Debate({ token, channels, me, pronouns, onTokenExpired }: DebateProps) 
     zoomBy,
   } = useCamera();
   const debate = channels.find((channel) => channel.id === Number(channelId));
+  const canSynthesize = me !== null && SYNTHESIS_USERS.includes(me.toLowerCase());
   const targets = useMemo(
     () =>
       new Map(
@@ -218,13 +242,6 @@ function Debate({ token, channels, me, pronouns, onTokenExpired }: DebateProps) 
     [replies, reactions],
   );
   const thread = useMemo(() => (hoveredId === null ? null : threadOf(replies, hoveredId)), [replies, hoveredId]);
-  function veilAt(arrival: Arrival) {
-    const target = shown.get(arrival.target);
-    return target && ({
-      "--x": `calc(50% + ${camera.x + target.x * camera.zoom}px)`,
-      "--y": `calc(50% + ${camera.y + target.y * camera.zoom}px)`,
-    } as CSSProperties);
-  }
 
   useEffect(() => {
     async function loadMessages() {
@@ -276,7 +293,7 @@ function Debate({ token, channels, me, pronouns, onTokenExpired }: DebateProps) 
         ownWilts.current.splice(index, 1);
         return false;
       });
-      if (toPlay.length > 0) setShowers(toPlay);
+      if (toPlay.length > 0) setWiltArrival(toPlay[toPlay.length - 1]);
     }
 
     seenReactions.current = null;
@@ -350,7 +367,7 @@ function Debate({ token, channels, me, pronouns, onTokenExpired }: DebateProps) 
     setOpenId(null);
     if (value === "wilt") {
       ownWilts.current.push(message.id);
-      setShowers([{ key: -Date.now(), target: message.id }]);
+      setWiltArrival({ key: -Date.now(), target: message.id });
     }
     if (value === "leaf") {
       ownLeaves.current.push(message.id);
@@ -383,7 +400,8 @@ function Debate({ token, channels, me, pronouns, onTokenExpired }: DebateProps) 
     setSynthesis(snapshot);
     const response = await fetch("/ia/synthese", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      // The server checks with this login who is asking: only some accounts may use the synthesis.
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({
         sujet: debate ? shownName(debate) : "",
         messages: replies.map((message) => ({
@@ -395,13 +413,15 @@ function Debate({ token, channels, me, pronouns, onTokenExpired }: DebateProps) 
         })),
       }),
     }).catch(() => null);
-    const result = response?.ok ? await response.json() : null;
+    const result: { synthese?: string; erreur?: string } | null = await response?.json().catch(() => null) ?? null;
+    // 401/403: not allowed, the server's own message says why. Anything else: a passing failure.
+    const refused = response?.status === 401 || response?.status === 403;
     setSynthesis((current) =>
       current === null
         ? null
         : result?.synthese
           ? { ...current, text: result.synthese }
-          : { ...current, error: "La synthèse n'a pas pu être faite. Réessaie." },
+          : { ...current, error: (refused && result?.erreur) || "La synthèse n'a pas pu être faite. Réessaie." },
     );
   }
 
@@ -457,7 +477,8 @@ function Debate({ token, channels, me, pronouns, onTokenExpired }: DebateProps) 
           type="button"
           className="synthesis-button"
           onClick={handleSynthesis}
-          disabled={replies.length === 0 || synthesis !== null}
+          disabled={replies.length === 0 || synthesis !== null || !canSynthesize}
+          title={canSynthesize ? undefined : `Synthèse réservée à ${SYNTHESIS_USERS.join(", ")}`}
         >
           Faire ma Synthesis
         </button>
@@ -498,10 +519,15 @@ function Debate({ token, channels, me, pronouns, onTokenExpired }: DebateProps) 
         onClickCapture={handleClickCapture}
         onClick={() => setOpenId(null)}
       >
-        {thornArrival && <div className="thorn-veil" key={thornArrival.key} style={veilAt(thornArrival)} aria-hidden />}
-        {leafArrival && <div className="leaf-veil" key={leafArrival.key} style={veilAt(leafArrival)} aria-hidden />}
-        <Rain showers={showers} stems={stems} camera={camera} />
-        <Branches stems={stems} camera={camera} thornArrival={thornArrival} leafArrival={leafArrival} sprouts={sprouts} highlight={thread} />
+        <Branches
+          stems={stems}
+          camera={camera}
+          thornArrival={thornArrival}
+          leafArrival={leafArrival}
+          wiltArrival={wiltArrival}
+          sprouts={sprouts}
+          highlight={thread}
+        />
         <Leaves arrival={leafArrival} stems={stems} camera={camera} />
         <div className="board" style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})` }}>
           <div className="central-flower" role="img" aria-label="Sujet du débat" />
@@ -580,6 +606,15 @@ function Debate({ token, channels, me, pronouns, onTokenExpired }: DebateProps) 
           </button>
           <button type="button" aria-label="Recentrer" data-tip="Recentrer" onClick={recenter}>
             <CameraIcon action="recenter" />
+          </button>
+          <button
+            type="button"
+            aria-label={expanded ? "Quitter le plein écran" : "Plein écran"}
+            aria-pressed={expanded}
+            data-tip={expanded ? "Quitter le plein écran" : "Plein écran"}
+            onClick={onToggleExpanded}
+          >
+            <CameraIcon action={expanded ? "collapse" : "expand"} />
           </button>
         </div>
       </div>

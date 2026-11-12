@@ -1,4 +1,4 @@
-export type CameraAction = "zoomIn" | "zoomOut" | "recenter";
+export type CameraAction = "zoomIn" | "zoomOut" | "recenter" | "expand" | "collapse";
 
 const SHAPES: Record<CameraAction, string[]> = {
   zoomIn: ["M-7 7 L7 -7", "M1.5 -7 L7 -7 L7 -1.5", "M-7 1.5 L-7 7 L-1.5 7"],
@@ -10,6 +10,8 @@ const SHAPES: Record<CameraAction, string[]> = {
     "M-10 0 L-4 0",
     "M10 0 L4 0",
   ],
+  expand: ["M-9 -4 L-9 -9 L-4 -9", "M4 -9 L9 -9 L9 -4", "M9 4 L9 9 L4 9", "M-4 9 L-9 9 L-9 4"],
+  collapse: ["M-9 -4 L-4 -4 L-4 -9", "M4 -9 L4 -4 L9 -4", "M9 4 L4 4 L4 9", "M-4 9 L-4 4 L-9 4"],
 };
 
 function CameraIcon({ action }: { action: CameraAction }) {

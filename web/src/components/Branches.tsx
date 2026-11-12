@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
-import { pointOnStem, type Placement, type Size } from "../layout";
+import { pointOnStem, wiltSag, type Placement, type Size } from "../layout";
 import { createCentralFlower } from "./centralFlower";
 import type { Sprout } from "../hooks/useSprouts";
 
@@ -13,8 +13,6 @@ const WIGGLE = 1.2;
 const WIGGLE_LENGTH = 9;
 const GLOW_RADIUS = 3;
 const GLOW = 0.3;
-const SWAY = 1.5;
-const BREATH = 3;
 const SWEEP = 0.6;
 const POINT_GAP = 1.5;
 export const LEAF = { length: 16, width: 8, turn: 0.35, petiole: 14 };
@@ -32,7 +30,7 @@ const UNDER_TEXT_LIT = 0.4;
 const TEXT_MARGIN = 4;
 const MAX_BOXES = 128;
 const ANGER = { duration: 2, fadeIn: 0.3, fadeOut: 0.8 };
-const TINT = { thorn: [1.0, 0.353, 0.212], leaf: [0.878, 0.31, 0.604] } as const;
+const TINT = { thorn: [1.0, 0.353, 0.212], leaf: [0.878, 0.31, 0.604], wilt: [0.608, 0.42, 1.0] } as const;
 const GROW_SECONDS = 2.4;
 const TRUNK_SHARE = 0.7;
 const TWIG_SHARE = 0.22;
@@ -45,6 +43,19 @@ const DIMMED = 0.6;
 const THREAD_MIX = 1.0;
 export type Color = readonly [number, number, number];
 const BLUE: Color = [0.184, 0.384, 1.0];
+// Sag of the saddest possible branch: its twigs then hang almost straight down.
+const FULL_SAG = wiltSag(Number.MAX_SAFE_INTEGER);
+const DROOP = 0.8;
+// Down on screen (layout y grows downward).
+const DOWN = Math.PI / 2;
+
+// Turns a twig's angle toward the ground, more as the branch gets sadder.
+function droop(angle: number, amount: number) {
+  if (amount <= 0) return angle;
+  const towardDown = Math.atan2(Math.sin(DOWN - angle), Math.cos(DOWN - angle));
+  return angle + towardDown * amount * DROOP;
+}
+
 export const ARRIVE_SECONDS = GROW_SECONDS * (1 - Math.sqrt(1 - TRUNK_SHARE / 1.05));
 
 export type Mark = "leaf" | "thorn";
@@ -282,6 +293,8 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
       return Math.min(0.92, Math.max(0.08, moved));
     };
 
+    // Square root: a single sad vote already makes the twigs hang visibly.
+    const sadness = Math.sqrt(Math.min(1, Math.max(0, stem.sag / FULL_SAG)));
     const twigCount = 2 + Math.floor(noise(stem.id, 3) * 3);
     for (let j = 0; j < twigCount; j++) {
       const at = free(0.3 + ((j + noise(stem.id, 10 + j)) / twigCount) * 0.5, j % 2 === 0);
@@ -289,9 +302,9 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
       const base = trunk[baseIndex];
       growth = { start: trunkAt(baseIndex), span: TWIG_SHARE, birth };
       const side = (j + Math.floor(noise(stem.id, 4) * 2)) % 2 ? 1 : -1;
-      const angle = (base.angle * Math.PI) / 180 + side * (0.45 + noise(stem.id, 20 + j) * 0.4);
+      const angle = droop((base.angle * Math.PI) / 180 + side * (0.45 + noise(stem.id, 20 + j) * 0.4), sadness);
       const reach = visible * (0.15 + noise(stem.id, 30 + j) * 0.15);
-      const twig = sprout(base, angle, reach, side, stem.id * 10 + j);
+      const twig = sprout(base, angle, reach, side * (1 - sadness), stem.id * 10 + j);
       addLine(twig, TWIG_WIDTH, stem.id * 10 + j);
       addNode(base, 2 + noise(stem.id, 35 + j), stem.id * 10 + j);
 
@@ -299,8 +312,8 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
         const forkIndex = Math.min(twig.length - 1, Math.round(twig.length * 0.55));
         const fork = twig[forkIndex];
         growth = { start: trunkAt(baseIndex) + TWIG_SHARE * (forkIndex / (twig.length - 1)), span: FORK_SHARE, birth };
-        const forkAngle = (fork.angle * Math.PI) / 180 - side * (0.5 + noise(stem.id, 45 + j) * 0.3);
-        addLine(sprout(fork, forkAngle, reach * 0.5, -side, stem.id * 10 + j + 5), FORK_WIDTH, stem.id * 10 + j + 5);
+        const forkAngle = droop((fork.angle * Math.PI) / 180 - side * (0.5 + noise(stem.id, 45 + j) * 0.3), sadness);
+        addLine(sprout(fork, forkAngle, reach * 0.5, -side * (1 - sadness), stem.id * 10 + j + 5), FORK_WIDTH, stem.id * 10 + j + 5);
         addNode(fork, 2, stem.id * 10 + j + 5);
       }
     }
@@ -312,9 +325,9 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
       const base = trunk[baseIndex];
       growth = { start: trunkAt(baseIndex), span: CREASE_SHARE, birth };
       const side = noise(stem.id, 60 + c) > 0.5 ? 1 : -1;
-      const angle = (base.angle * Math.PI) / 180 + side * (0.25 + noise(stem.id, 70 + c) * 0.35);
+      const angle = droop((base.angle * Math.PI) / 180 + side * (0.25 + noise(stem.id, 70 + c) * 0.35), sadness);
       const reach = 4 + noise(stem.id, 80 + c) * 6;
-      addLine(sprout(base, angle, reach, side, stem.id * 100 + c), CREASE_WIDTH, stem.id * 100 + c);
+      addLine(sprout(base, angle, reach, side * (1 - sadness), stem.id * 100 + c), CREASE_WIDTH, stem.id * 100 + c);
     }
 
     const beads = Math.round(visible / 40);
@@ -357,18 +370,10 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
   return { lines, points, stemIds, nodeStems };
 }
 
-const SWAY_GLSL = `
+// Branches never move: only a light sweep runs along them.
+const SWEEP_GLSL = `
 uniform float uTime;
-uniform float uSway;
-uniform float uBreath;
 uniform float uSweep;
-vec2 sway(vec2 p) {
-  vec2 wave = vec2(sin(p.y * 0.02 + uTime * 0.5), cos(p.x * 0.02 + uTime * 0.4)) * uSway;
-  float r = length(p);
-  vec2 outward = r > 0.001 ? p / r : vec2(0.0);
-  float breath = (0.5 + 0.5 * sin(uTime * 0.6 - r * 0.012)) * smoothstep(40.0, 260.0, r) * uBreath;
-  return wave + outward * breath;
-}
 float sweep(vec4 clip) {
   float diagonal = (clip.x + clip.y) * 0.5;
   float head = mix(-1.4, 1.4, clamp(mod(uTime, 9.0) / 4.0, 0.0, 1.0));
@@ -380,13 +385,8 @@ const ANGER_GLSL = `
 uniform float uTarget;
 uniform float uAngry;
 uniform float uAge;
-uniform float uShake;
 float targeted(float stem) {
   return 1.0 - step(0.5, abs(stem - uTarget));
-}
-vec2 shake(float hit) {
-  vec2 jolt = vec2(sin(uTime * 47.0) * 2.6 + sin(uTime * 31.0) * 1.2, cos(uTime * 39.0) * 2.2);
-  return jolt * uAngry * hit * uShake;
 }
 float grown(float order) {
   if (order < 0.5) return 2.0;
@@ -443,7 +443,7 @@ const vec3 PALE = vec3(1.0, 0.89, 0.89);
 `;
 
 const LINE_VERTEX = `
-${SWAY_GLSL}
+${SWEEP_GLSL}
 ${GROW_GLSL}
 ${ANGER_GLSL}
 ${UNDER_TEXT_GLSL}
@@ -486,7 +486,7 @@ void main() {
   float halfWidth = (core / 2.0 + uGlowRadius) * step(0.001, growing);
   vec3 p = position;
   float hit = targeted(aStem);
-  p.xy += sway(p.xy) + shake(hit) + aNormal * aSide * halfWidth / uZoom;
+  p.xy += aNormal * aSide * halfWidth / uZoom;
   vAnger = hit * uAngry;
   vT = t;
   vReveal = mix(2.0, grown(aFresh), hit);
@@ -552,7 +552,7 @@ void main() {
 `;
 
 const NODE_VERTEX = `
-${SWAY_GLSL}
+${SWEEP_GLSL}
 ${GROW_GLSL}
 ${ANGER_GLSL}
 ${UNDER_TEXT_GLSL}
@@ -566,7 +566,6 @@ varying float vAnger;
 void main() {
   vec3 p = position;
   float hit = targeted(aStem);
-  p.xy += sway(p.xy) + shake(hit);
   vAnger = hit * uAngry;
   focus();
   float growing = sprouted();
@@ -613,10 +612,11 @@ type View = {
     uTarget: { value: number };
     uAngry: { value: number };
     uAge: { value: number };
-    uShake: { value: number };
     uTint: { value: THREE.Vector3 };
   };
   angerStart: number | null;
+  // Only a new thorn grows during the tint; leaves and sadness just change the colour.
+  growThorn: boolean;
   focus: { value: number };
   focusTarget: number;
   lineStems: number[];
@@ -678,13 +678,14 @@ type BranchesProps = {
   camera: Camera;
   thornArrival: Arrival | null;
   leafArrival: Arrival | null;
+  wiltArrival?: Arrival | null;
   sprouts: Map<number, Sprout>;
   highlight: Set<number> | null;
   moods?: Map<number, Color>;
   bare?: boolean;
 };
 
-function Branches({ stems, camera, thornArrival, leafArrival, sprouts, highlight, moods, bare = false }: BranchesProps) {
+function Branches({ stems, camera, thornArrival, leafArrival, wiltArrival = null, sprouts, highlight, moods, bare = false }: BranchesProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewRef = useRef<View | null>(null);
   const cameraRef = useRef(camera);
@@ -710,8 +711,7 @@ function Branches({ stems, camera, thornArrival, leafArrival, sprouts, highlight
     orthographic.position.z = 10;
     const time = { value: 0 };
     const zoom = { value: 1 };
-    const sway = { value: SWAY };
-    const motion = { uBreath: { value: BREATH }, uSweep: { value: SWEEP } };
+    const motion = { uSweep: { value: SWEEP } };
     const boxes = Array.from({ length: MAX_BOXES }, () => new THREE.Vector4());
     const boxCount = { value: 0 };
     const focus = { value: 0 };
@@ -720,7 +720,6 @@ function Branches({ stems, camera, thornArrival, leafArrival, sprouts, highlight
       uTarget: { value: -1 },
       uAngry: { value: 0 },
       uAge: { value: 1000 },
-      uShake: { value: 1 },
       uTint: { value: new THREE.Vector3(...TINT.thorn) },
     };
     const lineMaterial = new THREE.ShaderMaterial({
@@ -730,7 +729,6 @@ function Branches({ stems, camera, thornArrival, leafArrival, sprouts, highlight
         ...anger,
         uFocus: focus,
         uTime: time,
-        uSway: sway,
         uZoom: zoom,
         uGlow: { value: GLOW },
         uGlowRadius: { value: GLOW_RADIUS },
@@ -743,7 +741,7 @@ function Branches({ stems, camera, thornArrival, leafArrival, sprouts, highlight
       blending: THREE.AdditiveBlending,
     });
     const nodeMaterial = new THREE.ShaderMaterial({
-      uniforms: { ...underText, ...motion, ...anger, uFocus: focus, uTime: time, uSway: sway, uPixelRatio: { value: pixelRatio } },
+      uniforms: { ...underText, ...motion, ...anger, uFocus: focus, uTime: time, uPixelRatio: { value: pixelRatio } },
       vertexShader: NODE_VERTEX,
       fragmentShader: NODE_FRAGMENT,
       transparent: true,
@@ -758,7 +756,7 @@ function Branches({ stems, camera, thornArrival, leafArrival, sprouts, highlight
     scene.add(lines, nodes, ...flower.layers);
     const animated = !matchMedia("(prefers-reduced-motion: reduce)").matches;
     const view: View = {
-      renderer, scene, camera: orthographic, lines, nodes, width: 1, height: 1, animated, boxes, boxCount, anger, angerStart: null,
+      renderer, scene, camera: orthographic, lines, nodes, width: 1, height: 1, animated, boxes, boxCount, anger, angerStart: null, growThorn: false,
       focus, focusTarget: 0, lineStems: [], nodeStems: [],
     };
     viewRef.current = view;
@@ -779,7 +777,7 @@ function Branches({ stems, camera, thornArrival, leafArrival, sprouts, highlight
         if (view.angerStart !== null) {
           const age = time.value - view.angerStart;
           const over = age > ANGER.duration;
-          anger.uAge.value = over || anger.uShake.value === 0 ? 1000 : age;
+          anger.uAge.value = over || !view.growThorn ? 1000 : age;
           anger.uAngry.value = angerEnvelope(age);
           if (over) view.angerStart = null;
         }
@@ -837,12 +835,13 @@ function Branches({ stems, camera, thornArrival, leafArrival, sprouts, highlight
     view.angerStart = performance.now() / 1000;
     view.anger.uTarget.value = arrival.target;
     view.anger.uAge.value = kind === "thorn" ? 0 : 1000;
-    view.anger.uShake.value = kind === "thorn" ? 1 : 0;
+    view.growThorn = kind === "thorn";
     view.anger.uTint.value.fromArray(TINT[kind]);
   }
 
   useEffect(() => tint(thornArrival, "thorn"), [thornArrival]);
   useEffect(() => tint(leafArrival, "leaf"), [leafArrival]);
+  useEffect(() => tint(wiltArrival, "wilt"), [wiltArrival]);
 
   useEffect(() => {
     cameraRef.current = camera;

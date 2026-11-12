@@ -6,6 +6,7 @@ import { BigFlower } from "../components/Logo";
 import ChannelPanel from "./ChannelPanel";
 import Debate from "./Debate";
 import { SERVER_DOWN, request } from "../api";
+import { usePresence } from "../hooks/usePresence";
 import { isDebate, workspacePath, type Channel } from "../channels";
 import type { Message } from "./Chat";
 
@@ -18,8 +19,11 @@ const DEFAULT_LAYOUT: Layout = { side: 166, channel: 320, closed: { side: false,
 const SIDE_MIN = 140;
 const SIDE_MAX = 320;
 const CHANNEL_MIN = 260;
+const CHANNEL_MAX = 560;
 const DEBATE_MIN = 320;
 const HOME_CHANNEL = "m1-ecni";
+// Every account joins it, so a socket kept open on it tells the server who is on the site.
+const PRESENCE_CHANNEL = "general";
 // Every account joins these, plus each ConVersus announced in them, so a new visitor sees everything.
 const DEMO_CHANNELS = ["general", "m1-ecni", "projet-conversus", "random"];
 const ARRIVAL_SIDE = 0.14;
@@ -50,10 +54,13 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
   const [profileError, setProfileError] = useState("");
   const [selecting, setSelecting] = useState(false);
   const [layout, setLayout] = useState<Layout>(readLayout);
+  const [expanded, setExpanded] = useState(false);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const dragStart = useRef(layout);
   const [total, setTotal] = useState(window.innerWidth);
   const { closed } = layout;
+  const presenceChannel = channels.find((channel) => channel.name === PRESENCE_CHANNEL)?.id;
+  const members = usePresence(token, presenceChannel, username);
 
   const loadProfile = useCallback(async () => {
     const response = await request(token, "/me");
@@ -203,7 +210,7 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
   }
 
   function handleChannelDrag(dx: number) {
-    const side = closed.side ? 0 : layout.side;
+    const side = closed.side ? 0 : sideWidth;
     const width = dragStart.current.channel + dx;
     const debateWidth = total - side - width;
     const before = dragStart.current.channel;
@@ -215,21 +222,27 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
       setLayout((current) => ({ ...current, channel: before, closed: { ...current.closed, debate: true } }));
       return;
     }
-    const largest = closed.debate ? total - side : total - side - DEBATE_MIN;
+    const largest = Math.min(CHANNEL_MAX, closed.debate ? total - side : total - side - DEBATE_MIN);
     setLayout((current) => ({ ...current, channel: Math.max(CHANNEL_MIN, Math.min(largest, width)) }));
   }
 
   const sideFills = closed.channel && closed.debate;
   const channelFills = closed.debate;
-  const channelWidth = Math.max(CHANNEL_MIN, Math.min(layout.channel, total - (closed.side ? 0 : layout.side) - DEBATE_MIN));
+  const sideWidth = Math.max(SIDE_MIN, Math.min(SIDE_MAX, layout.side));
+  const channelWidth = Math.max(
+    CHANNEL_MIN,
+    Math.min(layout.channel, CHANNEL_MAX, total - (closed.side ? 0 : sideWidth) - DEBATE_MIN),
+  );
+  const fullScreen = expanded && debateId !== undefined && !closed.debate;
   const debateFills = !closed.debate;
 
   return (
     <div className="workspace" ref={workspaceRef}>
-      {!closed.side && (
-        <div className={sideFills ? "column fill" : "column"} style={sideFills ? undefined : { width: layout.side }}>
+      {!fullScreen && !closed.side && (
+        <div className={sideFills ? "column fill" : "column"} style={sideFills ? undefined : { width: sideWidth }}>
           <Sidebar
             channels={channels}
+            members={members}
             username={username}
             pronouns={pronouns}
             onSwitch={onSwitch}
@@ -237,15 +250,17 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
           />
         </div>
       )}
-      <ResizeHandle
-        closed={closed.side ? "left" : null}
-        label="Ouvrir les canaux"
-        onDragStart={() => (dragStart.current = layout)}
-        onDrag={handleSideDrag}
-        onReopen={() => setClosed("side", false)}
-        closeLeft={{ label: "Fermer les canaux", onClose: () => setClosed("side", true) }}
-      />
-      {!closed.channel && (
+      {!fullScreen && (
+        <ResizeHandle
+          closed={closed.side ? "left" : null}
+          label="Ouvrir les canaux"
+          onDragStart={() => (dragStart.current = layout)}
+          onDrag={handleSideDrag}
+          onReopen={() => setClosed("side", false)}
+          closeLeft={{ label: "Fermer les canaux", onClose: () => setClosed("side", true) }}
+        />
+      )}
+      {!fullScreen && !closed.channel && (
         <div className={channelFills ? "column fill" : "column"} style={channelFills ? undefined : { width: channelWidth }}>
           {currentChannel && (
             <ChannelPanel
@@ -265,15 +280,17 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
           {profileError && <p className="login-error send-error" role="alert">{profileError}</p>}
         </div>
       )}
-      <ResizeHandle
-        closed={closed.channel ? "left" : closed.debate ? "right" : null}
-        label={closed.channel ? "Ouvrir le canal" : "Ouvrir le ConVersus"}
-        onDragStart={() => (dragStart.current = { ...layout, channel: channelWidth })}
-        onDrag={handleChannelDrag}
-        onReopen={() => setClosed(closed.channel ? "channel" : "debate", false)}
-        closeLeft={{ label: "Fermer le canal", onClose: () => setClosed("channel", true) }}
-        closeRight={{ label: "Fermer le ConVersus", onClose: () => setClosed("debate", true) }}
-      />
+      {!fullScreen && (
+        <ResizeHandle
+          closed={closed.channel ? "left" : closed.debate ? "right" : null}
+          label={closed.channel ? "Ouvrir le canal" : "Ouvrir le ConVersus"}
+          onDragStart={() => (dragStart.current = { ...layout, channel: channelWidth })}
+          onDrag={handleChannelDrag}
+          onReopen={() => setClosed(closed.channel ? "channel" : "debate", false)}
+          closeLeft={{ label: "Fermer le canal", onClose: () => setClosed("channel", true) }}
+          closeRight={{ label: "Fermer le ConVersus", onClose: () => setClosed("debate", true) }}
+        />
+      )}
       {!closed.debate && (
         <div className={debateFills ? "column fill" : "column"}>
           {debateId ? (
@@ -284,6 +301,8 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
               me={username}
               pronouns={pronouns ?? ""}
               onTokenExpired={onTokenExpired}
+              expanded={fullScreen}
+              onToggleExpanded={() => setExpanded(!fullScreen)}
             />
           ) : (
             <section className="debate-empty">

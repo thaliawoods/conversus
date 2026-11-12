@@ -6,7 +6,8 @@ type Camera = { x: number; y: number; zoom: number };
 type Spot = { x: number; y: number };
 type Blade = { points: Spot[]; width: number; shape: number; veins: [Spot, Spot][] };
 type Part = { kind: "petiole"; points: Spot[] } | { kind: "blade"; outline: Spot[]; midrib: Spot[]; veins: [Spot, Spot][] };
-type Flyer = { x: number; y: number; angle: number; side: number; start: number; phase: number; parts: Part[] };
+// falling: a flower dropping off a sad branch, instead of one blooming out of it.
+type Flyer = { x: number; y: number; angle: number; side: number; start: number; phase: number; parts: Part[]; falling: boolean };
 
 const COUNT = 7;
 const LIFE = 2.8;
@@ -14,6 +15,7 @@ const BUD = 0.3;
 const FADE = 0.9;
 const ROSE = "#e04f9a";
 const ROSE_CORE = "#ffe6f2";
+const FALL_GRAVITY = 110;
 
 const fract = (value: number) => value - Math.floor(value);
 const modulo = (value: number, base: number) => value - base * Math.floor(value / base);
@@ -172,12 +174,52 @@ function spiral(flyer: Flyer, flight: number) {
   };
 }
 
+function drop(flyer: Flyer, age: number) {
+  return {
+    x: flyer.x + Math.sin(age * 2.4 + flyer.phase) * 10 * flyer.side,
+    y: flyer.y + 0.5 * FALL_GRAVITY * age * age,
+    spin: Math.sin(age * 1.8 + flyer.phase) * 0.6,
+    flip: Math.cos(age * 2.2 + flyer.phase),
+  };
+}
+
+const leafCount = (stem: Stem) => stem.marks.filter((mark) => mark === "leaf").length;
+
 function Leaves({ arrival, stems, camera }: { arrival: Arrival | null; stems: Stem[]; camera: Camera }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const flyers = useRef<Flyer[]>([]);
   const latest = useRef({ stems, camera });
   const wake = useRef<() => void>(() => {});
   latest.current = { stems, camera };
+  const leavesBefore = useRef<Map<number, number> | null>(null);
+
+  // A branch that lost its flowers lets them fall.
+  useEffect(() => {
+    const counts = new Map(stems.map((stem) => [stem.id, leafCount(stem)]));
+    const before = leavesBefore.current;
+    leavesBefore.current = counts;
+    if (!before || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const now = performance.now() / 1000;
+    for (const stem of stems) {
+      const lost = (before.get(stem.id) ?? 0) - leafCount(stem);
+      for (let index = 0; index < lost; index++) {
+        const seed = stem.id * 50 + index + Math.round(now);
+        const point = pointOnStem(stem.from, stem.to, 0.3 + ((index + 1) / (lost + 1)) * 0.6, stem.sag);
+        const side = index % 2 === 0 ? 1 : -1;
+        flyers.current.push({
+          x: point.x,
+          y: point.y,
+          angle: (point.angle * Math.PI) / 180 + side,
+          side,
+          start: now + noise(seed, 72) * 0.3,
+          phase: noise(seed, 73) * 6.28,
+          parts: makeLeaf(seed),
+          falling: true,
+        });
+      }
+      if (lost > 0) wake.current();
+    }
+  }, [stems]);
 
   useEffect(() => {
     if (!arrival || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -196,6 +238,7 @@ function Leaves({ arrival, stems, camera }: { arrival: Arrival | null; stems: St
         start: now + 0.05 + noise(seed, 70) * 0.35,
         phase: noise(seed, 71) * 6.28,
         parts: makeLeaf(seed),
+        falling: false,
       });
     }
     wake.current();
@@ -227,8 +270,8 @@ function Leaves({ arrival, stems, camera }: { arrival: Arrival | null; stems: St
       for (const flyer of flyers.current) {
         const age = now - flyer.start;
         if (age < 0) continue;
-        const grow = popOut(age / 0.35);
-        const move = spiral(flyer, Math.max(0, age - BUD));
+        const grow = flyer.falling ? 1 : popOut(age / 0.35);
+        const move = flyer.falling ? drop(flyer, age) : spiral(flyer, Math.max(0, age - BUD));
         context!.save();
         context!.globalAlpha = Math.max(0, Math.min(1, (LIFE - age) / FADE));
         context!.translate(width / 2 + camera.x + move.x * camera.zoom, height / 2 + camera.y + move.y * camera.zoom);
