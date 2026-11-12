@@ -11,6 +11,7 @@ import { useUnread } from "../hooks/useUnread";
 import { enterSynthesisChannel, HIDDEN_CHANNELS, isDebate, SHARED_CHANNEL, SYNTHESIS_CHANNEL, workspacePath, type Channel } from "../channels";
 import Tutorial, { type TutorialColumn } from "../components/Tutorial";
 import type { Message } from "./Chat";
+import { PetalFlower } from "../components/PetalIcons";
 
 type WorkspaceProps = { token: string; onTokenExpired: () => void; onSwitch: (newToken: string) => void };
 
@@ -421,11 +422,12 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
             <section className="debate-empty">
               <BigFlower />
               {channelId && !selecting && (
-                <button type="button" className="login-button" onClick={() => {
+                <button type="button" className="debate-launch" onClick={() => {
                   setClosed("channel", false);
                   setTab("channel");
                   setSelecting(true);
                 }}>
+                  <PetalFlower className="petal-flower launch-flower" flat />
                   Lancer un ConVersus
                 </button>
               )}

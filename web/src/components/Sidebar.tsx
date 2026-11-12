@@ -123,7 +123,7 @@ function Sidebar({ channels, unread, members, username, pronouns, onSwitch, onLo
             </svg>
             {MEMBERS_TITLE}
             <span className="sidebar-count">
-              {onlineCount} en ligne · {members.length}
+              {onlineCount} en ligne sur {members.length}
             </span>
           </button>
           {!folded.includes(MEMBERS_TITLE) && (

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { enterSynthesisChannel, HIDDEN_CHANNELS, isDebate, shownName, SYNTHESIS_CHANNEL, workspacePath, type Channel } from "../channels";
 import DebatePicker from "../components/DebatePicker";
@@ -21,6 +21,9 @@ import { pronounsByName } from "../pronouns";
 import { SYNTHESIS_USERS } from "../synthesis";
 
 const ZOOM_STEP = 1.25;
+const FIT_MARGIN = 32; // px kept free around the plant when it is framed
+const CONTROLS_SPACE = 64; // px kept free at the bottom for the zoom buttons
+const MIN_FRAME_ZOOM = 0.55; // framing never zooms out further, so the text stays readable
 const MESSAGES = "/channel/message?namespace=conversus";
 const MAX_PREVIEW = 120;
 
@@ -330,6 +333,37 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
     setTextSizes(messageRefs.current.slice(0, replies.length).map(textSize));
   }, [replies, reactions]);
 
+  // Camera that shows the whole plant in the panel: at opening and on "Recentrer".
+  function frameOf() {
+    const view = viewportRef.current;
+    if (!view || positions.length === 0) return { x: 0, y: 0, zoom: 1 };
+    let left = 0;
+    let right = 0;
+    let top = 0;
+    let bottom = 0;
+    for (const spot of positions) {
+      left = Math.min(left, spot.x);
+      right = Math.max(right, spot.x + spot.width);
+      top = Math.min(top, spot.y);
+      bottom = Math.max(bottom, spot.y + spot.height);
+    }
+    const fit = Math.min(
+      1,
+      (view.clientWidth - 2 * FIT_MARGIN) / (right - left),
+      (view.clientHeight - 2 * FIT_MARGIN - CONTROLS_SPACE) / (bottom - top),
+    );
+    const zoom = Math.max(MIN_FRAME_ZOOM, fit);
+    return { x: (-(left + right) / 2) * zoom, y: (-(top + bottom) / 2) * zoom - CONTROLS_SPACE / 2, zoom };
+  }
+
+  // Frames the plant once per ConVersus, when every message has its place.
+  const framedFor = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (framedFor.current === channelId || positions.length === 0 || positions.length < replies.length) return;
+    framedFor.current = channelId;
+    recenter(frameOf());
+  });
+
   async function handleSendMessage(
     content: string,
     font: string | undefined,
@@ -560,7 +594,11 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
           highlight={thread}
         />
         <Leaves arrival={leafArrival} stems={stems} camera={camera} />
-        <div className="board" style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})` }}>
+        <div
+          className="board"
+          // --zoom lets the reaction row keep a usable size when zoomed out (App.css, .message-actions).
+          style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})`, "--zoom": camera.zoom } as CSSProperties}
+        >
           <div className="central-flower" role="img" aria-label="Sujet du débat" />
           {replies.map((message, index) => (
             <div
@@ -635,7 +673,7 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
           <button type="button" aria-label="Dézoomer" data-tip="Dézoomer" onClick={() => zoomBy(1 / ZOOM_STEP)}>
             <CameraIcon action="zoomOut" />
           </button>
-          <button type="button" aria-label="Recentrer" data-tip="Recentrer" onClick={recenter}>
+          <button type="button" aria-label="Recentrer" data-tip="Recentrer" onClick={() => recenter(frameOf())}>
             <CameraIcon action="recenter" />
           </button>
           <button

@@ -677,7 +677,7 @@
 }
 
 .account-name,
-.account-dropdown button {
+.account-dropdown button.account-choice {
   text-transform: capitalize;
 }
 
@@ -2842,4 +2842,106 @@
   .tour-bubble {
     transition: none;
   }
+}
+
+/* ===== Retouches de la QA du 12 novembre, nuit ===== */
+
+/* « Lancer le ConVersus » : contour comme les autres boutons, nettement éteint tant qu'aucun message n'est coché. */
+.channel-panel .selection-bar button {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--white);
+  transition: border-color 0.25s, opacity 0.25s;
+}
+.channel-panel .selection-bar button:hover:not(:disabled) {
+  border-color: var(--ice);
+  background: transparent;
+}
+.channel-panel .selection-bar button:disabled {
+  opacity: 0.3;
+}
+
+/* Cases à cocher dans la DA : carré fin, plein quand il est coché. */
+.message input[type="checkbox"] {
+  appearance: none;
+  flex: none;
+  width: 0.85rem;
+  height: 0.85rem;
+  margin: 0.3rem 0 0;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+}
+.message input[type="checkbox"]:hover {
+  border-color: var(--ice);
+}
+.message input[type="checkbox"]:checked {
+  border-color: var(--ice);
+  background: var(--ice);
+  box-shadow: inset 0 0 0 2px var(--night);
+}
+.message input[type="checkbox"]:focus-visible {
+  outline: 1px solid var(--ice);
+  outline-offset: 2px;
+}
+
+/* Réactions d'un message ouvert : gardent leur taille réelle quand on dézoome (--zoom vient de Debate.tsx). */
+.board-message .message-actions {
+  transform: scale(max(1, calc(1 / var(--zoom, 1))));
+  transform-origin: left top;
+}
+
+/* Boutons de zoom : voile plus opaque pour que le texte de la plante ne passe pas à travers. */
+.camera-controls {
+  background: rgba(9, 11, 23, 0.94);
+  box-shadow: 0 0 1.2rem 0.8rem rgba(9, 11, 23, 0.94);
+}
+
+/* Liste déroulante des ConVersus : fond presque opaque, la plante ne se lit plus à travers. */
+.debate-picker-list {
+  background: rgba(9, 11, 23, 0.96);
+}
+
+/* Bouton central « Lancer un ConVersus » : même style que celui de l'en-tête du canal. */
+.debate-empty .debate-launch {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: rgba(196, 230, 255, 0.85);
+  font-family: var(--font-text);
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: border-color 0.25s, color 0.25s;
+}
+.debate-empty .debate-launch:hover {
+  border-color: var(--ice);
+  color: var(--white);
+}
+
+/* Polices : trois par ligne. */
+.composer-panel.font-panel {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  justify-content: start;
+}
+
+/* Connexion et inscription : le formulaire commence à la même hauteur dans les deux modes, le logo ne saute plus.
+   16.3rem = moitié du formulaire de connexion, 44.8rem = formulaire d'inscription + marge. */
+@media (min-width: 701px) {
+  .login {
+    place-items: start start;
+    padding-top: max(2rem, min(calc(50vh - 16.3rem), calc(100vh - 44.8rem)));
+    box-sizing: border-box;
+  }
+}
+
+/* « 7 en ligne sur 88 » reste sur une ligne. */
+.sidebar-count {
+  white-space: nowrap;
 }

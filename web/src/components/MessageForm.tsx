@@ -59,7 +59,7 @@ function MessageForm({ onSend, placeholder, error }: MessageFormProps) {
           />
         )}
         {panel === "font" && (
-          <div className="composer-panel">
+          <div className="composer-panel font-panel">
             {FONTS.map((option) => (
               <button
                 type="button"

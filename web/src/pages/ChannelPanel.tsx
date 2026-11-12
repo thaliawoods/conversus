@@ -324,7 +324,7 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
       )}
       {!readOnly && (
         <ChannelComposer
-          placeholder={replyingTo ? `Réponds à ${authorOf(replyingTo)}…` : `Écrire dans ${shownName(channel)}`}
+          placeholder={replyingTo ? `Réponds à ${authorOf(replyingTo)}…` : `Écris dans ${shownName(channel)}`}
           onSend={handleSend}
         />
       )}

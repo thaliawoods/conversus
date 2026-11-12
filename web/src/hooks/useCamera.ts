@@ -131,9 +131,10 @@ export function useCamera() {
     }
   }
 
-  function recenter() {
+  // Back to a framing: by default the flower at zoom 1, otherwise the whole plant (see frameOf in Debate.tsx).
+  function recenter(frame = START) {
     stopGlide();
-    setCamera(START);
+    setCamera({ ...frame, zoom: Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, frame.zoom)) });
   }
 
   function zoomBy(factor: number) {

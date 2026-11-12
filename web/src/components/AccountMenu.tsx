@@ -46,7 +46,7 @@ function AccountMenu({ username, pronouns, onSwitch, onLogout, onTutorial }: Acc
         {accounts.length > 0 && <span className="account-label">{userLabel}</span>}
         {accounts.map((account) => (
           <button
-            className={account === username ? "active" : ""}
+            className={account === username ? "account-choice active" : "account-choice"}
             key={account}
             type="button"
             onClick={() => handleSwitch(account)}
@@ -55,8 +55,16 @@ function AccountMenu({ username, pronouns, onSwitch, onLogout, onTutorial }: Acc
             {account}
           </button>
         ))}
-        <button type="button" onClick={onTutorial}>
-          Revoir le tuto
+        <button
+          type="button"
+          onClick={(event) => {
+            // Closes the menu (it also stays open while it has the focus) before the tutorial starts.
+            setOpen(false);
+            event.currentTarget.blur();
+            onTutorial();
+          }}
+        >
+          Revoir le tutoriel
         </button>
         <button type="button" onClick={onLogout}>
           Déconnexion
