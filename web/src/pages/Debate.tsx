@@ -520,6 +520,7 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
           retainedCount={0}
           text={sharedSynthesis.text}
           sharedAt={sharedSynthesis.sharedAt}
+          question={debate ? shownName(debate) : undefined}
           error=""
           sharing={false}
           readOnly

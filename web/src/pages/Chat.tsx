@@ -4,7 +4,7 @@ import LaunchModal from "../components/LaunchModal";
 import SendArrow from "../components/SendArrow";
 import PanelMenu from "../components/PanelMenu";
 import { PetalFlower } from "../components/PetalIcons";
-import { shownName, workspacePath, type Channel } from "../channels";
+import { CONVERSUS_METADATA, shownName, workspacePath, type Channel } from "../channels";
 import { SERVER_DOWN, formatTime, request } from "../api";
 
 export type ReactionValue = "leaf" | "thorn" | "wilt";
@@ -111,7 +111,7 @@ function Chat({ token, channels, onTokenExpired, onChannelsChanged, selecting: i
     const failure = "Le ConVersus n'a pas pu être lancé. Réessaie.";
     const response = await request(token, "/channel?namespace=conversus", {
       name: `${subject}#${Date.now()}`,
-      metadata: {},
+      metadata: CONVERSUS_METADATA,
     });
     if (!checkResponse(response, failure)) {
       setIsLaunching(false);

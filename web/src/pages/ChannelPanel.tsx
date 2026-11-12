@@ -5,8 +5,11 @@ import LaunchModal from "../components/LaunchModal";
 import ChannelComposer from "../components/ChannelComposer";
 import { PetalFlower } from "../components/PetalIcons";
 import type { Message } from "./Chat";
-import { channelLabel, isClockTick, isSynthesis, SHARED_CHANNEL, shownName, SYNTHESIS_CHANNEL, type Channel } from "../channels";
+import { channelLabel, CONVERSUS_METADATA, isClockTick, isSynthesis, SHARED_CHANNEL, shownName, SYNTHESIS_CHANNEL, type Channel } from "../channels";
 import { pronounsByName } from "../pronouns";
+
+// Space around the header content: padding 1rem on each side + 1rem gap between name and button.
+const HEADER_ROOM = 48;
 
 type ChannelPanelProps = {
   token: string;
@@ -47,6 +50,12 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
   const setIsSelecting = onSelectingChange;
   const [isLaunching, setIsLaunching] = useState(false);
   const listRef = useRef<HTMLUListElement>(null);
+  // "Lancer un ConVersus" keeps only its flower when it would touch the channel name.
+  const headerRef = useRef<HTMLElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const launchRef = useRef<HTMLButtonElement>(null);
+  const fullLaunchWidth = useRef(0);
+  const [compactLaunch, setCompactLaunch] = useState(false);
   const [error, setError] = useState("");
   const [connectionError, setConnectionError] = useState("");
   const tokenExpired = useRef(onTokenExpired);
@@ -148,7 +157,7 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
   async function handleLaunch(subject: string) {
     const response = await request(token, "/channel?namespace=conversus", {
       name: `${subject}#${Date.now()}`,
-      metadata: {},
+      metadata: CONVERSUS_METADATA,
     });
     if (!checkResponse(response, "Le ConVersus n'a pas pu être lancé. Réessaie.")) {
       setIsLaunching(false);
@@ -176,14 +185,32 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
     );
   }
 
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+    function check() {
+      const title = titleRef.current;
+      const launch = launchRef.current;
+      if (!header || !title || !launch) return;
+      // Width of the whole button, measured while its text is shown.
+      if (!launch.classList.contains("compact") && !isSelecting) fullLaunchWidth.current = launch.offsetWidth;
+      setCompactLaunch(title.scrollWidth + fullLaunchWidth.current + HEADER_ROOM > header.clientWidth);
+    }
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, [channel.id, isSelecting, readOnly]);
+
   return (
     <section className="channel-panel">
-      <header className="panel-header">
-        <h2 className="channel-title">{shownName(channel)}</h2>
+      <header className="panel-header" ref={headerRef}>
+        <h2 className="channel-title" ref={titleRef}>{shownName(channel)}</h2>
         {!readOnly && (
           <button
             type="button"
-            className="panel-action"
+            className={compactLaunch ? "panel-action compact" : "panel-action"}
+            ref={launchRef}
             onClick={() => {
               setIsSelecting(!isSelecting);
               setSelectedIds([]);

@@ -507,6 +507,22 @@
   color: var(--ice-soft);
 }
 
+.modal-label .synthesis-question {
+  color: var(--white);
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+/* Same as the dates of the chat: lowercase, grey, small. */
+.modal-label.synthesis-date {
+  margin-top: -0.1rem;
+  font-size: var(--text-label);
+  letter-spacing: normal;
+  text-transform: none;
+  opacity: 0.7;
+}
+
 .modal-label input {
   width: 100%;
   margin: 0.4rem 0 0.8rem;
@@ -1479,6 +1495,20 @@
   color: var(--white);
 }
 
+.sidebar-group a.has-unread {
+  color: var(--white);
+  font-weight: 600;
+}
+
+.sidebar-unread {
+  flex: none;
+  margin-left: auto;
+  color: var(--white);
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .sidebar-mark {
   flex: none;
   width: 1.15rem;
@@ -1770,16 +1800,14 @@
   container-type: inline-size;
 }
 
-/* Narrow chat column: the button keeps only its flower, so the channel name has room. */
-@container (max-width: 380px) {
-  .channel-panel .launch-label {
+/* The button keeps only its flower when it would touch the channel name (measured in ChannelPanel.tsx). */
+.channel-panel .panel-action.compact .launch-label {
     position: absolute;
     width: 1px;
     height: 1px;
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
-  }
 }
 
 .channel-panel .panel-header {

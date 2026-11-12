@@ -5,11 +5,14 @@ import { PetalFlower } from "./PetalIcons";
 import AccountMenu from "./AccountMenu";
 import { HIDDEN_CHANNELS, isDebate, shownName, workspacePath, type Channel } from "../channels";
 import type { Member } from "../hooks/usePresence";
+import { unreadLabel } from "../hooks/useUnread";
 
 const MEMBERS_TITLE = "Membres";
 
 type SidebarProps = {
   channels: Channel[];
+  // Unread messages per channel id.
+  unread: Map<number, number>;
   members: Member[];
   username: string;
   pronouns: string | null;
@@ -18,7 +21,7 @@ type SidebarProps = {
   onTutorial: () => void;
 };
 
-function Sidebar({ channels, members, username, pronouns, onSwitch, onLogout, onTutorial }: SidebarProps) {
+function Sidebar({ channels, unread, members, username, pronouns, onSwitch, onLogout, onTutorial }: SidebarProps) {
   const { channelId, debateId } = useParams();
   const [search, setSearch] = useState("");
   const [folded, setFolded] = useState<string[]>([]);
@@ -83,11 +86,18 @@ function Sidebar({ channels, members, username, pronouns, onSwitch, onLogout, on
               <ul>
                 {group.items.map((channel) => {
                   const active = String(channel.id) === group.activeId;
+                  const count = unread.get(channel.id) ?? 0;
+                  const className = [active && "active", count > 0 && "has-unread"].filter(Boolean).join(" ") || undefined;
                   return (
                     <li key={channel.id}>
-                      <Link className={active ? "active" : undefined} to={group.path(channel)} aria-current={active ? "page" : undefined}>
+                      <Link className={className} to={group.path(channel)} aria-current={active ? "page" : undefined}>
                         <span className="sidebar-mark">{active && <PetalFlower flat />}</span>
                         <span className="sidebar-name">{shownName(channel)}</span>
+                        {count > 0 && (
+                          <span className="sidebar-unread" aria-label={`${unreadLabel(count)} non lus`}>
+                            {unreadLabel(count)}
+                          </span>
+                        )}
                       </Link>
                     </li>
                   );

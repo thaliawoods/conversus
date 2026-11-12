@@ -7,6 +7,7 @@ import ChannelPanel from "./ChannelPanel";
 import Debate from "./Debate";
 import { SERVER_DOWN, request } from "../api";
 import { usePresence } from "../hooks/usePresence";
+import { useUnread } from "../hooks/useUnread";
 import { enterSynthesisChannel, HIDDEN_CHANNELS, isDebate, SHARED_CHANNEL, SYNTHESIS_CHANNEL, workspacePath, type Channel } from "../channels";
 import Tutorial, { type TutorialColumn } from "../components/Tutorial";
 import type { Message } from "./Chat";
@@ -104,6 +105,7 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
   }
   const presenceChannel = channels.find((channel) => channel.name === PRESENCE_CHANNEL)?.id;
   const members = usePresence(token, presenceChannel, username);
+  const unread = useUnread(token, username, channels, channelId === undefined ? undefined : Number(channelId));
 
   const loadProfile = useCallback(async () => {
     const response = await request(token, "/me");
@@ -343,6 +345,7 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
   const sidebar = (
     <Sidebar
       channels={channels}
+      unread={unread}
       members={members}
       username={username}
       pronouns={pronouns}
