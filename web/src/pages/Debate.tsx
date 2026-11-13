@@ -96,12 +96,37 @@ function isReactionValue(value: unknown): value is ReactionValue {
   return value === "leaf" || value === "thorn" || value === "wilt";
 }
 
-// Every vote counts, as many as anyone wants: nothing replaces an earlier one. Oldest vote first.
-function currentVotes(reactions: Message[], message: Message): ReactionValue[] {
+// Value of the reaction that takes yours back (the server deletes nothing: it is a reaction too).
+const REMOVE = "remove";
+// How long a mark that went is still drawn, shrinking (Branches.tsx, RETREAT_SECONDS).
+const RETREAT_MS = 900;
+
+// Reactions to one message, oldest first.
+function reactionsTo(reactions: Message[], message: Message) {
   return reactions
-    .filter((reaction) => reaction.metadata?.conversus?.reactTo === message.id && isReactionValue(reaction.metadata.conversus.value))
+    .filter((reaction) => reaction.metadata?.conversus?.reactTo === message.id)
+    .sort((a, b) => a.id - b.id);
+}
+
+// One vote per person: your latest reaction replaces the previous one, "remove" takes it back.
+function latestVotes(reactions: Message[], message: Message) {
+  const latest = new Map<string, Message>();
+  for (const reaction of reactionsTo(reactions, message)) latest.set(reaction.user, reaction);
+  return latest;
+}
+
+// Current votes, oldest first.
+function currentVotes(reactions: Message[], message: Message): ReactionValue[] {
+  return [...latestVotes(reactions, message).values()]
     .sort((a, b) => a.id - b.id)
-    .map((reaction) => reaction.metadata!.conversus!.value as ReactionValue);
+    .map((reaction) => reaction.metadata?.conversus?.value)
+    .filter(isReactionValue);
+}
+
+// Your current vote on a message, or null.
+function myVote(reactions: Message[], message: Message, me: string | null): ReactionValue | null {
+  const value = me === null ? undefined : latestVotes(reactions, message).get(me)?.metadata?.conversus?.value;
+  return isReactionValue(value) ? value : null;
 }
 
 // The most voted reaction; on a tie, the most recent vote among the tied ones wins.
@@ -115,16 +140,41 @@ function majorityReaction(reactions: Message[], message: Message) {
 }
 
 // Leaves ("content") and thorns ("en colère") on the branch, in the order they came: the effect
-// chosen when posting, then each current vote, oldest first. Each "triste" takes away the newest
-// leaf. Placement ignores the marks, so nothing moves when one grows or goes.
-function marksOf(reactions: Message[], message: Message): Mark[] {
-  const effect = message.metadata?.conversus?.effect;
+// chosen when posting, then each reaction. A "triste" takes away the newest leaf. When someone
+// switches or takes back a reaction, its mark goes, and a "triste" taken back gives its leaf back.
+// A mark that went keeps its place (gone), so the others never move or change shape.
+function marksOf(reactions: Message[], message: Message): { marks: Mark[]; gone: boolean[] } {
   const marks: Mark[] = [];
-  for (const value of [...(effect ? [effect] : []), ...currentVotes(reactions, message)]) {
-    if (value !== "wilt") marks.push(value);
-    else if (marks.includes("leaf")) marks.splice(marks.lastIndexOf("leaf"), 1);
+  // held: its vote still stands; taken: a "triste" took this leaf.
+  const held: boolean[] = [];
+  const taken: boolean[] = [];
+  // What each person's current vote did: the mark it grew, or the leaf its "triste" took.
+  const did = new Map<string, { value: ReactionValue; index: number }>();
+  const apply = (value: unknown) => {
+    if (value === "leaf" || value === "thorn") {
+      held.push(true);
+      taken.push(false);
+      return marks.push(value) - 1;
+    }
+    if (value === "wilt") {
+      const index = marks.findLastIndex((mark, k) => mark === "leaf" && held[k] && !taken[k]);
+      if (index !== -1) taken[index] = true;
+      return index;
+    }
+    return -1;
+  };
+  apply(message.metadata?.conversus?.effect);
+  for (const reaction of reactionsTo(reactions, message)) {
+    const previous = did.get(reaction.user);
+    if (previous && previous.index !== -1) {
+      if (previous.value === "wilt") taken[previous.index] = false;
+      else held[previous.index] = false;
+    }
+    did.delete(reaction.user);
+    const value = reaction.metadata?.conversus?.value;
+    if (isReactionValue(value)) did.set(reaction.user, { value, index: apply(value) });
   }
-  return marks;
+  return { marks, gone: marks.map((_, k) => !held[k] || taken[k]) };
 }
 
 // Every font a message can be shown in, loaded up front so its size is known before placing it.
@@ -232,6 +282,30 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
   );
   const shown = useGlide(targets);
   const { sprouts, appear } = useSprouts(replies);
+  const marksByMessage = useMemo(
+    () => new Map(replies.map((message) => [message.id, marksOf(reactions, message)])),
+    [replies, reactions],
+  );
+  // A mark that just went (switched or taken back) is still drawn for a moment, shrinking.
+  const [retreats, setRetreats] = useState(new Map<number, number>());
+  const [leaveArrival, setLeaveArrival] = useState<Arrival | null>(null);
+  const previousMarks = useRef(new Map<number, { marks: Mark[]; gone: boolean[] }>());
+  useEffect(() => {
+    const previous = previousMarks.current;
+    previousMarks.current = marksByMessage;
+    for (const [id, { gone }] of marksByMessage) {
+      const before = previous.get(id);
+      const index = before ? gone.findIndex((now, k) => now && before.gone[k] === false) : -1;
+      if (index === -1) continue;
+      setRetreats((current) => new Map(current).set(id, index));
+      setLeaveArrival({ key: -Date.now(), target: id });
+      setTimeout(() => setRetreats((current) => {
+        const next = new Map(current);
+        if (next.get(id) === index) next.delete(id);
+        return next;
+      }), RETREAT_MS);
+    }
+  }, [marksByMessage]);
   const stems = useMemo(() => {
     const parents = findParents(replies);
     return replies.flatMap((message, index): Stem[] => {
@@ -241,9 +315,11 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
       const from = parent === null ? null : (shown.get(replies[parent].id) ?? null);
       const text = textSizes[index] ?? to;
       // Votes colour the branch (moods) and grow leaves or thorns on it, without moving anything.
-      return [{ from, to, sag: 0, id: message.id, marks: marksOf(reactions, message), text }];
+      const { marks, gone } = marksByMessage.get(message.id) ?? { marks: [], gone: [] };
+      const leaving = retreats.get(message.id);
+      return [{ from, to, sag: 0, id: message.id, marks, gone, leaving, text }];
     });
-  }, [replies, reactions, shown, textSizes]);
+  }, [replies, marksByMessage, retreats, shown, textSizes]);
   const moods = useMemo(
     () =>
       new Map(
@@ -452,8 +528,10 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
     if (pendingReactions.includes(key)) return;
     setPendingReactions((current) => [...current, key]);
     setOpenId(null);
+    // Clicking your own reaction again takes it back; another one replaces it.
+    const removing = myVote(reactions, message, me) === value;
     // Noted now, so the echo of this vote in the polling plays nothing.
-    const own = { leaf: ownLeaves, thorn: ownThorns, wilt: ownWilts }[value].current;
+    const own = removing ? [] : { leaf: ownLeaves, thorn: ownThorns, wilt: ownWilts }[value].current;
     own.push(message.id);
     // Posted in the hidden reactions channel of the debate, created by the first reaction.
     const lookup = reactionsChannel.current;
@@ -461,7 +539,7 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
     const response = lookup.id === null ? null : await request(token, MESSAGES, {
       content: "",
       channel: lookup.id,
-      metadata: { reactTo: message.id, value },
+      metadata: { reactTo: message.id, value: removing ? REMOVE : value },
       anonymous: false,
     });
     if (checkResponse(response, "Réaction non envoyée. Réessaie.")) {
@@ -472,7 +550,9 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
       // Played only now, in the same render as the new leaf or thorn: started at the click, the
       // growth was over before a slow server answered, and the mark popped up already grown.
       const arrival = { key: -Date.now(), target: message.id };
-      if (value === "thorn") setThornArrival(arrival);
+      if (removing) {
+        // Nothing grows: the mark that goes shrinks (see retreats).
+      } else if (value === "thorn") setThornArrival(arrival);
       if (value === "leaf") setLeafArrival(arrival);
       if (value === "wilt") setWiltArrival(arrival);
       // Sons coupés (voir LEAF_SOUND en haut du fichier) : THUNDER_SOUND, RAIN_SOUND, LEAF_SOUND.
@@ -636,6 +716,7 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
           thornArrival={thornArrival}
           leafArrival={leafArrival}
           wiltArrival={wiltArrival}
+          leaveArrival={leaveArrival}
           sprouts={sprouts}
           highlight={thread}
         />
@@ -694,8 +775,8 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
                     <button
                       type="button"
                       key={reaction.value}
-                      // Lit in its colour once anyone has given this reaction to the message.
-                      className={currentVotes(reactions, message).includes(reaction.value) ? "given" : undefined}
+                      // Your reaction stays lit in its colour; click it again to take it back.
+                      className={myVote(reactions, message, me) === reaction.value ? "given" : undefined}
                       disabled={pendingReactions.includes(`${message.id}-${reaction.value}`)}
                       data-tip={reaction.label}
                       data-reaction={reaction.value}

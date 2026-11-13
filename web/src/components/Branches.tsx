@@ -43,7 +43,9 @@ const ANGER = { duration: 2, fadeIn: 0.3, fadeOut: 0.8 };
 const TINT = { thorn: [1.0, 0.353, 0.212], leaf: [0.878, 0.31, 0.604], wilt: [0.608, 0.42, 1.0] } as const;
 // Order of the lines of a new mark, offset by its kind: a "content" only regrows the newest leaf,
 // an "en colère" only the newest thorn, even on a branch that has both.
-const FRESH = { thorn: 100, leaf: 200 } as const;
+const FRESH = { thorn: 100, leaf: 200, leaving: 300 } as const;
+// Time a mark that went takes to shrink back to its base.
+const RETREAT_SECONDS = 0.7;
 const GROW_SECONDS = 2.4;
 const TRUNK_SHARE = 0.7;
 const TWIG_SHARE = 0.22;
@@ -72,7 +74,9 @@ function droop(angle: number, amount: number) {
 export const ARRIVE_SECONDS = GROW_SECONDS * (1 - Math.sqrt(1 - TRUNK_SHARE / 1.05));
 
 export type Mark = "leaf" | "thorn";
-export type Stem = { from: Placement | null; to: Placement; sag: number; id: number; marks: Mark[]; text: Size };
+// gone: marks taken back, which keep their place so the others never move; leaving: the one
+// that just went, still drawn for a moment while it shrinks.
+export type Stem = { from: Placement | null; to: Placement; sag: number; id: number; marks: Mark[]; gone?: boolean[]; leaving?: number; text: Size };
 export type Arrival = { key: number; target: number };
 type Camera = { x: number; y: number; zoom: number };
 type Point = { x: number; y: number; angle: number };
@@ -251,12 +255,12 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
 
   // A three-leaflet leaf for each "content": a short petiole, a leaflet at its tip and a pair below.
   // fresh: the newest leaf of the stem, drawn line after line when its "content" arrives.
-  function addLeaf(base: Point, side: number, seed: number, fresh: boolean) {
+  function addLeaf(base: Point, side: number, seed: number, code: number) {
     const angle = (base.angle * Math.PI) / 180 + side * (0.9 + noise(seed, 2) * 0.3);
-    freshOrder = fresh ? FRESH.leaf + 1 : 0;
+    freshOrder = code ? code + 1 : 0;
     const petiole = curve(base, angle, side * 0.2, LEAF.petiole);
     addLine(petiole, PETIOLE_WIDTH, seed + 1);
-    freshOrder = fresh ? FRESH.leaf + 2 : 0;
+    freshOrder = code ? code + 2 : 0;
     const tip = petiole[petiole.length - 1];
     addLeaflet(tip, (tip.angle * Math.PI) / 180, side, 1, seed + 2);
     const node = petiole[Math.round(0.55 * (petiole.length - 1))];
@@ -314,7 +318,7 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
   //   addBlossom(stalk[stalk.length - 1], seed, fresh, 2);
   // }
 
-  function addThorn(trunk: Point[], center: number, side: number, seed: number, fresh: boolean) {
+  function addThorn(trunk: Point[], center: number, side: number, seed: number, code: number) {
     const count = 3 + Math.floor(noise(seed, 1) * 2);
     const gap = Math.round(THORN.spacing / POINT_GAP);
     for (let i = 0; i < count; i++) {
@@ -329,7 +333,7 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
         const last = points[k - 1];
         points.push({ x: last.x + (Math.cos(angle) * length) / 8, y: last.y + (Math.sin(angle) * length) / 8 });
       }
-      freshOrder = fresh ? FRESH.thorn + i + 1 : 0;
+      freshOrder = code ? code + i + 1 : 0;
       addLine(withAngles(points), THORN_WIDTH, seed + i, SPIKE);
       freshOrder = 0;
     }
@@ -439,14 +443,17 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
     });
     const twigSlots = perTwig.flatMap((_, round) => perTwig.flatMap((slots) => (slots[round] ? [slots[round]] : [])));
     const slotsFor = { leaf: twigSlots.filter((_, i) => i % 2 === 0), thorn: twigSlots.filter((_, i) => i % 2 === 1) };
-    const newestLeaf = stem.marks.lastIndexOf("leaf");
-    const newestThorn = stem.marks.lastIndexOf("thorn");
+    const gone = stem.gone ?? [];
+    const newestLeaf = stem.marks.findLastIndex((mark, k) => mark === "leaf" && !gone[k]);
+    const newestThorn = stem.marks.findLastIndex((mark, k) => mark === "thorn" && !gone[k]);
     stem.marks.forEach((mark, k) => {
       const rank = mark === "leaf" ? leaves++ : thorns++;
       const onStem = mark === "leaf" ? leafPlaces : thornPlaces;
       const side = rank % 2 === 0 ? 1 : -1;
       const seed = stem.id * 1000 + (mark === "leaf" ? rank : 500 + rank);
-      const fresh = k === (mark === "leaf" ? newestLeaf : newestThorn);
+      // A mark taken back keeps its rank (so its spot) but is not drawn, unless it is shrinking.
+      if (gone[k] && k !== stem.leaving) return;
+      const code = k === stem.leaving ? FRESH.leaving : k === (mark === "leaf" ? newestLeaf : newestThorn) ? FRESH[mark] : 0;
       const span = mark === "leaf" ? LEAF_SHARE : THORN_SHARE;
       let line = trunk;
       let index: number;
@@ -460,8 +467,8 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
         index = slot.index;
         growth = { start: slot.grows, span, birth };
       }
-      if (mark === "leaf") addLeaf(line[index], side, seed, fresh);
-      else addThorn(line, index, -side, seed, fresh);
+      if (mark === "leaf") addLeaf(line[index], side, seed, code);
+      else addThorn(line, index, -side, seed, code);
     });
 
     // Flower version of the marks (set aside, replaces the loop above): flowers open at the twig
@@ -534,6 +541,9 @@ uniform float uAngry;
 uniform float uAge;
 // Kind of mark growing now (FRESH.thorn or FRESH.leaf, 0 for none).
 uniform float uFreshKind;
+// Stem whose mark is shrinking away, and since when.
+uniform float uLeaveTarget;
+uniform float uLeaveAge;
 float targeted(float stem) {
   return 1.0 - step(0.5, abs(stem - uTarget));
 }
@@ -542,6 +552,14 @@ float grown(float order) {
   float rank = order - uFreshKind;
   float k = clamp((uAge - 0.15 - (rank - 1.0) * 0.2) / 0.6, 0.0, 1.0);
   return 1.0 - pow(1.0 - k, 3.0);
+}
+// How far along its line a mark is drawn: growing (fresh), shrinking (leaving) or whole (2.0).
+float reveal(float order, float stem) {
+  if (order > 299.5) {
+    float left = 1.0 - clamp(uLeaveAge / ${RETREAT_SECONDS.toFixed(2)}, 0.0, 1.0);
+    return mix(0.0, left * left, 1.0 - step(0.5, abs(stem - uLeaveTarget)));
+  }
+  return mix(2.0, grown(order), targeted(stem));
 }
 `;
 
@@ -640,7 +658,7 @@ void main() {
   p.xy += aNormal * aSide * halfWidth / uZoom;
   vAnger = hit * uAngry;
   vT = t;
-  vReveal = mix(2.0, grown(aFresh), hit);
+  vReveal = reveal(aFresh, aStem);
   vAcross = aSide * halfWidth;
   vCore = core / 2.0;
   vFade = max(smoothstep(0.0, 0.05, t), spike + blade);
@@ -727,7 +745,7 @@ void main() {
   vAnger = hit * uAngry;
   focus();
   // A fresh point (heart, stamen of a flower, set aside for now) appears with its lines when its mark grows.
-  float growing = sprouted() * min(1.0, mix(1.0, grown(aFresh), hit));
+  float growing = sprouted() * min(1.0, reveal(aFresh, aStem));
   vPulse = (0.75 + 0.25 * sin(uTime * 1.2 + aNode.y)) * max(shown(position.xy), ${UNDER_TEXT_LIT.toFixed(2)} * aLit * uFocus) * growing;
   gl_PointSize = aNode.x * 4.0 * uPixelRatio * growing;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
@@ -772,8 +790,11 @@ type View = {
     uAngry: { value: number };
     uAge: { value: number };
     uFreshKind: { value: number };
+    uLeaveTarget: { value: number };
+    uLeaveAge: { value: number };
     uTint: { value: THREE.Vector3 };
   };
+  leaveStart: number | null;
   angerStart: number | null;
   // Only a new thorn or leaf grows during the tint; sadness just changes the colour.
   growFresh: boolean;
@@ -839,13 +860,14 @@ type BranchesProps = {
   thornArrival: Arrival | null;
   leafArrival: Arrival | null;
   wiltArrival?: Arrival | null;
+  leaveArrival?: Arrival | null;
   sprouts: Map<number, Sprout>;
   highlight: Set<number> | null;
   moods?: Map<number, Color>;
   bare?: boolean;
 };
 
-function Branches({ stems, camera, thornArrival, leafArrival, wiltArrival = null, sprouts, highlight, moods, bare = false }: BranchesProps) {
+function Branches({ stems, camera, thornArrival, leafArrival, wiltArrival = null, leaveArrival = null, sprouts, highlight, moods, bare = false }: BranchesProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewRef = useRef<View | null>(null);
   const cameraRef = useRef(camera);
@@ -881,6 +903,8 @@ function Branches({ stems, camera, thornArrival, leafArrival, wiltArrival = null
       uAngry: { value: 0 },
       uAge: { value: 1000 },
       uFreshKind: { value: 0 },
+      uLeaveTarget: { value: -1 },
+      uLeaveAge: { value: 1000 },
       uTint: { value: new THREE.Vector3(...TINT.thorn) },
     };
     const lineMaterial = new THREE.ShaderMaterial({
@@ -917,7 +941,7 @@ function Branches({ stems, camera, thornArrival, leafArrival, wiltArrival = null
     scene.add(lines, nodes, ...flower.layers);
     const animated = !matchMedia("(prefers-reduced-motion: reduce)").matches;
     const view: View = {
-      renderer, scene, camera: orthographic, lines, nodes, width: 1, height: 1, animated, boxes, boxCount, anger, angerStart: null, growFresh: false,
+      renderer, scene, camera: orthographic, lines, nodes, width: 1, height: 1, animated, boxes, boxCount, anger, angerStart: null, leaveStart: null, growFresh: false,
       focus, focusTarget: 0, lineStems: [], nodeStems: [],
     };
     viewRef.current = view;
@@ -941,6 +965,10 @@ function Branches({ stems, camera, thornArrival, leafArrival, wiltArrival = null
           anger.uAge.value = over || !view.growFresh ? 1000 : age;
           anger.uAngry.value = angerEnvelope(age);
           if (over) view.angerStart = null;
+        }
+        if (view.leaveStart !== null) {
+          anger.uLeaveAge.value = time.value - view.leaveStart;
+          if (anger.uLeaveAge.value > RETREAT_SECONDS) view.leaveStart = null;
         }
         draw(view, cameraRef.current);
       });
@@ -1004,6 +1032,13 @@ function Branches({ stems, camera, thornArrival, leafArrival, wiltArrival = null
   useEffect(() => tint(thornArrival, "thorn"), [thornArrival]);
   useEffect(() => tint(leafArrival, "leaf"), [leafArrival]);
   useEffect(() => tint(wiltArrival, "wilt"), [wiltArrival]);
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || !view.animated || !leaveArrival) return;
+    view.leaveStart = performance.now() / 1000;
+    view.anger.uLeaveTarget.value = leaveArrival.target;
+    view.anger.uLeaveAge.value = 0;
+  }, [leaveArrival]);
 
   useEffect(() => {
     cameraRef.current = camera;
