@@ -15,9 +15,18 @@ const GLOW_RADIUS = 3;
 const GLOW = 0.3;
 const SWEEP = 0.6;
 const POINT_GAP = 1.5;
-export const LEAF = { length: 16, width: 8, turn: 0.35, petiole: 14 };
+export const LEAF = { length: 20, width: 10, turn: 0.35, petiole: 14 };
 const PETIOLE_WIDTH = { base: 1.2, tip: 0.8 };
 const VEIN_WIDTH = { base: 0.6, tip: 0.2 };
+// Flowers, set aside for now (kept to bring them back, see addBlossom):
+// // Small cherry blossom grown by each "content", at the tip of a twig, drawn with the same light line
+// // as the branches: five broad petals with a notch at the tip, a few stamens, a glowing heart.
+// const BLOSSOM = { stalk: 9, petal: 8, spread: 0.58, notch: 0.2, petals: 5, stamens: 7, stamen: 0.45, heart: 2 };
+// const STALK_WIDTH = { base: 0.9, tip: 0.6 };
+// const PETAL_WIDTH = { base: 0.7, tip: 0.7 };
+// const PETAL_VEIN_WIDTH = { base: 0.45, tip: 0.15 };
+// const STAMEN_WIDTH = { base: 0.35, tip: 0.35 };
+// const BLOSSOM_SHARE = 0.28;
 const THORN = { length: 10, spacing: 7, turn: 1.4 };
 const THORN_WIDTH = { base: 6, tip: 0.05 };
 const MARK_ROOM = 18;
@@ -30,7 +39,11 @@ const UNDER_TEXT_LIT = 0.4;
 const TEXT_MARGIN = 4;
 const MAX_BOXES = 128;
 const ANGER = { duration: 2, fadeIn: 0.3, fadeOut: 0.8 };
+// Colour the whole branch takes for a moment when someone reacts, while the new leaf or thorn grows.
 const TINT = { thorn: [1.0, 0.353, 0.212], leaf: [0.878, 0.31, 0.604], wilt: [0.608, 0.42, 1.0] } as const;
+// Order of the lines of a new mark, offset by its kind: a "content" only regrows the newest leaf,
+// an "en colère" only the newest thorn, even on a branch that has both.
+const FRESH = { thorn: 100, leaf: 200 } as const;
 const GROW_SECONDS = 2.4;
 const TRUNK_SHARE = 0.7;
 const TWIG_SHARE = 0.22;
@@ -128,15 +141,17 @@ function visibleRange(axis: Point[], from: Placement | null, to: Placement) {
 
 // Where each mark sits along the stem (0 = base, 1 = tip). The k-th mark always gets the same spot,
 // so a new mark never moves the others, and marks take the gaps between the twigs, never pushing them.
-function placeMarks(id: number, count: number, from: number, span: number, room: number, twigs: number[]) {
+// shift: another walk along the stem, so leaves and thorns each have their own spots.
+function placeMarks(id: number, count: number, from: number, span: number, room: number, twigs: number[], shift = 0) {
   const places: number[] = [];
   const crowded = (t: number, gap: number) => [...twigs, ...places].some((other) => Math.abs(other - t) < gap);
+  const along = (step: number) => from + span * (0.08 + 0.84 * ((noise(id, 300) + shift + step * 0.618034) % 1));
   for (let step = 0; places.length < count && step < 200; step++) {
     // Golden ratio steps spread the spots evenly; after a while, accept tighter gaps on short stems.
-    const t = from + span * (0.08 + 0.84 * ((noise(id, 300) + step * 0.618034) % 1));
+    const t = along(step);
     if (!crowded(t, step < 100 ? room : room * 0.5)) places.push(t);
   }
-  while (places.length < count) places.push(from + span * 0.5);
+  // A full stem gives fewer spots than marks: the others go on the twigs (see twigSlots).
   return places;
 }
 
@@ -155,6 +170,7 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
   const stemIds: number[] = [];
   const freshOrders: number[] = [];
   const nodeStems: number[] = [];
+  const nodeFresh: number[] = [];
   let stemId = 0;
   let freshOrder = 0;
 
@@ -184,6 +200,7 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
     nodes.push(point.x, -point.y, 0);
     nodeSizes.push(size, noise(seed, 6) * 6.28);
     nodeStems.push(stemId);
+    nodeFresh.push(freshOrder);
     nodeGrows.push(growth.start, growth.birth);
   }
 
@@ -232,25 +249,70 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
     });
   }
 
-  function addLeaf(base: Point, side: number, seed: number) {
-    const pick = noise(seed, 3);
-    const count = pick < 0.4 ? 1 : pick < 0.85 ? 3 : 5;
+  // A three-leaflet leaf for each "content": a short petiole, a leaflet at its tip and a pair below.
+  // fresh: the newest leaf of the stem, drawn line after line when its "content" arrives.
+  function addLeaf(base: Point, side: number, seed: number, fresh: boolean) {
     const angle = (base.angle * Math.PI) / 180 + side * (0.9 + noise(seed, 2) * 0.3);
-    if (count === 1) {
-      addLeaflet(base, angle, side, 1, seed);
-      return;
-    }
+    freshOrder = fresh ? FRESH.leaf + 1 : 0;
     const petiole = curve(base, angle, side * 0.2, LEAF.petiole);
     addLine(petiole, PETIOLE_WIDTH, seed + 1);
+    freshOrder = fresh ? FRESH.leaf + 2 : 0;
     const tip = petiole[petiole.length - 1];
     addLeaflet(tip, (tip.angle * Math.PI) / 180, side, 1, seed + 2);
-    const pairs = count === 5 ? [0.65, 0.3] : [0.55];
-    pairs.forEach((at, p) => {
-      const node = petiole[Math.round(at * (petiole.length - 1))];
-      const forward = (node.angle * Math.PI) / 180;
-      for (const edge of [-1, 1]) addLeaflet(node, forward + edge * 1.1, edge, 0.75 - p * 0.15, seed + 3 + p * 3 + edge);
-    });
+    const node = petiole[Math.round(0.55 * (petiole.length - 1))];
+    const forward = (node.angle * Math.PI) / 180;
+    for (const edge of [-1, 1]) addLeaflet(node, forward + edge * 1.1, edge, 0.75, seed + 3 + edge);
+    freshOrder = 0;
   }
+
+  // Flowers, set aside for now. To bring them back: uncomment BLOSSOM and its widths at the top,
+  // these two functions, the twig tips below, and the flower version of the marks at the end.
+  //
+  // // fresh: the newest flower of the stem, drawn line after line when its "content" arrives
+  // // (stalk, then petals, then stamens), like a new thorn.
+  // function addBlossom(heart: Point, seed: number, fresh: boolean, firstOrder = 1) {
+  //   const turn = noise(seed, 5) * Math.PI * 2;
+  //   freshOrder = fresh ? FRESH.leaf + firstOrder : 0;
+  //   for (let p = 0; p < BLOSSOM.petals; p++) {
+  //     const axis = turn + (p / BLOSSOM.petals) * Math.PI * 2 + (noise(seed, 15 + p) - 0.5) * 0.15;
+  //     const length = BLOSSOM.petal * (0.85 + noise(seed, 10 + p) * 0.3);
+  //     // Leaves the heart on one side of the axis, swells into a broad round lobe with a small
+  //     // notch at its tip, then comes back to the heart on the other side.
+  //     const outline = Array.from({ length: 25 }, (_, k) => {
+  //       const u = 2 * (k / 24) - 1;
+  //       const notch = 1 - BLOSSOM.notch * Math.exp(-((u / 0.16) ** 2));
+  //       const reach = length * Math.pow(1 - Math.abs(u) ** 2.4, 0.55) * notch;
+  //       const offset = axis + BLOSSOM.spread * u;
+  //       return { x: heart.x + Math.cos(offset) * reach, y: heart.y + Math.sin(offset) * reach };
+  //     });
+  //     addLine(withAngles(outline), PETAL_WIDTH, seed + 10 + p, 0.5);
+  //     // One fine stroke down the petal, like the pen hatching of the drawing.
+  //     const vein = [0.3, 0.62].map((at) => ({
+  //       x: heart.x + Math.cos(axis) * length * at,
+  //       y: heart.y + Math.sin(axis) * length * at,
+  //     }));
+  //     addLine(withAngles(vein), PETAL_VEIN_WIDTH, seed + 30 + p, 0.5);
+  //   }
+  //   freshOrder = fresh ? FRESH.leaf + firstOrder + 1 : 0;
+  //   for (let s = 0; s < BLOSSOM.stamens; s++) {
+  //     const angle = turn + ((s + 0.5) / BLOSSOM.stamens) * Math.PI * 2 + (noise(seed, 40 + s) - 0.5) * 0.4;
+  //     const reach = BLOSSOM.petal * BLOSSOM.stamen * (0.75 + noise(seed, 50 + s) * 0.5);
+  //     const tip = { x: heart.x + Math.cos(angle) * reach, y: heart.y + Math.sin(angle) * reach };
+  //     addLine(withAngles([heart, tip]), STAMEN_WIDTH, seed + 60 + s, 0.5);
+  //     addNode({ ...tip, angle: 0 }, 1, seed + 70 + s);
+  //   }
+  //   addNode(heart, BLOSSOM.heart, seed + 20);
+  //   freshOrder = 0;
+  // }
+  //
+  // // When every twig already has its flower: a short stalk off the stem carries the next one.
+  // function addStalkBlossom(base: Point, side: number, seed: number, fresh: boolean) {
+  //   const angle = (base.angle * Math.PI) / 180 + side * (0.9 + noise(seed, 2) * 0.3);
+  //   const stalk = curve(base, angle, side * 0.25, BLOSSOM.stalk * (0.8 + noise(seed, 4) * 0.4));
+  //   freshOrder = fresh ? FRESH.leaf + 1 : 0;
+  //   addLine(stalk, STALK_WIDTH, seed + 1);
+  //   addBlossom(stalk[stalk.length - 1], seed, fresh, 2);
+  // }
 
   function addThorn(trunk: Point[], center: number, side: number, seed: number, fresh: boolean) {
     const count = 3 + Math.floor(noise(seed, 1) * 2);
@@ -267,7 +329,7 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
         const last = points[k - 1];
         points.push({ x: last.x + (Math.cos(angle) * length) / 8, y: last.y + (Math.sin(angle) * length) / 8 });
       }
-      freshOrder = fresh ? i + 1 : 0;
+      freshOrder = fresh ? FRESH.thorn + i + 1 : 0;
       addLine(withAngles(points), THORN_WIDTH, seed + i, SPIKE);
       freshOrder = 0;
     }
@@ -304,6 +366,9 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
     const sadness = Math.sqrt(Math.min(1, Math.max(0, stem.sag / FULL_SAG)));
     const twigCount = 2 + Math.floor(noise(stem.id, 3) * 3);
     const twigPlaces: number[] = [];
+    const twigLines: { points: Point[]; start: number; span: number }[] = [];
+    // Flowers (set aside): twig and fork tips, in a fixed order, so the k-th flower always opens on the same one.
+    // const tips: { point: Point; grows: number }[] = [];
     for (let j = 0; j < twigCount; j++) {
       const at = 0.3 + ((j + noise(stem.id, 10 + j)) / twigCount) * 0.5;
       twigPlaces.push(at);
@@ -315,6 +380,8 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
       const reach = visible * (0.15 + noise(stem.id, 30 + j) * 0.15);
       const twig = sprout(base, angle, reach, side * (1 - sadness), stem.id * 10 + j);
       addLine(twig, TWIG_WIDTH, stem.id * 10 + j);
+      twigLines.push({ points: twig, start: growth.start, span: TWIG_SHARE });
+      // tips.push({ point: twig[twig.length - 1], grows: trunkAt(baseIndex) + TWIG_SHARE });
       addNode(base, 2 + noise(stem.id, 35 + j), stem.id * 10 + j);
 
       if (noise(stem.id, 40 + j) > 0.35) {
@@ -322,7 +389,10 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
         const fork = twig[forkIndex];
         growth = { start: trunkAt(baseIndex) + TWIG_SHARE * (forkIndex / (twig.length - 1)), span: FORK_SHARE, birth };
         const forkAngle = droop((fork.angle * Math.PI) / 180 - side * (0.5 + noise(stem.id, 45 + j) * 0.3), sadness);
-        addLine(sprout(fork, forkAngle, reach * 0.5, -side * (1 - sadness), stem.id * 10 + j + 5), FORK_WIDTH, stem.id * 10 + j + 5);
+        const forked = sprout(fork, forkAngle, reach * 0.5, -side * (1 - sadness), stem.id * 10 + j + 5);
+        addLine(forked, FORK_WIDTH, stem.id * 10 + j + 5);
+        twigLines.push({ points: forked, start: growth.start, span: FORK_SHARE });
+        // tips.push({ point: forked[forked.length - 1], grows: growth.start + FORK_SHARE });
         addNode(fork, 2, stem.id * 10 + j + 5);
       }
     }
@@ -346,15 +416,81 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
       addNode(trunk[index], 2 + noise(stem.id, 95 + b) * 1.5, stem.id * 7 + b);
     }
 
-    const markPlaces = placeMarks(stem.id, stem.marks.length, clear, markSpan, room, twigPlaces);
+    // Leaves ("content") and thorns ("en colère") along the stem, each kind on its own spots, by rank
+    // among its kind: the n-th leaf and the n-th thorn always sit at the same place with the same
+    // look, whatever comes or goes (a leaf taken by "triste", a changed vote), so nothing shuffles.
+    let leaves = 0;
+    let thorns = 0;
+    const leafCount = stem.marks.filter((mark) => mark === "leaf").length;
+    const leafPlaces = placeMarks(stem.id, leafCount, clear, markSpan, room, twigPlaces);
+    const thornPlaces = placeMarks(stem.id, stem.marks.length - leafCount, clear, markSpan, room, twigPlaces, 0.5);
+    // Once the stem is full, marks go on the twigs: a spot every MARK_ROOM px from 30 % of each
+    // twig to its tip, taken twig after twig so they spread out, even spots for leaves and odd
+    // ones for thorns. When the twigs are full too, a new mark is not drawn (the branch still
+    // takes its colour): nothing is ever drawn over another mark.
+    const perTwig = twigLines.map(({ points, start, span }) => {
+      const length = points.reduce((sum, point, i) => (i === 0 ? 0 : sum + Math.hypot(point.x - points[i - 1].x, point.y - points[i - 1].y)), 0);
+      const gap = Math.max(1, Math.round(((points.length - 1) * MARK_ROOM) / Math.max(length, 1)));
+      const slots: { line: Point[]; index: number; grows: number }[] = [];
+      for (let i = Math.round((points.length - 1) * 0.3); i < points.length - 1; i += gap) {
+        slots.push({ line: points, index: i, grows: start + span * (i / (points.length - 1)) });
+      }
+      return slots;
+    });
+    const twigSlots = perTwig.flatMap((_, round) => perTwig.flatMap((slots) => (slots[round] ? [slots[round]] : [])));
+    const slotsFor = { leaf: twigSlots.filter((_, i) => i % 2 === 0), thorn: twigSlots.filter((_, i) => i % 2 === 1) };
+    const newestLeaf = stem.marks.lastIndexOf("leaf");
     const newestThorn = stem.marks.lastIndexOf("thorn");
     stem.marks.forEach((mark, k) => {
-      const index = indexAt(markPlaces[k]);
-      const side = k % 2 === 0 ? 1 : -1;
-      growth = { start: trunkAt(index), span: mark === "leaf" ? LEAF_SHARE : THORN_SHARE, birth };
-      if (mark === "leaf") addLeaf(trunk[index], side, stem.id * 1000 + k);
-      else addThorn(trunk, index, side, stem.id * 1000 + k, k === newestThorn);
+      const rank = mark === "leaf" ? leaves++ : thorns++;
+      const onStem = mark === "leaf" ? leafPlaces : thornPlaces;
+      const side = rank % 2 === 0 ? 1 : -1;
+      const seed = stem.id * 1000 + (mark === "leaf" ? rank : 500 + rank);
+      const fresh = k === (mark === "leaf" ? newestLeaf : newestThorn);
+      const span = mark === "leaf" ? LEAF_SHARE : THORN_SHARE;
+      let line = trunk;
+      let index: number;
+      if (rank < onStem.length) {
+        index = indexAt(onStem[rank]);
+        growth = { start: trunkAt(index), span, birth };
+      } else {
+        const slot = slotsFor[mark][rank - onStem.length];
+        if (!slot) return;
+        line = slot.line;
+        index = slot.index;
+        growth = { start: slot.grows, span, birth };
+      }
+      if (mark === "leaf") addLeaf(line[index], side, seed, fresh);
+      else addThorn(line, index, -side, seed, fresh);
     });
+
+    // Flower version of the marks (set aside, replaces the loop above): flowers open at the twig
+    // tips; thorns, and flowers once every tip has one, sit along the stem.
+    // let flowers = 0;
+    // let thorns = 0;
+    // const newestFlower = stem.marks.lastIndexOf("leaf");
+    // const newestThorn = stem.marks.lastIndexOf("thorn");
+    // const onStem: { mark: Mark; seed: number; fresh: boolean }[] = [];
+    // stem.marks.forEach((mark, k) => {
+    //   const fresh = k === (mark === "leaf" ? newestFlower : newestThorn);
+    //   const rank = mark === "leaf" ? flowers++ : 500 + thorns++;
+    //   const seed = stem.id * 1000 + rank;
+    //   const tip = mark === "leaf" ? tips[rank] : undefined;
+    //   if (!tip) {
+    //     onStem.push({ mark, seed, fresh });
+    //     return;
+    //   }
+    //   growth = { start: tip.grows, span: BLOSSOM_SHARE, birth };
+    //   addBlossom(tip.point, seed, fresh);
+    // });
+    // const markPlaces = placeMarks(stem.id, onStem.length, clear, markSpan, room, twigPlaces);
+    // onStem.forEach(({ mark, seed, fresh }, place) => {
+    //   const index = indexAt(markPlaces[place]);
+    //   const side = place % 2 === 0 ? 1 : -1;
+    //   growth = { start: trunkAt(index), span: mark === "leaf" ? BLOSSOM_SHARE : THORN_SHARE, birth };
+    //   if (mark === "leaf") addStalkBlossom(trunk[index], side, seed, fresh);
+    //   else addThorn(trunk, index, side, seed, fresh);
+    // });
   }
 
   const lines = new THREE.BufferGeometry();
@@ -374,6 +510,7 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
   points.setAttribute("position", new THREE.Float32BufferAttribute(nodes, 3));
   points.setAttribute("aNode", new THREE.Float32BufferAttribute(nodeSizes, 2));
   points.setAttribute("aStem", new THREE.Float32BufferAttribute(nodeStems, 1));
+  points.setAttribute("aFresh", new THREE.Float32BufferAttribute(nodeFresh, 1));
   points.setAttribute("aGrow", new THREE.Float32BufferAttribute(nodeGrows, 2));
   points.setAttribute("aLit", new THREE.Float32BufferAttribute(new Float32Array(nodeStems.length), 1));
   points.setAttribute("aMood", new THREE.Float32BufferAttribute(new Float32Array(nodeStems.length * 3), 3));
@@ -395,12 +532,15 @@ const ANGER_GLSL = `
 uniform float uTarget;
 uniform float uAngry;
 uniform float uAge;
+// Kind of mark growing now (FRESH.thorn or FRESH.leaf, 0 for none).
+uniform float uFreshKind;
 float targeted(float stem) {
   return 1.0 - step(0.5, abs(stem - uTarget));
 }
 float grown(float order) {
-  if (order < 0.5) return 2.0;
-  float k = clamp((uAge - 0.15 - (order - 1.0) * 0.2) / 0.6, 0.0, 1.0);
+  if (order < 0.5 || abs(floor(order / 100.0) * 100.0 - uFreshKind) > 0.5) return 2.0;
+  float rank = order - uFreshKind;
+  float k = clamp((uAge - 0.15 - (rank - 1.0) * 0.2) / 0.6, 0.0, 1.0);
   return 1.0 - pow(1.0 - k, 3.0);
 }
 `;
@@ -473,6 +613,7 @@ varying float vAcross;
 varying float vCore;
 varying float vFade;
 varying float vBlade;
+varying float vSpike;
 varying float vShown;
 varying float vSweep;
 
@@ -504,6 +645,7 @@ void main() {
   vCore = core / 2.0;
   vFade = max(smoothstep(0.0, 0.05, t), spike + blade);
   vBlade = blade;
+  vSpike = spike;
   focus();
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
   vSweep = sweep(gl_Position);
@@ -521,6 +663,7 @@ varying float vAcross;
 varying float vCore;
 varying float vFade;
 varying float vBlade;
+varying float vSpike;
 varying float vShown;
 varying float vSweep;
 varying float vOn;
@@ -542,10 +685,14 @@ void main() {
   float rim = 1.0 - smoothstep(0.0, 0.2, center);
   float across = clamp(vAcross / max(vCore, 0.5), -1.0, 1.0);
   float lit = smoothstep(-0.3, 1.0, -across);
-  vec3 bladeColor = mix(bright * 0.5, mix(bright, white, 0.8), lit);
-  bladeColor = mix(bladeColor, white, max(midrib, rim * 0.4));
-  float bladeAlpha = max(inside * (0.6 + 0.4 * lit + 0.3 * rim + 0.5 * midrib), glow);
+  // Leaves stay coloured, white only along the midrib: drawn in additive blending, a few
+  // overlapping leaves added up to a white blur where no shape could be read.
+  vec3 bladeColor = mix(bright * 0.4, mix(bright, white, 0.38), lit);
+  bladeColor = mix(bladeColor, white, max(midrib * 0.7, rim * 0.15));
+  float bladeAlpha = max(inside * (0.5 + 0.22 * lit + 0.15 * rim + 0.45 * midrib), glow * 0.6);
   a = mix(a, bladeAlpha, vBlade);
+  // Thorns a touch softer than the branches.
+  a *= mix(1.0, 0.85, vSpike);
   color = mix(color, bladeColor, vBlade);
   a *= vShown;
   a *= step(vT, vReveal - 0.001);
@@ -570,6 +717,7 @@ ${FOCUS_GLSL}
 uniform float uPixelRatio;
 attribute vec2 aNode;
 attribute float aStem;
+attribute float aFresh;
 varying float vPulse;
 varying float vAnger;
 
@@ -578,7 +726,8 @@ void main() {
   float hit = targeted(aStem);
   vAnger = hit * uAngry;
   focus();
-  float growing = sprouted();
+  // A fresh point (heart, stamen of a flower, set aside for now) appears with its lines when its mark grows.
+  float growing = sprouted() * min(1.0, mix(1.0, grown(aFresh), hit));
   vPulse = (0.75 + 0.25 * sin(uTime * 1.2 + aNode.y)) * max(shown(position.xy), ${UNDER_TEXT_LIT.toFixed(2)} * aLit * uFocus) * growing;
   gl_PointSize = aNode.x * 4.0 * uPixelRatio * growing;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
@@ -622,11 +771,12 @@ type View = {
     uTarget: { value: number };
     uAngry: { value: number };
     uAge: { value: number };
+    uFreshKind: { value: number };
     uTint: { value: THREE.Vector3 };
   };
   angerStart: number | null;
-  // Only a new thorn grows during the tint; leaves and sadness just change the colour.
-  growThorn: boolean;
+  // Only a new thorn or leaf grows during the tint; sadness just changes the colour.
+  growFresh: boolean;
   focus: { value: number };
   focusTarget: number;
   lineStems: number[];
@@ -730,6 +880,7 @@ function Branches({ stems, camera, thornArrival, leafArrival, wiltArrival = null
       uTarget: { value: -1 },
       uAngry: { value: 0 },
       uAge: { value: 1000 },
+      uFreshKind: { value: 0 },
       uTint: { value: new THREE.Vector3(...TINT.thorn) },
     };
     const lineMaterial = new THREE.ShaderMaterial({
@@ -766,7 +917,7 @@ function Branches({ stems, camera, thornArrival, leafArrival, wiltArrival = null
     scene.add(lines, nodes, ...flower.layers);
     const animated = !matchMedia("(prefers-reduced-motion: reduce)").matches;
     const view: View = {
-      renderer, scene, camera: orthographic, lines, nodes, width: 1, height: 1, animated, boxes, boxCount, anger, angerStart: null, growThorn: false,
+      renderer, scene, camera: orthographic, lines, nodes, width: 1, height: 1, animated, boxes, boxCount, anger, angerStart: null, growFresh: false,
       focus, focusTarget: 0, lineStems: [], nodeStems: [],
     };
     viewRef.current = view;
@@ -787,7 +938,7 @@ function Branches({ stems, camera, thornArrival, leafArrival, wiltArrival = null
         if (view.angerStart !== null) {
           const age = time.value - view.angerStart;
           const over = age > ANGER.duration;
-          anger.uAge.value = over || !view.growThorn ? 1000 : age;
+          anger.uAge.value = over || !view.growFresh ? 1000 : age;
           anger.uAngry.value = angerEnvelope(age);
           if (over) view.angerStart = null;
         }
@@ -844,8 +995,9 @@ function Branches({ stems, camera, thornArrival, leafArrival, wiltArrival = null
     if (!view || !view.animated || !arrival) return;
     view.angerStart = performance.now() / 1000;
     view.anger.uTarget.value = arrival.target;
-    view.anger.uAge.value = kind === "thorn" ? 0 : 1000;
-    view.growThorn = kind === "thorn";
+    view.growFresh = kind === "thorn" || kind === "leaf";
+    view.anger.uFreshKind.value = kind === "wilt" ? 0 : FRESH[kind];
+    view.anger.uAge.value = view.growFresh ? 0 : 1000;
     view.anger.uTint.value.fromArray(TINT[kind]);
   }
 

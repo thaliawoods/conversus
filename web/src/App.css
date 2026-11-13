@@ -754,7 +754,9 @@
   flex: 1;
   min-height: 0;
   position: relative;
-  overflow: hidden;
+  /* clip, not hidden: a hidden overflow can still scroll when a message gets the focus (click,
+     Tab), which shifted the whole plant and its buttons. The camera alone moves the plant. */
+  overflow: clip;
   margin: 0 1rem;
   border: none;
   background: transparent;
@@ -813,11 +815,15 @@
   fill: currentColor;
   stroke: none;
 }
-/* Bouton « Aa » juste sous « Faire ma Synthesis », sous la ligne de l'en-tête, son bord droit
-   aligné sur celui du bouton (l'en-tête a 0.2rem de marge intérieure, le bouton 0.4rem). */
-.debate .col-head .font-controls {
-  top: calc(100% + 0.6rem);
-  right: -0.2rem;
+/* Bouton « Aa » en haut à droite de la plante, mêmes marges que les boutons du bas. Il est posé
+   juste au-dessus de la plante (pas dedans) pour échapper au fondu du haut. */
+.font-anchor {
+  position: relative;
+  height: 0;
+  margin: 0 1rem;
+}
+.font-controls {
+  top: 1.4rem;
   bottom: auto;
 }
 /* Sa bulle s'ouvre en dessous, sinon le fondu du haut la mange. */
@@ -1000,15 +1006,19 @@
   stroke: #f2f8ff;
   opacity: 0;
 }
-.message-actions button[data-reaction]:hover:not(:disabled) .face-tube {
+/* Lit on hover, and stays lit once someone has already given this reaction (.given). */
+.message-actions button[data-reaction]:hover:not(:disabled) .face-tube,
+.message-actions button[data-reaction].given .face-tube {
   stroke: var(--mood);
 }
 
-.message-actions button[data-reaction]:hover:not(:disabled) .face-core {
+.message-actions button[data-reaction]:hover:not(:disabled) .face-core,
+.message-actions button[data-reaction].given .face-core {
   opacity: 1;
 }
 
-.message-actions button[data-reaction]:hover:not(:disabled) .reaction-face {
+.message-actions button[data-reaction]:hover:not(:disabled) .reaction-face,
+.message-actions button[data-reaction].given .reaction-face {
   filter: drop-shadow(0 0 1.5px var(--mood));
 }
 [data-reaction="leaf"] {

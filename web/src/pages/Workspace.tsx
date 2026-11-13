@@ -9,7 +9,7 @@ import { SERVER_DOWN, request } from "../api";
 import { usePresence } from "../hooks/usePresence";
 import Tutorial, { type TutorialColumn } from "../components/Tutorial";
 import { useUnread } from "../hooks/useUnread";
-import { enterSynthesisChannel, HIDDEN_CHANNELS, isDebate, SHARED_CHANNEL, SYNTHESIS_CHANNEL, workspacePath, type Channel } from "../channels";
+import { enterSynthesisChannel, HIDDEN_CHANNELS, isDebate, isReactionsChannel, SHARED_CHANNEL, SYNTHESIS_CHANNEL, workspacePath, type Channel } from "../channels";
 import type { Message } from "./Chat";
 import { PetalFlower } from "../components/PetalIcons";
 
@@ -122,7 +122,7 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
     const profile = await response.json();
     // The server can list a channel twice when someone entered it twice.
     const unique: Channel[] = [...new Map((profile.channels as Channel[]).map((channel) => [channel.id, channel])).values()];
-    setChannels(unique);
+    setChannels(unique.filter((channel) => !isReactionsChannel(channel)));
     setUsername(profile.username);
     setPronouns(profile.metadata?.conversus?.pronouns ?? "");
     // First visit in ConVersus: nothing in the account's "conversus" metadata says the tour was
@@ -179,7 +179,7 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
       await joinMissing(DEMO_CHANNELS);
       const after = await request(token, "/me");
       if (!after?.ok) return;
-      const rooms = ((await after.json()).channels as Channel[]).filter((channel) => !isDebate(channel) && channel.name !== SHARED_CHANNEL);
+      const rooms = ((await after.json()).channels as Channel[]).filter((channel) => !isDebate(channel) && !isReactionsChannel(channel) && channel.name !== SHARED_CHANNEL);
       const debates = new Set<string>();
       for (const room of rooms) {
         const response = await request(token, `/channel/message?channel=${room.id}&namespace=conversus`);

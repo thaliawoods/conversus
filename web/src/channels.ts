@@ -55,6 +55,33 @@ export async function enterSynthesisChannel(token: string) {
   return request(token, "/channel/enter", { channel: SYNTHESIS_CHANNEL });
 }
 
+// Hidden channel holding the reactions of one ConVersus. The server only sends the 100 latest
+// messages of a channel: kept in the debate, reactions pushed its oldest replies (and their
+// branches) out of that window. Here they only compete with each other.
+export function reactionsChannelName(debateId: number) {
+  return `reactions-${debateId}`;
+}
+
+export function isReactionsChannel(channel: Channel) {
+  return /^reactions-\d+$/.test(channel.name);
+}
+
+// Id of the reactions channel of a debate, entering it (and creating it first if create is set
+// and nobody has yet). null when it does not exist yet or the server cannot be reached.
+export async function reactionsChannelId(token: string, debateId: number, create: boolean) {
+  const name = reactionsChannelName(debateId);
+  let entered = await request(token, "/channel/enter", { channel: name });
+  if (!entered?.ok && create) {
+    await request(token, "/channel?namespace=conversus", { name, metadata: {} });
+    entered = await request(token, "/channel/enter", { channel: name });
+  }
+  if (!entered?.ok) return null;
+  const me = await request(token, "/me");
+  if (!me?.ok) return null;
+  const channels: Channel[] = (await me.json()).channels;
+  return channels.find((channel) => channel.name === name)?.id ?? null;
+}
+
 // Messages posted by the server every 10 minutes.
 export function isClockTick(message: { content: string }) {
   return message.content.startsWith("clock tick :");

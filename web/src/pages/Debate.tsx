@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
-import { enterSynthesisChannel, HIDDEN_CHANNELS, isDebate, shownName, SYNTHESIS_CHANNEL, workspacePath, type Channel } from "../channels";
+import { enterSynthesisChannel, HIDDEN_CHANNELS, isDebate, reactionsChannelId, shownName, SYNTHESIS_CHANNEL, workspacePath, type Channel } from "../channels";
 import DebatePicker from "../components/DebatePicker";
 import SynthesisModal from "../components/SynthesisModal";
 import SynthesisIcon from "../components/SynthesisIcon";
@@ -96,16 +96,10 @@ function isReactionValue(value: unknown): value is ReactionValue {
   return value === "leaf" || value === "thorn" || value === "wilt";
 }
 
-// One vote per person: reacting again replaces your previous reaction. Oldest vote first.
+// Every vote counts, as many as anyone wants: nothing replaces an earlier one. Oldest vote first.
 function currentVotes(reactions: Message[], message: Message): ReactionValue[] {
-  const latest = new Map<string, Message>();
-  for (const reaction of reactions) {
-    const { reactTo, value } = reaction.metadata?.conversus ?? {};
-    if (reactTo !== message.id || !isReactionValue(value)) continue;
-    const previous = latest.get(reaction.user);
-    if (!previous || previous.id < reaction.id) latest.set(reaction.user, reaction);
-  }
-  return [...latest.values()]
+  return reactions
+    .filter((reaction) => reaction.metadata?.conversus?.reactTo === message.id && isReactionValue(reaction.metadata.conversus.value))
     .sort((a, b) => a.id - b.id)
     .map((reaction) => reaction.metadata!.conversus!.value as ReactionValue);
 }
@@ -120,23 +114,23 @@ function majorityReaction(reactions: Message[], message: Message) {
   return votes.findLast((vote) => counts[vote] === best) ?? null;
 }
 
-const MAX_MARKS = 8;
-
-function isMark(value: unknown): value is Mark {
-  return value === "leaf" || value === "thorn";
-}
-
-// A leaf for every "content" and a thorn for every "en colère", in the order they came:
-// the effect chosen when posting, then each current vote. Oldest first, so a new mark never
-// takes the spot of an older one. They only decorate the stem: placement ignores them.
+// Leaves ("content") and thorns ("en colère") on the branch, in the order they came: the effect
+// chosen when posting, then each current vote, oldest first. Each "triste" takes away the newest
+// leaf. Placement ignores the marks, so nothing moves when one grows or goes.
 function marksOf(reactions: Message[], message: Message): Mark[] {
   const effect = message.metadata?.conversus?.effect;
-  return [effect, ...currentVotes(reactions, message)].filter(isMark).slice(0, MAX_MARKS);
+  const marks: Mark[] = [];
+  for (const value of [...(effect ? [effect] : []), ...currentVotes(reactions, message)]) {
+    if (value !== "wilt") marks.push(value);
+    else if (marks.includes("leaf")) marks.splice(marks.lastIndexOf("leaf"), 1);
+  }
+  return marks;
 }
 
 // Every font a message can be shown in, loaded up front so its size is known before placing it.
 const MESSAGE_FONTS = ["Josafronde", "LigaSans", "LoveAndRage", "Nudles", "Tremplin", "PicNic"];
 
+// Every reaction plays its animation: each one grows a new leaf or thorn (or takes a leaf away).
 function arrivalsOf(messages: Message[], value: ReactionValue): Arrival[] {
   return messages.flatMap((message) => {
     const conversus = message.metadata?.conversus;
@@ -208,8 +202,12 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
   const [leafArrival, setLeafArrival] = useState<Arrival | null>(null);
   const [wiltArrival, setWiltArrival] = useState<Arrival | null>(null);
   const seenReactions = useRef<Set<number> | null>(null);
+  // Targets of our own reactions, already played on click: their echo from the server plays nothing.
   const ownWilts = useRef<number[]>([]);
   const ownLeaves = useRef<number[]>([]);
+  const ownThorns = useRef<number[]>([]);
+  const reactionsChannel = useRef<{ id: number | null; checked: number }>({ id: null, checked: 0 });
+  const subjectRef = useRef<Message | null>(null);
   const {
     camera,
     viewportRef,
@@ -242,7 +240,7 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
       const parent = parents[index];
       const from = parent === null ? null : (shown.get(replies[parent].id) ?? null);
       const text = textSizes[index] ?? to;
-      // Votes colour the branch (moods) and "content" grows leaves on it, without moving anything.
+      // Votes colour the branch (moods) and grow leaves or thorns on it, without moving anything.
       return [{ from, to, sag: 0, id: message.id, marks: marksOf(reactions, message), text }];
     });
   }, [replies, reactions, shown, textSizes]);
@@ -260,7 +258,17 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
 
   useEffect(() => {
     async function loadMessages() {
-      const response = await request(token, `/channel/message?channel=${channelId}&namespace=conversus`);
+      // Reactions live in their own hidden channel (see reactionsChannelId): looked up again
+      // every 10 s while nobody has created it yet.
+      const lookup = reactionsChannel.current;
+      if (lookup.id === null && Date.now() - lookup.checked > 10_000) {
+        lookup.checked = Date.now();
+        lookup.id = await reactionsChannelId(token, Number(channelId), false);
+      }
+      const [response, reactionsResponse] = await Promise.all([
+        request(token, `/channel/message?channel=${channelId}&namespace=conversus`),
+        lookup.id === null ? null : request(token, `/channel/message?channel=${lookup.id}&namespace=conversus`),
+      ]);
       if (response?.status === 401) {
         onTokenExpired();
         return;
@@ -273,8 +281,18 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
       const data = await response.json();
       const all: Message[] = (data ?? []).toReversed();
       setMissing(all.length === 0);
-      setSubject(all[0] ?? null);
-      const messages = all.slice(1);
+      // The subject is the first message of the debate, kept once seen: if it ever leaves the
+      // server's window of 100 messages, a reply must not take its place (the plant would rebuild).
+      const oldest = all[0] ?? null;
+      if (!subjectRef.current || (oldest && oldest.id < subjectRef.current.id)) subjectRef.current = oldest;
+      const subjectId = subjectRef.current?.id ?? -1;
+      setSubject(subjectRef.current);
+      // Reactions from both channels: the old ones were posted in the debate itself.
+      const ownChannel: Message[] = reactionsResponse?.ok ? ((await reactionsResponse.json()) ?? []) : [];
+      const messages = [
+        ...all.filter((message) => message.id > subjectId),
+        ...ownChannel.filter((message) => message.metadata?.conversus?.reactTo !== undefined),
+      ].sort((a, b) => a.id - b.id);
       setReplies(
         messages.filter(
           (message) =>
@@ -295,24 +313,24 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
       const freshThorns = thorns.filter((thorn) => !seen.has(thorn.key));
       const freshLeaves = leaves.filter((leaf) => !seen.has(leaf.key));
       [...freshWilts, ...freshThorns, ...freshLeaves].forEach((arrival) => seen.add(arrival.key));
-      if (freshThorns.length > 0) setThornArrival(freshThorns[freshThorns.length - 1]);
-      const leavesToPlay = freshLeaves.filter((leaf) => {
-        const index = ownLeaves.current.indexOf(leaf.target);
-        if (index === -1) return true;
-        ownLeaves.current.splice(index, 1);
-        return false;
-      });
+      const othersOnly = (arrivals: Arrival[], own: number[]) =>
+        arrivals.filter((arrival) => {
+          const index = own.indexOf(arrival.target);
+          if (index === -1) return true;
+          own.splice(index, 1);
+          return false;
+        });
+      const thornsToPlay = othersOnly(freshThorns, ownThorns.current);
+      if (thornsToPlay.length > 0) setThornArrival(thornsToPlay[thornsToPlay.length - 1]);
+      const leavesToPlay = othersOnly(freshLeaves, ownLeaves.current);
       if (leavesToPlay.length > 0) setLeafArrival(leavesToPlay[leavesToPlay.length - 1]);
-      const toPlay = freshWilts.filter((wilt) => {
-        const index = ownWilts.current.indexOf(wilt.target);
-        if (index === -1) return true;
-        ownWilts.current.splice(index, 1);
-        return false;
-      });
+      const toPlay = othersOnly(freshWilts, ownWilts.current);
       if (toPlay.length > 0) setWiltArrival(toPlay[toPlay.length - 1]);
     }
 
     seenReactions.current = null;
+    reactionsChannel.current = { id: null, checked: 0 };
+    subjectRef.current = null;
     loadMessages();
     const stopListening = listenToChannel(token, channelId, loadMessages);
     const intervalId = setInterval(loadMessages, FALLBACK_POLL);
@@ -353,6 +371,7 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
     // Placement ignores votes, so a message stays where it is when someone reacts to it.
     const none = replies.map(() => 0);
     setPositions(placeMessages(sizes, parents, ids, none, none));
+    // The branch still reaches the text as it is shown now (font of the vote, opened or not).
     setTextSizes(messageRefs.current.slice(0, replies.length).map(textSize));
   }, [replies, reactions, specialFonts, fontsLoaded]);
 
@@ -433,36 +452,33 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
     if (pendingReactions.includes(key)) return;
     setPendingReactions((current) => [...current, key]);
     setOpenId(null);
-    // Son coupé (voir LEAF_SOUND en haut du fichier) :
-    // if (value === "thorn") {
-    //   THUNDER_SOUND.currentTime = 0;
-    //   THUNDER_SOUND.play().catch(() => {});
-    // }
-    if (value === "wilt") {
-      ownWilts.current.push(message.id);
-      setWiltArrival({ key: -Date.now(), target: message.id });
-      // RAIN_SOUND.currentTime = 0;
-      // RAIN_SOUND.play().catch(() => {});
-    }
-    if (value === "leaf") {
-      ownLeaves.current.push(message.id);
-      setLeafArrival({ key: -Date.now(), target: message.id });
-      // LEAF_SOUND.currentTime = 0;
-      // LEAF_SOUND.play().catch(() => {});
-    }
-    const response = await request(token, MESSAGES, {
+    // Noted now, so the echo of this vote in the polling plays nothing.
+    const own = { leaf: ownLeaves, thorn: ownThorns, wilt: ownWilts }[value].current;
+    own.push(message.id);
+    // Posted in the hidden reactions channel of the debate, created by the first reaction.
+    const lookup = reactionsChannel.current;
+    if (lookup.id === null) lookup.id = await reactionsChannelId(token, Number(channelId), true);
+    const response = lookup.id === null ? null : await request(token, MESSAGES, {
       content: "",
-      channel: Number(channelId),
+      channel: lookup.id,
       metadata: { reactTo: message.id, value },
       anonymous: false,
     });
     if (checkResponse(response, "Réaction non envoyée. Réessaie.")) {
       const created: Message = await response!.json();
-      setReactions((current) => [...current, created]);
+      // The server leaves "user" empty in its answer: without your name, this vote would count as
+      // someone else's (your previous vote would stay) until the next reload corrects the plant.
+      setReactions((current) => [...current, { ...created, user: created.user || (me ?? "") }]);
+      // Played only now, in the same render as the new leaf or thorn: started at the click, the
+      // growth was over before a slow server answered, and the mark popped up already grown.
+      const arrival = { key: -Date.now(), target: message.id };
+      if (value === "thorn") setThornArrival(arrival);
+      if (value === "leaf") setLeafArrival(arrival);
+      if (value === "wilt") setWiltArrival(arrival);
+      // Sons coupés (voir LEAF_SOUND en haut du fichier) : THUNDER_SOUND, RAIN_SOUND, LEAF_SOUND.
     } else {
-      const own = value === "leaf" ? ownLeaves.current : ownWilts.current;
       const index = own.indexOf(message.id);
-      if ((value === "wilt" || value === "leaf") && index !== -1) own.splice(index, 1);
+      if (index !== -1) own.splice(index, 1);
     }
     setPendingReactions((current) => current.filter((item) => item !== key));
   }
@@ -570,9 +586,6 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
           <SynthesisIcon />
           Faire ma Synthesis
         </button>
-        <div className="camera-controls font-controls">
-          <FontToggle />
-        </div>
       </div>
       {!synthesis && sharedSynthesis && (
         <SynthesisModal
@@ -601,6 +614,12 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
           onShare={handleShare}
         />
       )}
+      {/* Outside the viewport, so the fade at the top of the plant does not hide it. */}
+      <div className="font-anchor">
+        <div className="camera-controls font-controls">
+          <FontToggle />
+        </div>
+      </div>
       <div
         className="viewport"
         ref={viewportRef}
@@ -620,7 +639,7 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
           sprouts={sprouts}
           highlight={thread}
         />
-        <Leaves arrival={leafArrival} wilt={wiltArrival} stems={stems} camera={camera} />
+        <Leaves wilt={wiltArrival} stems={stems} camera={camera} />
         <div
           className="board"
           // --zoom lets the reaction row keep a usable size when zoomed out (App.css, .message-actions).
@@ -675,6 +694,8 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
                     <button
                       type="button"
                       key={reaction.value}
+                      // Lit in its colour once anyone has given this reaction to the message.
+                      className={currentVotes(reactions, message).includes(reaction.value) ? "given" : undefined}
                       disabled={pendingReactions.includes(`${message.id}-${reaction.value}`)}
                       data-tip={reaction.label}
                       data-reaction={reaction.value}

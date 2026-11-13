@@ -6,15 +6,13 @@ type Camera = { x: number; y: number; zoom: number };
 type Spot = { x: number; y: number };
 type Blade = { points: Spot[]; width: number; shape: number; veins: [Spot, Spot][] };
 type Part = { kind: "petiole"; points: Spot[] } | { kind: "blade"; outline: Spot[]; midrib: Spot[]; veins: [Spot, Spot][] };
-// falling: a flower dropping off a sad branch, instead of one blooming out of it.
-type Flyer = { x: number; y: number; angle: number; side: number; start: number; phase: number; parts: Part[]; falling: boolean };
+type Flyer = { x: number; y: number; angle: number; side: number; start: number; phase: number; parts: Part[] };
 
 const COUNT = 7;
 const LIFE = 2.8;
-const BUD = 0.3;
 const FADE = 0.9;
-const ROSE = "#e04f9a";
-const ROSE_CORE = "#ffe6f2";
+// Violet of the "triste" reaction.
+const VIOLET = { line: "#9b6bff", fill: "rgba(155, 107, 255, 0.3)", core: "#efe6ff" };
 const FALL_GRAVITY = 110;
 
 const fract = (value: number) => value - Math.floor(value);
@@ -122,11 +120,11 @@ function trace(context: CanvasRenderingContext2D, points: Spot[]) {
 }
 
 function drawLeaf(context: CanvasRenderingContext2D, parts: Part[]) {
-  context.shadowColor = ROSE;
+  context.shadowColor = VIOLET.line;
   for (const part of parts) {
     if (part.kind === "petiole") {
       trace(context, part.points);
-      context.strokeStyle = ROSE;
+      context.strokeStyle = VIOLET.line;
       context.lineWidth = 1.2;
       context.shadowBlur = 5;
       context.stroke();
@@ -134,9 +132,9 @@ function drawLeaf(context: CanvasRenderingContext2D, parts: Part[]) {
     }
     trace(context, part.outline);
     context.closePath();
-    context.fillStyle = "rgba(224, 79, 154, 0.3)";
+    context.fillStyle = VIOLET.fill;
     context.fill();
-    context.strokeStyle = ROSE;
+    context.strokeStyle = VIOLET.line;
     context.lineWidth = 1;
     context.shadowBlur = 6;
     context.stroke();
@@ -149,29 +147,10 @@ function drawLeaf(context: CanvasRenderingContext2D, parts: Part[]) {
       context.stroke();
     }
     trace(context, part.midrib);
-    context.strokeStyle = ROSE_CORE;
+    context.strokeStyle = VIOLET.core;
     context.lineWidth = 0.7;
     context.stroke();
   }
-}
-
-function popOut(progress: number) {
-  const overshoot = 2.2;
-  const clamped = Math.min(1, Math.max(0, progress));
-  return 1 + (overshoot + 1) * Math.pow(clamped - 1, 3) + overshoot * Math.pow(clamped - 1, 2);
-}
-
-function spiral(flyer: Flyer, flight: number) {
-  const turn = flyer.phase + flight * 5.2 * flyer.side;
-  const radius = 6 + 26 * flight;
-  const centerX = flyer.x + flyer.side * 8 * flight;
-  const centerY = flyer.y - 48 * flight - 14 * flight * flight;
-  return {
-    x: centerX + Math.cos(turn) * radius,
-    y: centerY + Math.sin(turn) * radius * 0.4,
-    spin: flight * 4 * flyer.side,
-    flip: Math.cos(flight * 7 + flyer.phase),
-  };
 }
 
 function drop(flyer: Flyer, age: number) {
@@ -183,16 +162,15 @@ function drop(flyer: Flyer, age: number) {
   };
 }
 
-// "content" makes flowers fly out of the branch, "triste" makes them fall off it: the branch
-// itself never moves, only these flyers.
-function Leaves({ arrival, wilt, stems, camera }: { arrival: Arrival | null; wilt: Arrival | null; stems: Stem[]; camera: Camera }) {
+// "triste" makes violet leaves fall off the branch: the branch itself never moves, only these leaves.
+function Leaves({ wilt, stems, camera }: { wilt: Arrival | null; stems: Stem[]; camera: Camera }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const flyers = useRef<Flyer[]>([]);
   const latest = useRef({ stems, camera });
   const wake = useRef<() => void>(() => {});
   latest.current = { stems, camera };
 
-  function spawn(target: Arrival | null, falling: boolean) {
+  function spawn(target: Arrival | null) {
     if (!target || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const stem = latest.current.stems.find((item) => item.id === target.target);
     if (!stem) return;
@@ -206,17 +184,15 @@ function Leaves({ arrival, wilt, stems, camera }: { arrival: Arrival | null; wil
         y: point.y,
         angle: (point.angle * Math.PI) / 180 + side,
         side,
-        start: now + 0.05 + noise(seed, falling ? 72 : 70) * 0.35,
-        phase: noise(seed, falling ? 73 : 71) * 6.28,
+        start: now + 0.05 + noise(seed, 72) * 0.35,
+        phase: noise(seed, 73) * 6.28,
         parts: makeLeaf(seed),
-        falling,
       });
     }
     wake.current();
   }
 
-  useEffect(() => spawn(arrival, false), [arrival]);
-  useEffect(() => spawn(wilt, true), [wilt]);
+  useEffect(() => spawn(wilt), [wilt]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -244,13 +220,12 @@ function Leaves({ arrival, wilt, stems, camera }: { arrival: Arrival | null; wil
       for (const flyer of flyers.current) {
         const age = now - flyer.start;
         if (age < 0) continue;
-        const grow = flyer.falling ? 1 : popOut(age / 0.35);
-        const move = flyer.falling ? drop(flyer, age) : spiral(flyer, Math.max(0, age - BUD));
+        const move = drop(flyer, age);
         context!.save();
         context!.globalAlpha = Math.max(0, Math.min(1, (LIFE - age) / FADE));
         context!.translate(width / 2 + camera.x + move.x * camera.zoom, height / 2 + camera.y + move.y * camera.zoom);
         context!.rotate(flyer.angle + move.spin);
-        context!.scale(camera.zoom * grow, camera.zoom * grow * flyer.side * move.flip);
+        context!.scale(camera.zoom, camera.zoom * flyer.side * move.flip);
         drawLeaf(context!, flyer.parts);
         context!.restore();
       }
