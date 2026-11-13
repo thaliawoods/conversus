@@ -4,15 +4,16 @@ export type Channel = { id: number; name: string };
 
 // Label put on every ConVersus channel, in its "conversus" metadata. A ConVersus is a normal
 // channel on the shared server, so other groups' apps list it too: they can recognise it
-// (channel.metadata.conversus.type === "conversus") and hide it if they want (code from Kilian, f23790b).
+// (channel.metadata.conversus.type === "conversus") and hide it if they want.
 export const CONVERSUS_METADATA = { type: "conversus" };
 
 export function isDebate(channel: Channel) {
   return /#\d+$/.test(channel.name);
 }
 
-// Name as shown on screen: without the "#<time>" of a ConVersus, first letter in capitals.
+// Name as shown on screen: "Nos Synthesis" for the synthesis channel, otherwise without the "#<time>" of a ConVersus, first letter in capitals.
 export function channelLabel(name: string) {
+  if (name === SYNTHESIS_CHANNEL) return "Nos Synthesis";
   const shown = name.replace(/#\d+$/, "");
   return shown.charAt(0).toUpperCase() + shown.slice(1);
 }
@@ -37,7 +38,7 @@ export const HIDDEN_CHANNELS: string[] = [
 // Channel where every group talks: its announced ConVersus are not joined automatically.
 export const SHARED_CHANNEL = "general";
 
-// Read-only channel: every shared ConVersus synthesis also lands here (code from Kilian, f23790b).
+// Read-only channel: shared ConVersus syntheses land here, nobody writes in it.
 // The server cannot forbid writing, so the app hides the composer and shows syntheses only.
 export const SYNTHESIS_CHANNEL = "synthesis";
 

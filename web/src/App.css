@@ -797,6 +797,33 @@
   color: var(--ice);
 }
 
+/* Every button down here shares one colour, and lights up in the yellow of the anonymous button. */
+.camera-controls button:hover,
+.camera-controls button:focus-visible {
+  color: #ffdf4e;
+}
+.camera-controls button:hover svg,
+.camera-controls button:focus-visible svg {
+  filter: drop-shadow(0 0 3px rgba(255, 223, 78, 0.55));
+}
+.camera-controls svg {
+  transition: filter 0.25s;
+}
+.font-icon .font-letters {
+  fill: currentColor;
+  stroke: none;
+}
+/* Bouton « Aa » seul en haut à droite de la plante, sous le fondu du haut du canvas. */
+.font-controls {
+  top: 2.6rem;
+  bottom: auto;
+}
+/* Sa bulle s'ouvre en dessous, sinon le fondu du haut la mange. */
+.font-controls [data-tip]::after {
+  top: calc(100% + 0.45rem);
+  bottom: auto;
+}
+
 .camera-icon {
   display: block;
   width: 1.5rem;
@@ -881,7 +908,7 @@
   font-size: 0.62rem;
   font-weight: 400;
   letter-spacing: 0.06em;
-  color: var(--ice);
+  color: var(--user-color, var(--ice));
   opacity: 0.6;
   text-transform: capitalize;
 }
@@ -1434,6 +1461,10 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* Reaches into the sidebar padding so the scrollbar sits on the column edge;
+     the padding keeps the content where it was. */
+  margin-right: -1rem;
+  padding-right: 1rem;
   /* Same thin scrollbar as the channel messages. */
   scrollbar-width: thin;
   scrollbar-color: rgba(196, 230, 255, 0.22) transparent;
@@ -1544,7 +1575,13 @@
 }
 
 .sidebar-member .sidebar-name {
+  color: var(--user-color, inherit);
+  opacity: 0.5;
   text-transform: capitalize;
+}
+
+.sidebar-member.online .sidebar-name {
+  opacity: 1;
 }
 
 .sidebar-me {
@@ -1561,9 +1598,9 @@
 }
 
 .sidebar-member.online .presence-dot {
-  border-color: #ffdf4e;
-  background: #ffdf4e;
-  box-shadow: 0 0 0.35rem rgba(255, 223, 78, 0.7);
+  border-color: #5fd38a;
+  background: #5fd38a;
+  box-shadow: 0 0 0.35rem rgba(95, 211, 138, 0.6);
 }
 
 .visually-hidden {
@@ -1910,12 +1947,8 @@
 .channel-panel .message-meta strong {
   font-size: 0.76rem;
   font-weight: 600;
-  color: var(--ice-soft);
+  color: var(--user-color, var(--ice-soft));
   text-transform: capitalize;
-}
-
-.channel-panel .message-meta strong.mine {
-  color: #b98cff;
 }
 
 .channel-panel .message-meta time {
@@ -1963,7 +1996,7 @@
   opacity: 0.3;
 }
 
-.board-message.lit strong:not(.mine) {
+.board-message.lit strong {
   color: #ffdf4e;
   opacity: 0.9;
 }
@@ -2511,7 +2544,7 @@
 }
 
 .channel-panel .reply-quote-name {
-  color: var(--ice);
+  color: var(--user-color, var(--ice));
   text-transform: capitalize;
 }
 

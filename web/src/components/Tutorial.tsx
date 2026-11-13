@@ -79,7 +79,7 @@ const STEPS: Step[] = [
   {
     title: "La synthèse",
     text:
-      "Quand le débat a bien poussé, « Faire ma Synthesis » en tire un résumé, partagé dans le canal d'origine ou dans le canal Synthesis.",
+      "Quand le débat a bien poussé, « Faire ma Synthesis » en tire un résumé, partagé dans le canal d'origine et dans Nos Synthesis.",
     target: ".synthesis-button",
     reveal: "debate",
   },

@@ -9,12 +9,14 @@ import Branches, { type Arrival, type Color, type Mark, type Stem } from "../com
 import Leaves from "../components/Leaves";
 import ReactionIcon, { REACTIONS } from "../components/ReactionIcon";
 import type { Message, ReactionValue } from "./Chat";
-import { placeMessages, wiltSag, type Placement, type Size } from "../layout";
+import { placeMessages, type Placement, type Size } from "../layout";
 import { useCamera } from "../hooks/useCamera";
 import { useGlide, type Spot } from "../hooks/useGlide";
 import useSprouts from "../hooks/useSprouts";
 import MessageForm from "../components/MessageForm";
-import { fontFamily, shownFont } from "../fonts";
+import { fontFamily, shownFont, useSpecialFonts } from "../fonts";
+import FontToggle from "../components/FontToggle";
+import { userStyle } from "../userColor";
 import { SERVER_DOWN, formatTime, request } from "../api";
 import { FALLBACK_POLL, listenToChannel } from "../live";
 import { pronounsByName } from "../pronouns";
@@ -68,12 +70,14 @@ function threadOf(replies: Message[], id: number) {
   return thread;
 }
 
+// Sons des réactions, coupés pour l'instant. Pour les remettre : décommenter ces trois lignes
+// et les trois appels dans handleReact.
 // Son des feuilles (freesound « crunching leaves »), joué quand on réagit Content.
-const LEAF_SOUND = new Audio("/sounds/feuilles.mp3");
+// const LEAF_SOUND = new Audio("/sounds/feuilles.mp3");
 // Pluie (dragon-studio « calming rain ») : 2 s du milieu, fondus calés sur Rain.tsx.
-const RAIN_SOUND = new Audio("/sounds/pluie.mp3");
+// const RAIN_SOUND = new Audio("/sounds/pluie.mp3");
 // Orage (evanaeva « thunderstorm ») : de 2 à 4 s, joué quand on réagit En colère.
-const THUNDER_SOUND = new Audio("/sounds/orage.mp3");
+// const THUNDER_SOUND = new Audio("/sounds/orage.mp3");
 
 const MOOD_FONTS: Record<ReactionValue, string> = { thorn: "LoveAndRage", wilt: "Nudles", leaf: "LigaSans" };
 
@@ -116,30 +120,14 @@ function majorityReaction(reactions: Message[], message: Message) {
   return votes.findLast((vote) => counts[vote] === best) ?? null;
 }
 
-function countWilts(reactions: Message[], message: Message) {
-  const fromVotes = currentVotes(reactions, message).filter((vote) => vote === "wilt").length;
-  const fromEffect = message.metadata?.conversus?.effect === "wilt" ? 1 : 0;
-  return fromVotes + fromEffect;
-}
+const MAX_LEAVES = 8;
 
-const MAX_MARKS = 8;
-
-// Leaves and thorns on a branch, in the order they came: every "content" adds a flower,
-// every "en colère" a thorn, and a "triste" makes all the flowers there fall off.
-function marksOf(reactions: Message[], message: Message) {
-  const values = [
-    message.metadata?.conversus?.effect,
-    ...reactions
-      .filter((reaction) => reaction.metadata?.conversus?.reactTo === message.id)
-      .toSorted((a, b) => a.id - b.id)
-      .map((reaction) => reaction.metadata?.conversus?.value),
-  ];
-  let marks: Mark[] = [];
-  for (const value of values) {
-    if (value === "wilt") marks = marks.filter((mark) => mark !== "leaf");
-    else if (value === "leaf" || value === "thorn") marks.push(value);
-  }
-  return marks.slice(-MAX_MARKS);
+// A leaf on the branch for every "content": the effect chosen when posting, then each current vote.
+// They only decorate the stem: placement ignores them, so nothing moves when one grows.
+function leavesOf(reactions: Message[], message: Message): Mark[] {
+  const fromEffect = message.metadata?.conversus?.effect === "leaf" ? 1 : 0;
+  const fromVotes = currentVotes(reactions, message).filter((vote) => vote === "leaf").length;
+  return Array<Mark>(Math.min(MAX_LEAVES, fromEffect + fromVotes)).fill("leaf");
 }
 
 function arrivalsOf(messages: Message[], value: ReactionValue): Arrival[] {
@@ -186,11 +174,11 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
   const location = useLocation();
   const sharedSynthesis: { text: string; sharedAt: string } | undefined = location.state?.synthesis;
   const sectionRef = useRef<HTMLElement>(null);
-  const [subject, setSubject] = useState<Message | null>(null);
   const [synthesis, setSynthesis] = useState<Synthesis | null>(null);
   const [sharing, setSharing] = useState(false);
   const [error, setError] = useState("");
   const [connectionError, setConnectionError] = useState("");
+  const [subject, setSubject] = useState<Message | null>(null);
   // A real ConVersus always has at least its subject: no message at all = it doesn't exist.
   const [missing, setMissing] = useState(false);
   const [pendingReactions, setPendingReactions] = useState<string[]>([]);
@@ -201,6 +189,7 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
   const [textSizes, setTextSizes] = useState<Size[]>([]);
   const messageRefs = useRef<HTMLDivElement[]>([]);
   const [openId, setOpenId] = useState<number | null>(null);
+  const { special: specialFonts } = useSpecialFonts();
   const [hoveredId, setHoveredId] = useState<number | null>(null);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [thornArrival, setThornArrival] = useState<Arrival | null>(null);
@@ -225,10 +214,11 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
     () =>
       new Map(
         replies.flatMap((message, index): [number, Spot][] =>
-          positions[index] ? [[message.id, { ...positions[index], sag: wiltSag(countWilts(reactions, message)) }]] : [],
+          // Votes never move a branch: no sag, whatever the reactions.
+          positions[index] ? [[message.id, { ...positions[index], sag: 0 }]] : [],
         ),
       ),
-    [replies, reactions, positions],
+    [replies, positions],
   );
   const shown = useGlide(targets);
   const { sprouts, appear } = useSprouts(replies);
@@ -239,9 +229,9 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
       if (!to) return [];
       const parent = parents[index];
       const from = parent === null ? null : (shown.get(replies[parent].id) ?? null);
-      const marks = marksOf(reactions, message);
       const text = textSizes[index] ?? to;
-      return [{ from, to, sag: to.sag, id: message.id, marks, text }];
+      // Votes colour the branch (moods) and "content" grows leaves on it, without moving anything.
+      return [{ from, to, sag: 0, id: message.id, marks: leavesOf(reactions, message), text }];
     });
   }, [replies, reactions, shown, textSizes]);
   const moods = useMemo(
@@ -327,11 +317,12 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
     }));
     const parents = findParents(replies);
     const ids = replies.map((message) => message.id);
-    const sags = replies.map((message) => wiltSag(countWilts(reactions, message)));
-    const marks = replies.map((message) => marksOf(reactions, message).length);
-    setPositions(placeMessages(sizes, parents, ids, sags, marks));
+    // Placement ignores votes, so a message stays where it is when someone reacts to it.
+    const none = replies.map(() => 0);
+    setPositions(placeMessages(sizes, parents, ids, none, none));
     setTextSizes(messageRefs.current.slice(0, replies.length).map(textSize));
-  }, [replies, reactions]);
+    // The plain font changes the size of the messages: measure them again.
+  }, [replies, reactions, specialFonts]);
 
   // Camera that shows the whole plant in the panel: at opening and on "Recentrer".
   function frameOf() {
@@ -410,21 +401,22 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
     if (pendingReactions.includes(key)) return;
     setPendingReactions((current) => [...current, key]);
     setOpenId(null);
-    if (value === "thorn") {
-      THUNDER_SOUND.currentTime = 0;
-      THUNDER_SOUND.play().catch(() => {});
-    }
+    // Son coupé (voir LEAF_SOUND en haut du fichier) :
+    // if (value === "thorn") {
+    //   THUNDER_SOUND.currentTime = 0;
+    //   THUNDER_SOUND.play().catch(() => {});
+    // }
     if (value === "wilt") {
       ownWilts.current.push(message.id);
       setWiltArrival({ key: -Date.now(), target: message.id });
-      RAIN_SOUND.currentTime = 0;
-      RAIN_SOUND.play().catch(() => {});
+      // RAIN_SOUND.currentTime = 0;
+      // RAIN_SOUND.play().catch(() => {});
     }
     if (value === "leaf") {
       ownLeaves.current.push(message.id);
       setLeafArrival({ key: -Date.now(), target: message.id });
-      LEAF_SOUND.currentTime = 0;
-      LEAF_SOUND.play().catch(() => {});
+      // LEAF_SOUND.currentTime = 0;
+      // LEAF_SOUND.play().catch(() => {});
     }
     const response = await request(token, MESSAGES, {
       content: "",
@@ -593,7 +585,7 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
           sprouts={sprouts}
           highlight={thread}
         />
-        <Leaves arrival={leafArrival} stems={stems} camera={camera} />
+        <Leaves arrival={leafArrival} wilt={wiltArrival} stems={stems} camera={camera} />
         <div
           className="board"
           // --zoom lets the reaction row keep a usable size when zoomed out (App.css, .message-actions).
@@ -626,7 +618,7 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
                 }
               }}
             >
-              <strong>
+              <strong style={userStyle(displayName(message))}>
                 {displayName(message)}
                 {displayName(message) !== "Anonyme" && pronounsOf.get(displayName(message)) && (
                   <span className="pronouns"> · {pronounsOf.get(displayName(message))}</span>
@@ -636,8 +628,8 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
                 )}
               </strong>
               <p
-                data-font={moodFont(reactions, message)}
-                style={{ fontFamily: fontFamily(moodFont(reactions, message)) }}
+                data-font={specialFonts ? moodFont(reactions, message) : "plain"}
+                style={{ fontFamily: fontFamily(moodFont(reactions, message), specialFonts) }}
               >
                 {openId === message.id ? message.content : preview(message.content)}
               </p>
@@ -685,6 +677,13 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
           >
             <CameraIcon action={expanded ? "collapse" : "expand"} />
           </button>
+        </div>
+        <div
+          className="camera-controls font-controls"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <FontToggle />
         </div>
       </div>
       {replyingTo && (

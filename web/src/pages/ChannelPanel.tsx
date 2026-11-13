@@ -5,6 +5,7 @@ import LaunchModal from "../components/LaunchModal";
 import ChannelComposer from "../components/ChannelComposer";
 import { PetalFlower } from "../components/PetalIcons";
 import type { Message } from "./Chat";
+import { userStyle } from "../userColor";
 import { channelLabel, CONVERSUS_METADATA, isClockTick, isSynthesis, SHARED_CHANNEL, shownName, SYNTHESIS_CHANNEL, type Channel } from "../channels";
 import { pronounsByName } from "../pronouns";
 
@@ -228,7 +229,6 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
       <ul className="messages" ref={listRef} onScroll={handleScroll}>
         {messages.map((message) => {
           const author = authorOf(message);
-          const mine = !!me && !message.anonymous && message.user === me;
           const debateName = message.metadata?.conversus?.channelName;
           const synthesisOf = message.metadata?.conversus?.synthesisOf;
           const joinTarget = debateName || synthesisOf;
@@ -243,7 +243,7 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
                     <path className="reply-curl-core" d={CURL} />
                   </svg>
                   <p className="reply-quote">
-                    <span className="reply-quote-name">{authorOf(quoted)}</span> {quoted.content}
+                    <span className="reply-quote-name" style={userStyle(authorOf(quoted))}>{authorOf(quoted)}</span> {quoted.content}
                   </p>
                 </>
               )}
@@ -258,7 +258,7 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
               <span className="avatar">{author[0]}</span>
               <div className="message-body">
                 <div className="message-meta">
-                  <strong className={mine ? "mine" : undefined}>{author}</strong>
+                  <strong style={userStyle(author)}>{author}</strong>
                   {!message.anonymous && pronounsOf.get(message.user) && (
                     <span className="pronouns">· {pronounsOf.get(message.user)}</span>
                   )}

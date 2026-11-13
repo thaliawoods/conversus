@@ -17,9 +17,9 @@ type SynthesisModalProps = {
   onShare: () => void;
   // A synthesis already shared: no share button.
   readOnly?: boolean;
-  // When it was shared, e.g. "partagée aujourd'hui à 15:40".
+  // When it was shared, e.g. "Aujourd'hui à 15:40".
   sharedAt?: string;
-  // The ConVersus question, shown instead of the scope when reading a shared synthesis (from Kilian, f23790b).
+  // The ConVersus question, shown instead of the scope when reading a shared synthesis.
   question?: string;
 };
 

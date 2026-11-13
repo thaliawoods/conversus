@@ -1,7 +1,8 @@
 import { useState } from "react";
 import EmojiPicker, { EmojiStyle, Theme } from "emoji-picker-react";
-import { FONTS, fontFamily } from "../fonts";
+import { FONTS, fontFamily, useSpecialFonts } from "../fonts";
 import AnonymousIcon from "./AnonymousIcon";
+import ReactionIcon from "./ReactionIcon";
 import SendArrow from "./SendArrow";
 import type { ReactionValue } from "../pages/Chat";
 
@@ -25,6 +26,7 @@ function MessageForm({ onSend, placeholder, error }: MessageFormProps) {
   const [anonymous, setAnonymous] = useState(false);
   const [panel, setPanel] = useState<Panel>(null);
   const [sending, setSending] = useState(false);
+  const { special: specialFonts } = useSpecialFonts();
 
   function togglePanel(name: Panel) {
     setPanel(panel === name ? null : name);
@@ -72,6 +74,7 @@ function MessageForm({ onSend, placeholder, error }: MessageFormProps) {
                   setPanel(null);
                 }}
               >
+                {option.mood && <ReactionIcon value={option.mood} />}
                 {option.label}
               </button>
             ))}
@@ -115,7 +118,7 @@ function MessageForm({ onSend, placeholder, error }: MessageFormProps) {
             value={content}
             onChange={(event) => setContent(event.target.value)}
             placeholder={placeholder}
-            style={{ fontFamily: fontFamily(font) }}
+            style={{ fontFamily: fontFamily(font, specialFonts) }}
           />
           <button className="send-button" type="submit" disabled={sending} aria-label="Envoyer" data-tip="Envoyer">
             <SendArrow />

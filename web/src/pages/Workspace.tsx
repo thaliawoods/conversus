@@ -7,9 +7,9 @@ import ChannelPanel from "./ChannelPanel";
 import Debate from "./Debate";
 import { SERVER_DOWN, request } from "../api";
 import { usePresence } from "../hooks/usePresence";
+import Tutorial, { type TutorialColumn } from "../components/Tutorial";
 import { useUnread } from "../hooks/useUnread";
 import { enterSynthesisChannel, HIDDEN_CHANNELS, isDebate, SHARED_CHANNEL, SYNTHESIS_CHANNEL, workspacePath, type Channel } from "../channels";
-import Tutorial, { type TutorialColumn } from "../components/Tutorial";
 import type { Message } from "./Chat";
 import { PetalFlower } from "../components/PetalIcons";
 
@@ -29,6 +29,7 @@ const HOME_CHANNEL = "m1-ecni";
 const PRESENCE_CHANNEL = "general";
 // Every account joins these, plus each ConVersus announced in them, so a new visitor sees everything.
 const DEMO_CHANNELS = ["general", "m1-ecni", "projet-conversus", "random", SYNTHESIS_CHANNEL];
+const ARRIVAL_SIDE = 0.14;
 // Also kept in the browser, in case the server refuses to save it on the account.
 const TUTORIAL_KEY = "conversus-tutorial-seen:";
 
@@ -39,7 +40,6 @@ function tutorialSeenHere(username: string) {
     return false;
   }
 }
-const ARRIVAL_SIDE = 0.14;
 // Below TABLET_MAX the channel list becomes a drawer; below MOBILE_MAX one view at a time, with tabs.
 const TABLET_MAX = 900;
 const MOBILE_MAX = 600;
@@ -138,7 +138,6 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
     try {
       localStorage.setItem(TUTORIAL_KEY + username, "1");
     } catch {
-      // Private browsing: the account metadata below still remembers it.
     }
     // The server replaces the whole "conversus" metadata: start from the current one (pronouns…).
     const response = await request(token, "/me");
@@ -164,7 +163,6 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
       if (missing.length === 0) return;
       missing.forEach((name) => joined.current.add(name));
       for (const name of missing) {
-        // The synthesis channel may not exist yet: it is created on the first visit.
         if (name === SYNTHESIS_CHANNEL) await enterSynthesisChannel(token);
         else await request(token, "/channel/enter", { channel: name });
       }
@@ -343,6 +341,7 @@ function Workspace({ token, onTokenExpired, onSwitch }: WorkspaceProps) {
   const showChannel = mobile ? tab === "channel" : !fullScreen && !closed.channel;
   const showDebate = mobile ? tab === "debate" : !closed.debate;
   const showHandles = !mobile && !fullScreen;
+
   const sidebar = (
     <Sidebar
       channels={channels}

@@ -64,7 +64,7 @@ function AccountMenu({ username, pronouns, onSwitch, onLogout, onTutorial }: Acc
             onTutorial();
           }}
         >
-          Revoir le tutoriel
+          Revoir le tuto
         </button>
         <button type="button" onClick={onLogout}>
           Déconnexion
