@@ -768,6 +768,23 @@
   color: var(--ice);
 }
 
+/* Every button down here shares one colour, and lights up in the yellow of the anonymous button. */
+.camera-controls button:hover,
+.camera-controls button:focus-visible {
+  color: #ffdf4e;
+}
+.camera-controls button:hover svg,
+.camera-controls button:focus-visible svg {
+  filter: drop-shadow(0 0 3px rgba(255, 223, 78, 0.55));
+}
+.camera-controls svg {
+  transition: filter 0.25s;
+}
+.font-icon .font-letters {
+  fill: currentColor;
+  stroke: none;
+}
+
 .camera-icon {
   display: block;
   width: 1.5rem;
@@ -1540,9 +1557,9 @@
 }
 
 .sidebar-member.online .presence-dot {
-  border-color: #ffdf4e;
-  background: #ffdf4e;
-  box-shadow: 0 0 0.35rem rgba(255, 223, 78, 0.7);
+  border-color: #5fd38a;
+  background: #5fd38a;
+  box-shadow: 0 0 0.35rem rgba(95, 211, 138, 0.6);
 }
 
 .visually-hidden {
@@ -1871,8 +1888,7 @@
   place-items: center;
   border-radius: 50%;
   border: 1px solid var(--line);
-  border-color: color-mix(in srgb, var(--user-color, var(--ice)) 45%, transparent);
-  color: var(--user-color, var(--ice));
+  color: var(--ice);
   font-size: 0.8rem;
   text-transform: uppercase;
 }

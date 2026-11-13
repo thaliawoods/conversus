@@ -1,6 +1,6 @@
 import { useState } from "react";
 import EmojiPicker, { EmojiStyle, Theme } from "emoji-picker-react";
-import { fontFamily } from "../fonts";
+import { fontFamily, useSpecialFonts } from "../fonts";
 import AnonymousIcon from "./AnonymousIcon";
 import SendArrow from "./SendArrow";
 import type { ReactionValue } from "../pages/Chat";
@@ -23,6 +23,7 @@ function MessageForm({ onSend, placeholder, error }: MessageFormProps) {
   const [anonymous, setAnonymous] = useState(false);
   const [panel, setPanel] = useState<Panel>(null);
   const [sending, setSending] = useState(false);
+  const { special: specialFonts } = useSpecialFonts();
 
   function togglePanel(name: Panel) {
     setPanel(panel === name ? null : name);
@@ -84,7 +85,7 @@ function MessageForm({ onSend, placeholder, error }: MessageFormProps) {
             value={content}
             onChange={(event) => setContent(event.target.value)}
             placeholder={placeholder}
-            style={{ fontFamily: fontFamily() }}
+            style={{ fontFamily: fontFamily(undefined, specialFonts) }}
           />
           <button className="send-button" type="submit" disabled={sending} aria-label="Envoyer" data-tip="Envoyer">
             <SendArrow />

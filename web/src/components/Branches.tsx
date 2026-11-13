@@ -126,6 +126,20 @@ function visibleRange(axis: Point[], from: Placement | null, to: Placement) {
   return { start: first / last, end: end / last };
 }
 
+// Where each mark sits along the stem (0 = base, 1 = tip). The k-th mark always gets the same spot,
+// so a new mark never moves the others, and marks take the gaps between the twigs, never pushing them.
+function placeMarks(id: number, count: number, from: number, span: number, room: number, twigs: number[]) {
+  const places: number[] = [];
+  const crowded = (t: number, gap: number) => [...twigs, ...places].some((other) => Math.abs(other - t) < gap);
+  for (let step = 0; places.length < count && step < 200; step++) {
+    // Golden ratio steps spread the spots evenly; after a while, accept tighter gaps on short stems.
+    const t = from + span * (0.08 + 0.84 * ((noise(id, 300) + step * 0.618034) % 1));
+    if (!crowded(t, step < 100 ? room : room * 0.5)) places.push(t);
+  }
+  while (places.length < count) places.push(from + span * 0.5);
+  return places;
+}
+
 function buildGeometry(stems: Stem[], births: Map<number, number>) {
   const positions: number[] = [];
   const grows: number[] = [];
@@ -284,20 +298,15 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
     const clear = Math.min(0.8, Math.max(0, (bare / samples - range.start) / span));
     const beforeText = stem.from === null ? Math.min(0.8 - clear, TEXT_CLEAR / Math.max(visible, 1)) : 0;
     const markSpan = 1 - clear - Math.max(0, beforeText);
-    const markPlaces = stem.marks.map((_, k) => clear + (markSpan * (k + 1)) / (stem.marks.length + 1));
     const room = MARK_ROOM / Math.max(visible, 1);
-    const free = (t: number, before: boolean) => {
-      const place = markPlaces.find((other) => Math.abs(other - t) < room);
-      if (place === undefined) return t;
-      const moved = before ? place - room * 1.1 : place + room * 1.1;
-      return Math.min(0.92, Math.max(0.08, moved));
-    };
 
     // Square root: a single sad vote already makes the twigs hang visibly.
     const sadness = Math.sqrt(Math.min(1, Math.max(0, stem.sag / FULL_SAG)));
     const twigCount = 2 + Math.floor(noise(stem.id, 3) * 3);
+    const twigPlaces: number[] = [];
     for (let j = 0; j < twigCount; j++) {
-      const at = free(0.3 + ((j + noise(stem.id, 10 + j)) / twigCount) * 0.5, j % 2 === 0);
+      const at = 0.3 + ((j + noise(stem.id, 10 + j)) / twigCount) * 0.5;
+      twigPlaces.push(at);
       const baseIndex = indexAt(at);
       const base = trunk[baseIndex];
       growth = { start: trunkAt(baseIndex), span: TWIG_SHARE, birth };
@@ -320,7 +329,7 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
 
     const creases = 3 + Math.floor(noise(stem.id, 50) * 3);
     for (let c = 0; c < creases; c++) {
-      const at = free(0.15 + noise(stem.id, 51 + c) * 0.75, c % 2 === 0);
+      const at = 0.15 + noise(stem.id, 51 + c) * 0.75;
       const baseIndex = indexAt(at);
       const base = trunk[baseIndex];
       growth = { start: trunkAt(baseIndex), span: CREASE_SHARE, birth };
@@ -337,6 +346,7 @@ function buildGeometry(stems: Stem[], births: Map<number, number>) {
       addNode(trunk[index], 2 + noise(stem.id, 95 + b) * 1.5, stem.id * 7 + b);
     }
 
+    const markPlaces = placeMarks(stem.id, stem.marks.length, clear, markSpan, room, twigPlaces);
     const newestThorn = stem.marks.lastIndexOf("thorn");
     stem.marks.forEach((mark, k) => {
       const index = indexAt(markPlaces[k]);

@@ -5,7 +5,7 @@ import DebatePicker from "../components/DebatePicker";
 import SynthesisModal from "../components/SynthesisModal";
 import SynthesisIcon from "../components/SynthesisIcon";
 import CameraIcon from "../components/CameraIcon";
-import Branches, { type Arrival, type Color, type Stem } from "../components/Branches";
+import Branches, { type Arrival, type Color, type Mark, type Stem } from "../components/Branches";
 import Leaves from "../components/Leaves";
 import ReactionIcon, { REACTIONS } from "../components/ReactionIcon";
 import type { Message, ReactionValue } from "./Chat";
@@ -14,7 +14,8 @@ import { useCamera } from "../hooks/useCamera";
 import { useGlide, type Spot } from "../hooks/useGlide";
 import useSprouts from "../hooks/useSprouts";
 import MessageForm from "../components/MessageForm";
-import { fontFamily, shownFont } from "../fonts";
+import { fontFamily, shownFont, useSpecialFonts } from "../fonts";
+import FontToggle from "../components/FontToggle";
 import { userStyle } from "../userColor";
 import { SERVER_DOWN, formatTime, request } from "../api";
 import { FALLBACK_POLL, listenToChannel } from "../live";
@@ -114,6 +115,16 @@ function majorityReaction(reactions: Message[], message: Message) {
   return votes.findLast((vote) => counts[vote] === best) ?? null;
 }
 
+const MAX_LEAVES = 8;
+
+// A leaf on the branch for every "content": the effect chosen when posting, then each current vote.
+// They only decorate the stem: placement ignores them, so nothing moves when one grows.
+function leavesOf(reactions: Message[], message: Message): Mark[] {
+  const fromEffect = message.metadata?.conversus?.effect === "leaf" ? 1 : 0;
+  const fromVotes = currentVotes(reactions, message).filter((vote) => vote === "leaf").length;
+  return Array<Mark>(Math.min(MAX_LEAVES, fromEffect + fromVotes)).fill("leaf");
+}
+
 function arrivalsOf(messages: Message[], value: ReactionValue): Arrival[] {
   return messages.flatMap((message) => {
     const conversus = message.metadata?.conversus;
@@ -170,6 +181,7 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
   const [textSizes, setTextSizes] = useState<Size[]>([]);
   const messageRefs = useRef<HTMLDivElement[]>([]);
   const [openId, setOpenId] = useState<number | null>(null);
+  const { special: specialFonts } = useSpecialFonts();
   const [hoveredId, setHoveredId] = useState<number | null>(null);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [thornArrival, setThornArrival] = useState<Arrival | null>(null);
@@ -210,10 +222,10 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
       const parent = parents[index];
       const from = parent === null ? null : (shown.get(replies[parent].id) ?? null);
       const text = textSizes[index] ?? to;
-      // Votes only colour the branch (moods): no leaves or thorns that would push its twigs around.
-      return [{ from, to, sag: 0, id: message.id, marks: [], text }];
+      // Votes colour the branch (moods) and "content" grows leaves on it, without moving anything.
+      return [{ from, to, sag: 0, id: message.id, marks: leavesOf(reactions, message), text }];
     });
-  }, [replies, shown, textSizes]);
+  }, [replies, reactions, shown, textSizes]);
   const moods = useMemo(
     () =>
       new Map(
@@ -299,7 +311,8 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
     const none = replies.map(() => 0);
     setPositions(placeMessages(sizes, parents, ids, none, none));
     setTextSizes(messageRefs.current.slice(0, replies.length).map(textSize));
-  }, [replies, reactions]);
+    // The plain font changes the size of the messages: measure them again.
+  }, [replies, reactions, specialFonts]);
 
   async function handleSendMessage(
     content: string,
@@ -548,8 +561,8 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
                 )}
               </strong>
               <p
-                data-font={moodFont(reactions, message)}
-                style={{ fontFamily: fontFamily(moodFont(reactions, message)) }}
+                data-font={specialFonts ? moodFont(reactions, message) : "plain"}
+                style={{ fontFamily: fontFamily(moodFont(reactions, message), specialFonts) }}
               >
                 {openId === message.id ? message.content : preview(message.content)}
               </p>
@@ -579,6 +592,7 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => event.stopPropagation()}
         >
+          <FontToggle />
           <button type="button" aria-label="Zoomer" data-tip="Zoomer" onClick={() => zoomBy(ZOOM_STEP)}>
             <CameraIcon action="zoomIn" />
           </button>

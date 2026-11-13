@@ -8,7 +8,8 @@ import type { Member } from "../hooks/usePresence";
 import { userStyle } from "../userColor";
 import { unreadLabel } from "../hooks/useUnread";
 
-const MEMBERS_TITLE = "Membres";
+const ONLINE_TITLE = "En ligne";
+const OFFLINE_TITLE = "Hors ligne";
 
 type SidebarProps = {
   channels: Channel[];
@@ -33,9 +34,12 @@ function Sidebar({ channels, unread, members, username, pronouns, onSwitch, onLo
       (channel.name === SHARED_CHANNEL || !HIDDEN_CHANNELS.includes(channel.name)) &&
       shownName(channel).toLowerCase().includes(query),
   );
-  // Everyone is listed, online first (usePresence sorts them).
+  // Everyone is listed, in two folders: who is online, then who is not.
   const foundMembers = members.filter((member) => member.username.toLowerCase().includes(query));
-  const onlineCount = members.filter((member) => member.online).length;
+  const memberGroups = [
+    { title: ONLINE_TITLE, items: foundMembers.filter((member) => member.online) },
+    { title: OFFLINE_TITLE, items: foundMembers.filter((member) => !member.online) },
+  ];
   const groups = [
     {
       title: "Canaux",
@@ -105,38 +109,38 @@ function Sidebar({ channels, unread, members, username, pronouns, onSwitch, onLo
             )}
           </section>
         ))}
-        <section className="sidebar-group">
-          <button
-            type="button"
-            className="sidebar-group-title"
-            aria-expanded={!folded.includes(MEMBERS_TITLE)}
-            onClick={() => toggleGroup(MEMBERS_TITLE)}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden>
-              <path d="M6 9l6 6 6-6" />
-            </svg>
-            {MEMBERS_TITLE}
-            <span className="sidebar-count">
-              {onlineCount} en ligne · {members.length}
-            </span>
-          </button>
-          {!folded.includes(MEMBERS_TITLE) && (
-            <ul>
-              {foundMembers.map((member) => (
-                <li key={member.id} className={member.online ? "sidebar-member online" : "sidebar-member"}>
-                  <span className="sidebar-mark">
-                    <span className="presence-dot" />
-                  </span>
-                  <span className="sidebar-name" style={userStyle(member.username)}>
-                    {member.username}
-                    {member.username === username && <span className="sidebar-me"> (toi)</span>}
-                  </span>
-                  <span className="visually-hidden">{member.online ? "en ligne" : "hors ligne"}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+        {memberGroups.map((group) => (
+          <section className="sidebar-group" key={group.title}>
+            <button
+              type="button"
+              className="sidebar-group-title"
+              aria-expanded={!folded.includes(group.title)}
+              onClick={() => toggleGroup(group.title)}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden>
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+              {group.title}
+              <span className="sidebar-count">{group.items.length}</span>
+            </button>
+            {!folded.includes(group.title) && (
+              <ul>
+                {group.items.map((member) => (
+                  <li key={member.id} className={member.online ? "sidebar-member online" : "sidebar-member"}>
+                    <span className="sidebar-mark">
+                      <span className="presence-dot" />
+                    </span>
+                    <span className="sidebar-name" style={userStyle(member.username)}>
+                      {member.username}
+                      {member.username === username && <span className="sidebar-me"> (toi)</span>}
+                    </span>
+                    <span className="visually-hidden">{member.online ? "en ligne" : "hors ligne"}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        ))}
       </div>
       <AccountMenu
         username={username}

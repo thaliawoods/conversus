@@ -231,7 +231,7 @@ function ChannelPanel({ token, channel, me, pronouns, onDebatesSeen, onOpenDebat
                   aria-label="Cibler ce message"
                 />
               )}
-              <span className="avatar" style={userStyle(author)}>{author[0]}</span>
+              <span className="avatar">{author[0]}</span>
               <div className="message-body">
                 <div className="message-meta">
                   <strong style={userStyle(author)}>{author}</strong>

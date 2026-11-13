@@ -11,13 +11,13 @@ function hash(text: string) {
   return value >>> 0;
 }
 
-// Light enough to read on the night background; two lightness levels double the
-// number of colours that can be told apart.
+// Soft pastel tints: light enough to read on the night background, muted so names
+// don't shout. Two lightness levels double the number of colours that can be told apart.
 export function userColor(username: string) {
   const value = hash(username.trim().toLowerCase());
   const hue = value % 360;
-  const lightness = (value >>> 9) % 2 === 0 ? 70 : 80;
-  return `hsl(${hue} 80% ${lightness}%)`;
+  const lightness = (value >>> 9) % 2 === 0 ? 72 : 80;
+  return `hsl(${hue} 38% ${lightness}%)`;
 }
 
 // Exposes the colour as --user-color, so stylesheet states (a lit thread, an offline
