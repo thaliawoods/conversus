@@ -5,11 +5,11 @@ import DebatePicker from "../components/DebatePicker";
 import SynthesisModal from "../components/SynthesisModal";
 import SynthesisIcon from "../components/SynthesisIcon";
 import CameraIcon from "../components/CameraIcon";
-import Branches, { type Arrival, type Color, type Mark, type Stem } from "../components/Branches";
+import Branches, { type Arrival, type Color, type Stem } from "../components/Branches";
 import Leaves from "../components/Leaves";
 import ReactionIcon, { REACTIONS } from "../components/ReactionIcon";
 import type { Message, ReactionValue } from "./Chat";
-import { placeMessages, wiltSag, type Placement, type Size } from "../layout";
+import { placeMessages, type Placement, type Size } from "../layout";
 import { useCamera } from "../hooks/useCamera";
 import { useGlide, type Spot } from "../hooks/useGlide";
 import useSprouts from "../hooks/useSprouts";
@@ -114,32 +114,6 @@ function majorityReaction(reactions: Message[], message: Message) {
   return votes.findLast((vote) => counts[vote] === best) ?? null;
 }
 
-function countWilts(reactions: Message[], message: Message) {
-  const fromVotes = currentVotes(reactions, message).filter((vote) => vote === "wilt").length;
-  const fromEffect = message.metadata?.conversus?.effect === "wilt" ? 1 : 0;
-  return fromVotes + fromEffect;
-}
-
-const MAX_MARKS = 8;
-
-// Leaves and thorns on a branch, in the order they came: every "content" adds a flower,
-// every "en colère" a thorn, and a "triste" makes all the flowers there fall off.
-function marksOf(reactions: Message[], message: Message) {
-  const values = [
-    message.metadata?.conversus?.effect,
-    ...reactions
-      .filter((reaction) => reaction.metadata?.conversus?.reactTo === message.id)
-      .toSorted((a, b) => a.id - b.id)
-      .map((reaction) => reaction.metadata?.conversus?.value),
-  ];
-  let marks: Mark[] = [];
-  for (const value of values) {
-    if (value === "wilt") marks = marks.filter((mark) => mark !== "leaf");
-    else if (value === "leaf" || value === "thorn") marks.push(value);
-  }
-  return marks.slice(-MAX_MARKS);
-}
-
 function arrivalsOf(messages: Message[], value: ReactionValue): Arrival[] {
   return messages.flatMap((message) => {
     const conversus = message.metadata?.conversus;
@@ -220,10 +194,11 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
     () =>
       new Map(
         replies.flatMap((message, index): [number, Spot][] =>
-          positions[index] ? [[message.id, { ...positions[index], sag: wiltSag(countWilts(reactions, message)) }]] : [],
+          // Votes never move a branch: no sag, whatever the reactions.
+          positions[index] ? [[message.id, { ...positions[index], sag: 0 }]] : [],
         ),
       ),
-    [replies, reactions, positions],
+    [replies, positions],
   );
   const shown = useGlide(targets);
   const { sprouts, appear } = useSprouts(replies);
@@ -234,11 +209,11 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
       if (!to) return [];
       const parent = parents[index];
       const from = parent === null ? null : (shown.get(replies[parent].id) ?? null);
-      const marks = marksOf(reactions, message);
       const text = textSizes[index] ?? to;
-      return [{ from, to, sag: to.sag, id: message.id, marks, text }];
+      // Votes only colour the branch (moods): no leaves or thorns that would push its twigs around.
+      return [{ from, to, sag: 0, id: message.id, marks: [], text }];
     });
-  }, [replies, reactions, shown, textSizes]);
+  }, [replies, shown, textSizes]);
   const moods = useMemo(
     () =>
       new Map(
@@ -320,9 +295,9 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
     }));
     const parents = findParents(replies);
     const ids = replies.map((message) => message.id);
-    const sags = replies.map((message) => wiltSag(countWilts(reactions, message)));
-    const marks = replies.map((message) => marksOf(reactions, message).length);
-    setPositions(placeMessages(sizes, parents, ids, sags, marks));
+    // Placement ignores votes, so a message stays where it is when someone reacts to it.
+    const none = replies.map(() => 0);
+    setPositions(placeMessages(sizes, parents, ids, none, none));
     setTextSizes(messageRefs.current.slice(0, replies.length).map(textSize));
   }, [replies, reactions]);
 
@@ -534,7 +509,7 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
           sprouts={sprouts}
           highlight={thread}
         />
-        <Leaves arrival={leafArrival} stems={stems} camera={camera} />
+        <Leaves arrival={leafArrival} wilt={wiltArrival} stems={stems} camera={camera} />
         <div className="board" style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})` }}>
           <div className="central-flower" role="img" aria-label="Sujet du débat" />
           {replies.map((message, index) => (
