@@ -11,13 +11,14 @@ function hash(text: string) {
   return value >>> 0;
 }
 
-// Soft pastel tints: light enough to read on the night background, muted so names
-// don't shout. Two lightness levels double the number of colours that can be told apart.
+// A fixed palette rather than any hue: in HSL a big slice of the wheel reads as green, so random
+// hues gave lots of greens. OKLCH hues spaced around the wheel look evenly different, and the same
+// lightness and chroma keep them all soft and equally readable on the night background.
+const HUES = [0, 30, 60, 90, 125, 160, 195, 230, 260, 290, 315, 340];
+
 export function userColor(username: string) {
-  const value = hash(username.trim().toLowerCase());
-  const hue = value % 360;
-  const lightness = (value >>> 9) % 2 === 0 ? 72 : 80;
-  return `hsl(${hue} 38% ${lightness}%)`;
+  const hue = HUES[hash(username.trim().toLowerCase()) % HUES.length];
+  return `oklch(80% 0.09 ${hue})`;
 }
 
 // Exposes the colour as --user-color, so stylesheet states (a lit thread, an offline

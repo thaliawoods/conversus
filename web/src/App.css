@@ -813,9 +813,11 @@
   fill: currentColor;
   stroke: none;
 }
-/* Bouton « Aa » seul en haut à droite de la plante, sous le fondu du haut du canvas. */
-.font-controls {
-  top: 2.6rem;
+/* Bouton « Aa » juste sous « Faire ma Synthesis », sous la ligne de l'en-tête, son bord droit
+   aligné sur celui du bouton (l'en-tête a 0.2rem de marge intérieure, le bouton 0.4rem). */
+.debate .col-head .font-controls {
+  top: calc(100% + 0.6rem);
+  right: -0.2rem;
   bottom: auto;
 }
 /* Sa bulle s'ouvre en dessous, sinon le fondu du haut la mange. */

@@ -120,15 +120,22 @@ function majorityReaction(reactions: Message[], message: Message) {
   return votes.findLast((vote) => counts[vote] === best) ?? null;
 }
 
-const MAX_LEAVES = 8;
+const MAX_MARKS = 8;
 
-// A leaf on the branch for every "content": the effect chosen when posting, then each current vote.
-// They only decorate the stem: placement ignores them, so nothing moves when one grows.
-function leavesOf(reactions: Message[], message: Message): Mark[] {
-  const fromEffect = message.metadata?.conversus?.effect === "leaf" ? 1 : 0;
-  const fromVotes = currentVotes(reactions, message).filter((vote) => vote === "leaf").length;
-  return Array<Mark>(Math.min(MAX_LEAVES, fromEffect + fromVotes)).fill("leaf");
+function isMark(value: unknown): value is Mark {
+  return value === "leaf" || value === "thorn";
 }
+
+// A leaf for every "content" and a thorn for every "en colère", in the order they came:
+// the effect chosen when posting, then each current vote. Oldest first, so a new mark never
+// takes the spot of an older one. They only decorate the stem: placement ignores them.
+function marksOf(reactions: Message[], message: Message): Mark[] {
+  const effect = message.metadata?.conversus?.effect;
+  return [effect, ...currentVotes(reactions, message)].filter(isMark).slice(0, MAX_MARKS);
+}
+
+// Every font a message can be shown in, loaded up front so its size is known before placing it.
+const MESSAGE_FONTS = ["Josafronde", "LigaSans", "LoveAndRage", "Nudles", "Tremplin", "PicNic"];
 
 function arrivalsOf(messages: Message[], value: ReactionValue): Arrival[] {
   return messages.flatMap((message) => {
@@ -187,6 +194,11 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
   const [reactions, setReactions] = useState<Message[]>([]);
   const [positions, setPositions] = useState<Placement[]>([]);
   const [textSizes, setTextSizes] = useState<Size[]>([]);
+  // Size each message is placed with, measured once. A vote changes the font of a message, so
+  // its size: placing it again would move the whole plant and could swallow a short branch.
+  const placedSizes = useRef(new Map<number, Size>());
+  const placedWith = useRef<string | null>(null);
+  const [fontsLoaded, setFontsLoaded] = useState(false);
   const messageRefs = useRef<HTMLDivElement[]>([]);
   const [openId, setOpenId] = useState<number | null>(null);
   const { special: specialFonts } = useSpecialFonts();
@@ -231,7 +243,7 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
       const from = parent === null ? null : (shown.get(replies[parent].id) ?? null);
       const text = textSizes[index] ?? to;
       // Votes colour the branch (moods) and "content" grows leaves on it, without moving anything.
-      return [{ from, to, sag: 0, id: message.id, marks: leavesOf(reactions, message), text }];
+      return [{ from, to, sag: 0, id: message.id, marks: marksOf(reactions, message), text }];
     });
   }, [replies, reactions, shown, textSizes]);
   const moods = useMemo(
@@ -310,19 +322,39 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
     };
   }, [token, channelId, onTokenExpired]);
 
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all(MESSAGE_FONTS.map((font) => document.fonts.load(`1rem "${font}"`)))
+      .catch(() => {})
+      .finally(() => !cancelled && setFontsLoaded(true));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useLayoutEffect(() => {
-    const sizes = messageRefs.current.slice(0, replies.length).map((element) => ({
-      width: element.offsetWidth,
-      height: element.offsetHeight,
-    }));
+    // Measured again only when the fonts arrive or the plain font is switched on or off.
+    const fontState = `${fontsLoaded}-${specialFonts}`;
+    if (placedWith.current !== fontState) {
+      placedWith.current = fontState;
+      placedSizes.current.clear();
+    }
+    const sizes = replies.map((message, index) => {
+      let size = placedSizes.current.get(message.id);
+      if (!size) {
+        const element = messageRefs.current[index];
+        size = { width: element.offsetWidth, height: element.offsetHeight };
+        placedSizes.current.set(message.id, size);
+      }
+      return size;
+    });
     const parents = findParents(replies);
     const ids = replies.map((message) => message.id);
     // Placement ignores votes, so a message stays where it is when someone reacts to it.
     const none = replies.map(() => 0);
     setPositions(placeMessages(sizes, parents, ids, none, none));
     setTextSizes(messageRefs.current.slice(0, replies.length).map(textSize));
-    // The plain font changes the size of the messages: measure them again.
-  }, [replies, reactions, specialFonts]);
+  }, [replies, reactions, specialFonts, fontsLoaded]);
 
   // Camera that shows the whole plant in the panel: at opening and on "Recentrer".
   function frameOf() {
@@ -538,6 +570,9 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
           <SynthesisIcon />
           Faire ma Synthesis
         </button>
+        <div className="camera-controls font-controls">
+          <FontToggle />
+        </div>
       </div>
       {!synthesis && sharedSynthesis && (
         <SynthesisModal
@@ -677,13 +712,6 @@ function Debate({ token, channels, me, pronouns, onTokenExpired, expanded, onTog
           >
             <CameraIcon action={expanded ? "collapse" : "expand"} />
           </button>
-        </div>
-        <div
-          className="camera-controls font-controls"
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <FontToggle />
         </div>
       </div>
       {replyingTo && (
