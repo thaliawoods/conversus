@@ -41,10 +41,9 @@ function fitPlant(stems: Stem[], width: number, height: number) {
 function SynthesisModal({ stems, moods, retainedCount, text, error, sharing, onCancel, onShare, readOnly = false, sharedAt, question }: SynthesisModalProps) {
   const plantRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 1, height: 1 });
+  // Only worth saying when the synthesis covers some messages, not the whole debate.
   const scope =
-    retainedCount === 0
-      ? "De tout le débat"
-      : `Des ${retainedCount} ${retainedCount > 1 ? "messages retenus" : "message retenu"}`;
+    retainedCount === 0 ? null : `Des ${retainedCount} ${retainedCount > 1 ? "messages retenus" : "message retenu"}`;
 
   useLayoutEffect(() => {
     const plant = plantRef.current;
@@ -71,9 +70,11 @@ function SynthesisModal({ stems, moods, retainedCount, text, error, sharing, onC
         </div>
         <div className="synthesis-side">
           <h2 id="synthesis-title">Synthesis</h2>
-          <p className="modal-label">
-            {question ? <span className="synthesis-question">{question}</span> : scope}
-          </p>
+          {(question || scope) && (
+            <p className="modal-label">
+              {question ? <span className="synthesis-question">{question}</span> : scope}
+            </p>
+          )}
           {/* Own line, so it never breaks in two after a long question. */}
           {sharedAt && <p className="modal-label synthesis-date">{sharedAt}</p>}
           {text === null && !error && <p className="synthesis-text waiting">La synthèse s'écrit…</p>}
